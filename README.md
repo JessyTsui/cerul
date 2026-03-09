@@ -1,5 +1,5 @@
 <div align="center">
-  <h1>Cerul.ai</h1>
+  <h1>Cerul</h1>
   <p><strong>Video understanding search infrastructure for AI agents.</strong></p>
   <p>Search what is shown in videos, not just what is said.</p>
   <p>
@@ -15,7 +15,7 @@
 
 ## Overview
 
-Cerul.ai is an early-stage open-source project focused on video understanding for AI agents.
+Cerul is an early-stage open-source project focused on video understanding for AI agents.
 
 The goal is to make videos searchable in a way that goes beyond transcripts by capturing the information that appears on screen: slides, charts, product demos, code screens, whiteboards, and other visual evidence.
 
@@ -34,7 +34,7 @@ Both tracks are intended to share the same core infrastructure:
 - indexing pipelines
 - authentication and usage controls
 - storage and retrieval primitives
-- SDK and MCP integrations
+- agent integrations
 
 ## Why This Exists
 
@@ -50,7 +50,7 @@ What exists today:
 
 - public repository scaffold
 - license and environment template
-- project structure for web, API, workers, SDKs, and MCP
+- project structure for frontend, backend, workers, docs, database migrations, and agent skills
 
 What is not in the repository yet:
 
@@ -62,17 +62,25 @@ What is not in the repository yet:
 ## Repository Layout
 
 ```text
-apps/
-  web/        Next.js application
-  api/        FastAPI service
-core/         Shared Python modules
+frontend/     Next.js application
+backend/      FastAPI service and backend modules
 workers/      Indexing pipelines and job workers
+docs/         Public architecture, API, product, and runbook docs
+db/           Migrations and public-safe seed data
+skills/       Installable agent skills for Codex / Claude-style clients
 config/       YAML config files
 scripts/      Bootstrap and local utility scripts
-training/     Model training experiments
-sdk/          Client SDKs
-mcp/          MCP server
 ```
+
+## Agent Integration Strategy
+
+Cerul's first agent integration path is intentionally simple:
+
+- expose a stable HTTP API
+- authenticate with API keys
+- provide an installable skill for Codex / Claude-style clients
+
+MCP is not part of the first implementation plan. If it becomes useful later, it should be added as a thin adapter over the same backend API rather than as a second integration surface with its own business logic.
 
 ## Development Direction
 
@@ -81,7 +89,7 @@ The near-term build sequence is straightforward:
 1. Establish the public project skeleton.
 2. Implement the first end-to-end `broll` indexing and search flow.
 3. Add the heavier `knowledge` ingestion and retrieval pipeline.
-4. Expand outward into SDK and MCP integrations.
+4. Add agent-facing integrations, starting with an installable skill.
 
 ## Open Source Scope
 
@@ -91,7 +99,7 @@ Public in this repository:
 
 - application code
 - pipeline framework
-- SDK and MCP integrations
+- agent integration artifacts
 - local development scaffolding
 
 Not public:

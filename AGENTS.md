@@ -33,14 +33,21 @@ Default architectural assumptions:
 - database: Neon PostgreSQL with pgvector
 - auth: Better Auth
 - heavy ingestion and media processing: Python workers
+- first agent integration path: installable skill over direct HTTP API
 
 Do not introduce a second primary backend stack, ORM stack, or deployment platform without an explicit decision. In particular, do not casually pivot the project toward TanStack Start, Cloudflare D1, or Drizzle as the default foundation.
 
+For agent integrations, keep the first phase simple:
+
+- ship a documented HTTP API
+- ship a skill that uses API keys
+- do not add an MCP adapter unless there is clear external demand
+
 Keep these boundaries intact:
 
-- `apps/api` handles request orchestration, auth, usage, and API responses
+- `backend/` handles request orchestration, auth, usage, and API responses
 - `workers/` handles ingestion, indexing, and media-heavy processing
-- `core/` holds reusable shared logic
+- `backend/app/` holds backend domain modules and shared backend logic
 - frontend pages should not become the primary business logic layer
 
 Worker-side ingestion should continue to follow a shared step-pipeline approach:
@@ -66,7 +73,9 @@ Do not commit:
 If material is useful internally but not suitable for the repository, keep it under the local private workspace rather than adding it here.
 
 ## Project Structure & Module Organization
-Cerul is organized as a bootstrap monorepo. Put product-facing code in `apps/`: `apps/web` is the Next.js frontend (`app/`, `components/`, `lib/`) and `apps/api` is the FastAPI backend (`routers/`, `services/`, `middleware/`). Shared Python logic belongs in `core/` (`auth/`, `db/`, `embedding/`, `pipeline/`, `search/`, `telemetry/`). Track-specific indexing flows live in `workers/broll_indexer` and `workers/knowledge_indexer`. Keep reusable client code in `sdk/javascript` and `sdk/python`, MCP server code in `mcp/`, config files in `config/`, and experiments in `training/`.
+Cerul is organized as a lightweight monorepo with root-level product entrypoints. Put the Next.js app in `frontend/` (`app/`, `components/`, `lib/`) and the FastAPI app in `backend/` (`app/routers`, `app/services`, `app/middleware`). Backend domain modules live under `backend/app/` (`auth/`, `billing/`, `db/`, `embedding/`, `search/`, `telemetry/`). Shared pipeline infrastructure belongs in `workers/common/pipeline`, while track-specific indexing flows live in `workers/broll` and `workers/knowledge`. Keep public-safe docs in `docs/`, migrations and seed data in `db/`, installable agent skills in `skills/`, config files in `config/`, and local automation scripts in `scripts/`.
+
+Do not create a top-level `sdk/` just to wrap Cerul's own backend calls. An SDK only belongs in the repo once there is a real public client package to ship and version independently. Until then, frontend code should call backend APIs directly, and agent integrations should prefer a documented skill plus direct HTTP access. Treat MCP the same way: it is a future adapter, not a required first-class module in the initial repository layout.
 
 ## Build, Test, and Development Commands
 This repository is still scaffold-first: no root `package.json`, `pyproject.toml`, or `Makefile` is committed yet. Today, the main setup command is:
@@ -75,10 +84,10 @@ This repository is still scaffold-first: no root `package.json`, `pyproject.toml
 cp .env.example .env
 ```
 
-Use it to seed local secrets and service URLs before running any new app code. When you add runnable modules, expose explicit commands close to that module and document them in both `README.md` and this file (for example, `pnpm --dir apps/web dev` or `pytest apps/api`).
+Use it to seed local secrets and service URLs before running any new app code. When you add runnable modules, expose explicit commands close to that module and document them in both `README.md` and this file (for example, `pnpm --dir frontend dev` or `pytest backend`).
 
 ## Coding Style & Naming Conventions
-Match the target stack. Use `snake_case` for Python modules, functions, and worker steps (`knowledge_indexer`, `scene_threshold`), and `PascalCase` for React components with `camelCase` helpers. Prefer 4-space indentation in Python and 2 spaces in TypeScript, JSON, and YAML. Keep files narrowly scoped: API routing stays in `apps/api/routers`, shared retrieval logic stays in `core/search`, and app-only utilities stay inside the owning app.
+Match the target stack. Use `snake_case` for Python modules, functions, and worker steps (`knowledge`, `scene_threshold`), and `PascalCase` for React components with `camelCase` helpers. Prefer 4-space indentation in Python and 2 spaces in TypeScript, JSON, and YAML. Keep files narrowly scoped: API routing stays in `backend/app/routers`, shared retrieval logic stays in `backend/app/search`, pipeline primitives stay in `workers/common/pipeline`, and app-only utilities stay inside the owning app.
 
 Additional Cerul-specific expectations:
 

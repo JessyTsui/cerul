@@ -2,7 +2,7 @@
 
 ## Supported Scope
 
-Cerul.ai is currently in a pre-1.0 bootstrap stage.
+Cerul is currently in a pre-1.0 bootstrap stage.
 
 At this stage, security fixes are only expected for the latest code on the default branch.
 
