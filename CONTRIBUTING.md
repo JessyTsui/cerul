@@ -1,8 +1,8 @@
-# Contributing to Cerul.ai
+# Contributing to Cerul
 
 Thanks for your interest in contributing.
 
-Cerul.ai is still in an early bootstrap phase, so the repository is intentionally lightweight. The goal right now is to keep the project easy to evolve while establishing clear contribution boundaries.
+Cerul is still in an early bootstrap phase, so the repository is intentionally lightweight. The goal right now is to keep the project easy to evolve while establishing clear contribution boundaries.
 
 ## Before You Start
 
@@ -22,19 +22,25 @@ Cerul currently has two product tracks:
 
 They should continue to share one common platform backbone. Contributions that introduce a parallel primary stack, duplicate business logic, or unnecessary framework churn are unlikely to be accepted.
 
+For agent-facing integrations, the default path is:
+
+- direct HTTP API
+- API key authentication
+- installable skill
+
+Please do not add an MCP layer unless there is a documented reason and a clear user need.
+
 ## Repository Structure
 
 ```text
-apps/
-  web/        Next.js application
-  api/        FastAPI service
-core/         Shared Python modules
+frontend/     Next.js application
+backend/      FastAPI service and backend modules
 workers/      Indexing pipelines and ingestion workers
+docs/         Public project docs
+db/           Migrations and public-safe seeds
+skills/       Installable agent skills
 config/       Config files
 scripts/      Local scripts and bootstrap helpers
-training/     Training experiments
-sdk/          Client SDKs
-mcp/          MCP server
 ```
 
 ## Branches
