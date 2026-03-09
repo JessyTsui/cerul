@@ -1,0 +1,46 @@
+name: Bug Report
+description: Report a user-visible bug or incorrect behavior
+title: "[Bug] "
+labels:
+  - bug
+body:
+  - type: textarea
+    id: summary
+    attributes:
+      label: Summary
+      description: What is going wrong?
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to Reproduce
+      description: List the minimal steps needed to reproduce the issue.
+      placeholder: |
+        1. Go to ...
+        2. Call ...
+        3. Observe ...
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected Behavior
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual Behavior
+    validations:
+      required: true
+  - type: textarea
+    id: scope
+    attributes:
+      label: Affected Area
+      description: Which directory, module, route, or worker is affected?
+  - type: textarea
+    id: notes
+    attributes:
+      label: Extra Context
+      description: Logs, screenshots, payloads, or anything else helpful.

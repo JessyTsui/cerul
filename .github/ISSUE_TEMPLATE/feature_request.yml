@@ -1,0 +1,30 @@
+name: Feature Request
+description: Propose a new feature or capability
+title: "[Feature] "
+labels:
+  - enhancement
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: What problem should this feature solve?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed Change
+      description: Describe the solution you want.
+    validations:
+      required: true
+  - type: textarea
+    id: impact
+    attributes:
+      label: Expected Impact
+      description: Why does this matter for Cerul?
+  - type: textarea
+    id: scope
+    attributes:
+      label: Scope Notes
+      description: Mention affected areas such as `apps/web`, `apps/api`, or `workers/`.

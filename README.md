@@ -102,6 +102,12 @@ Not public:
 - proprietary training data
 - tuned production prompts and parameters
 
+## Community
+
+- [Contributing Guide](./CONTRIBUTING.md)
+- [Security Policy](./SECURITY.md)
+- [Code of Conduct](./CODE_OF_CONDUCT.md)
+
 ## License
 
 This repository is licensed under [Apache 2.0](./LICENSE).

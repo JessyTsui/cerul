@@ -1,0 +1,30 @@
+name: Decision Request
+description: Track a non-trivial architecture, infrastructure, or workflow decision
+title: "[Decision] "
+labels:
+  - decision
+body:
+  - type: textarea
+    id: context
+    attributes:
+      label: Context
+      description: What decision needs to be made and why now?
+    validations:
+      required: true
+  - type: textarea
+    id: options
+    attributes:
+      label: Options Considered
+      description: List the main options and tradeoffs.
+    validations:
+      required: true
+  - type: textarea
+    id: recommendation
+    attributes:
+      label: Recommended Direction
+      description: What is the current recommendation?
+  - type: textarea
+    id: impact
+    attributes:
+      label: Impact
+      description: What parts of the system would change?
