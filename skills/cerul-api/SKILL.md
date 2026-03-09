@@ -52,7 +52,7 @@ OAuth is not the default path for this skill. Only use OAuth if Cerul later publ
 ## Minimal HTTP Example
 
 ```bash
-curl "$CERUL_BASE_URL/v1/search" \
+curl "${CERUL_BASE_URL:-https://api.cerul.ai}/v1/search" \
   -H "Authorization: Bearer $CERUL_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{
