@@ -39,7 +39,7 @@ workers/      Indexing pipelines and ingestion workers
 docs/         Public project docs
 db/           Migrations and public-safe seeds
 skills/       Installable agent skills
-config/       Config files
+config/       Public-safe config defaults
 scripts/      Local scripts and bootstrap helpers
 ```
 
@@ -122,6 +122,8 @@ Do not commit:
 - internal fundraising or strategy materials
 
 If a file is useful internally but should not be public, keep it out of this repository.
+
+Public-safe runtime defaults belong in `config/`. Secrets and provider credentials belong in `.env` or deployment platform env vars.
 
 ## Code Style
 

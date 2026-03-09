@@ -1,0 +1,16 @@
+version: 1
+
+public:
+  default_track: broll
+  enabled_tracks:
+    - broll
+    - knowledge
+
+search:
+  mmr_lambda: 0.75
+  clip_score_threshold: null
+
+knowledge:
+  scene_threshold: 0.35
+  rerank_top_n: 20
+  rerank_prompt_template: default

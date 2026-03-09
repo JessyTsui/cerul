@@ -73,7 +73,7 @@ Do not commit:
 If material is useful internally but not suitable for the repository, keep it under the local private workspace rather than adding it here.
 
 ## Project Structure & Module Organization
-Cerul is organized as a lightweight monorepo with root-level product entrypoints. Put the Next.js app in `frontend/` (`app/`, `components/`, `lib/`) and the FastAPI app in `backend/` (`app/routers`, `app/services`, `app/middleware`). Backend domain modules live under `backend/app/` (`auth/`, `billing/`, `db/`, `embedding/`, `search/`, `telemetry/`). Shared pipeline infrastructure belongs in `workers/common/pipeline`, while track-specific indexing flows live in `workers/broll` and `workers/knowledge`. Keep public-safe docs in `docs/`, migrations and seed data in `db/`, installable agent skills in `skills/`, config files in `config/`, and local automation scripts in `scripts/`.
+Cerul is organized as a lightweight monorepo with root-level product entrypoints. Put the Next.js app in `frontend/` (`app/`, `components/`, `lib/`) and the FastAPI app in `backend/` (`app/routers`, `app/services`, `app/middleware`). Backend domain modules live under `backend/app/` (`auth/`, `billing/`, `db/`, `embedding/`, `search/`, `telemetry/`). Shared pipeline infrastructure belongs in `workers/common/pipeline`, while track-specific indexing flows live in `workers/broll` and `workers/knowledge`. Keep public-safe docs in `docs/`, migrations and seed data in `db/`, installable agent skills in `skills/`, public-safe config files in `config/`, and local automation scripts in `scripts/`.
 
 Do not create a top-level `sdk/` just to wrap Cerul's own backend calls. An SDK only belongs in the repo once there is a real public client package to ship and version independently. Until then, frontend code should call backend APIs directly, and agent integrations should prefer a documented skill plus direct HTTP access. Treat MCP the same way: it is a future adapter, not a required first-class module in the initial repository layout.
 
@@ -84,7 +84,7 @@ This repository is still scaffold-first: no root `package.json`, `pyproject.toml
 cp .env.example .env
 ```
 
-Use it to seed local secrets and service URLs before running any new app code. When you add runnable modules, expose explicit commands close to that module and document them in both `README.md` and this file (for example, `pnpm --dir frontend dev` or `pytest backend`).
+Use it to seed local secrets, runtime profile selection, and any optional env overrides before running new app code. Public-safe default config should live in `config/*.yaml`, not in `.env`. Frontend browser code must consume a derived public config subset rather than reading raw repo config files directly. When you add runnable modules, expose explicit commands close to that module and document them in both `README.md` and this file (for example, `pnpm --dir frontend dev` or `pytest backend`).
 
 ## Coding Style & Naming Conventions
 Match the target stack. Use `snake_case` for Python modules, functions, and worker steps (`knowledge`, `scene_threshold`), and `PascalCase` for React components with `camelCase` helpers. Prefer 4-space indentation in Python and 2 spaces in TypeScript, JSON, and YAML. Keep files narrowly scoped: API routing stays in `backend/app/routers`, shared retrieval logic stays in `backend/app/search`, pipeline primitives stay in `workers/common/pipeline`, and app-only utilities stay inside the owning app.
@@ -220,6 +220,6 @@ Issue rules:
 - include acceptance criteria when the task is implementation-driven
 
 ## Security & Configuration Tips
-Never commit `.env`, provider credentials, or generated artifacts. Use `.env.example` as the source of truth for required variables such as `OPENAI_API_KEY`, `DATABASE_URL`, and content API keys.
+Never commit `.env`, provider credentials, or generated artifacts. Use `.env.example` as the source of truth for required private variables such as `OPENAI_API_KEY`, `DATABASE_URL`, and content API keys. Use `config/*.yaml` for commit-safe defaults and non-sensitive tuning values. Treat `publicConfig` as a code-level whitelist derived from those sources, not as a third configuration store.
 
 If a change affects public docs or repository metadata, ensure the result still matches the intended open-source boundary of the project.

@@ -68,7 +68,7 @@ workers/      Indexing pipelines and job workers
 docs/         Public architecture, API, product, and runbook docs
 db/           Migrations and public-safe seed data
 skills/       Installable agent skills for Codex / Claude-style clients
-config/       YAML config files
+config/       Public-safe YAML config defaults and templates
 scripts/      Bootstrap and local utility scripts
 ```
 

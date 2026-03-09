@@ -1,0 +1,5 @@
+public:
+  app_env: production
+  api_base_url: https://api.cerul.ai
+  web_base_url: https://cerul.ai
+  demo_mode: false
