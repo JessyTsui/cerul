@@ -99,7 +99,7 @@ export const metadata: Metadata = {
         url: "/og-image.png",
         width: 1200,
         height: 630,
-        alt: "Cerul",
+        alt: "Cerul — Video Search API for AI Agents",
       },
     ],
   },
@@ -108,7 +108,14 @@ export const metadata: Metadata = {
     title: "Cerul",
     description:
       "Video understanding search API for AI agents. Search what is shown in videos, not just what is said.",
-    images: ["/og-image.png"],
+    images: [
+      {
+        url: "/og-twitter.png",
+        width: 800,
+        height: 418,
+        alt: "Cerul — Video Search API for AI Agents",
+      },
+    ],
   },
 };
 
