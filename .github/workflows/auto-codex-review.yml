@@ -1,0 +1,55 @@
+name: Auto Codex Review on PR
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  codex-review:
+    runs-on: ubuntu-latest
+    if: github.event.pull_request.draft == false
+    steps:
+      - name: Request Codex review
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const pullRequest = context.payload.pull_request;
+            const prNumber = pullRequest.number;
+            const event = context.payload.action;
+            const headSha = pullRequest.head.sha;
+            const requestBody = [
+              '@codex review plz',
+              '',
+              `Event: ${event}`,
+              `Commit: ${headSha}`
+            ].join('\n');
+
+            const comments = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: prNumber,
+              per_page: 100
+            });
+            const alreadyRequestedForCommit = comments.data.some(
+              c =>
+                c.user.login === 'github-actions[bot]' &&
+                c.body.includes('@codex review plz') &&
+                c.body.includes(`Commit: ${headSha}`)
+            );
+            if (alreadyRequestedForCommit) {
+              console.log(`Codex review already requested for commit ${headSha}, skipping`);
+              return;
+            }
+
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: prNumber,
+              body: requestBody
+            });
+            console.log(`Requested Codex review on PR #${prNumber} for commit ${headSha}`);
