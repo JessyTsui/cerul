@@ -86,6 +86,32 @@ cp .env.example .env
 
 Use it to seed local secrets, runtime profile selection, and any optional env overrides before running new app code. Public-safe default config should live in `config/*.yaml`, not in `.env`. Frontend browser code must consume a derived public config subset rather than reading raw repo config files directly. When you add runnable modules, expose explicit commands close to that module and document them in both `README.md` and this file (for example, `pnpm --dir frontend dev` or `pytest backend`).
 
+Current frontend commands:
+
+```sh
+pnpm --dir frontend install
+pnpm --dir frontend dev
+pnpm --dir frontend lint
+pnpm --dir frontend test
+pnpm --dir frontend build
+```
+
+Current backend commands:
+
+```sh
+python3 -m venv backend/.venv
+backend/.venv/bin/python -m pip install -r backend/requirements.txt
+backend/.venv/bin/python -m uvicorn app.main:app --app-dir backend --reload --host 127.0.0.1 --port 8000
+backend/.venv/bin/pytest backend/tests
+```
+
+Repository-level reset:
+
+```sh
+./rebuild.sh
+./rebuild.sh --fast
+```
+
 ## Coding Style & Naming Conventions
 Match the target stack. Use `snake_case` for Python modules, functions, and worker steps (`knowledge`, `scene_threshold`), and `PascalCase` for React components with `camelCase` helpers. Prefer 4-space indentation in Python and 2 spaces in TypeScript, JSON, and YAML. Keep files narrowly scoped: API routing stays in `backend/app/routers`, shared retrieval logic stays in `backend/app/search`, pipeline primitives stay in `workers/common/pipeline`, and app-only utilities stay inside the owning app.
 

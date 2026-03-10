@@ -1,9 +1,52 @@
 # Frontend Workspace
 
-This directory is reserved for the Cerul web app.
+Cerul's web application lives in this directory.
 
-- framework: Next.js
-- primary concerns: landing pages, docs pages, dashboard, and demo flows
-- expected subdirectories: `app/`, `components/`, `lib/`
+## Scope
 
-Do not move backend business logic here. The frontend should consume the backend API instead of becoming a second application core.
+The frontend is responsible for:
+
+- landing and marketing pages
+- public documentation pages
+- dashboard and demo surfaces
+
+The frontend should consume backend APIs instead of becoming the primary business logic layer.
+
+## Stack
+
+- Next.js App Router
+- React
+- Tailwind CSS v4
+- TypeScript
+
+## Commands
+
+```sh
+pnpm --dir frontend install
+pnpm --dir frontend dev
+pnpm --dir frontend lint
+pnpm --dir frontend test
+pnpm --dir frontend build
+```
+
+## Deployment
+
+Cerul's web app is ready to deploy to Vercel as a subdirectory app.
+
+- set the Vercel project Root Directory to `frontend`
+- keep `frontend/vercel.json` as the project-level Vercel config
+- optional env override: `NEXT_PUBLIC_SITE_URL=https://your-domain.example`
+
+If no custom public URL is provided, the app falls back to Vercel system environment
+variables for metadata, canonical URLs, `robots.txt`, and `sitemap.xml`.
+
+## Routes in this scaffold
+
+- `/` marketing home
+- `/docs` public documentation landing page
+- `/docs/[slug]` documentation subpages
+- `/pricing` pricing page
+- `/login` and `/signup` auth mock pages
+- `/dashboard` private console overview
+- `/dashboard/keys`, `/dashboard/usage`, `/dashboard/pipelines`, `/dashboard/settings`
+- `/api/demo/search` and `/api/demo/dashboard` mock API routes for the frontend demo

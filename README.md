@@ -51,6 +51,7 @@ What exists today:
 - public repository scaffold
 - license and environment template
 - project structure for frontend, backend, workers, docs, database migrations, and agent skills
+- initial Next.js frontend scaffold for the landing page, docs, and dashboard surfaces
 
 What is not in the repository yet:
 
@@ -71,6 +72,50 @@ skills/       Installable agent skills for Codex / Claude-style clients
 config/       Public-safe YAML config defaults and templates
 scripts/      Bootstrap and local utility scripts
 ```
+
+## Development Commands
+
+Current runnable frontend commands:
+
+```sh
+pnpm --dir frontend install
+pnpm --dir frontend dev
+pnpm --dir frontend lint
+pnpm --dir frontend test
+pnpm --dir frontend build
+```
+
+Current runnable backend commands:
+
+```sh
+python3 -m venv backend/.venv
+backend/.venv/bin/python -m pip install -r backend/requirements.txt
+backend/.venv/bin/python -m uvicorn app.main:app --app-dir backend --reload --host 127.0.0.1 --port 8000
+backend/.venv/bin/pytest backend/tests
+```
+
+Repository-level development reset:
+
+```sh
+./rebuild.sh
+./rebuild.sh --fast
+```
+
+`./rebuild.sh` clears frontend and backend caches, reinstalls dependencies, and then
+starts both development servers together.
+
+## Vercel Deployment
+
+To deploy the current web experience on Vercel:
+
+1. Import the repository into Vercel.
+2. Set the project Root Directory to `frontend`.
+3. Keep the included `frontend/vercel.json`.
+4. Optionally set `NEXT_PUBLIC_SITE_URL` if you want metadata and canonical URLs to
+   use a custom domain before that domain is attached in Vercel.
+
+If `NEXT_PUBLIC_SITE_URL` is not provided, the frontend falls back to Vercel system
+environment variables for metadata, `robots.txt`, and `sitemap.xml`.
 
 ## Agent Integration Strategy
 
@@ -119,3 +164,7 @@ Not public:
 ## License
 
 This repository is licensed under [Apache 2.0](./LICENSE).
+
+## Star History
+
+[![Star History Chart](https://api.star-history.com/svg?repos=JessyTsui/cerul&type=Date)](https://star-history.com/#JessyTsui/cerul&Date)
