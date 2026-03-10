@@ -19,9 +19,40 @@ class StripeWebhookDb:
         self.stripe_events: dict[str, dict[str, object]] = {}
         self.checkout_updates = 0
         self.subscription_updates = 0
+        self.transaction_entries = 0
+        self.transaction_exits = 0
+
+    def transaction(self):
+        db = self
+
+        class _Transaction:
+            async def __aenter__(self) -> None:
+                db.transaction_entries += 1
+
+            async def __aexit__(self, exc_type, exc, tb) -> bool:
+                db.transaction_exits += 1
+                return False
+
+        return _Transaction()
 
     async def fetchrow(self, query: str, *params: object) -> dict[str, object] | None:
         normalized = " ".join(query.split())
+
+        if "INSERT INTO stripe_events" in normalized:
+            stripe_event_id = str(params[0])
+            if stripe_event_id in self.stripe_events:
+                return None
+            created = {
+                "stripe_event_id": stripe_event_id,
+                "event_type": str(params[1]),
+                "payload": str(params[2]),
+                "processed_at": None,
+            }
+            self.stripe_events[stripe_event_id] = created
+            return {
+                "stripe_event_id": stripe_event_id,
+                "processed_at": None,
+            }
 
         if "FROM stripe_events" in normalized:
             event = self.stripe_events.get(str(params[0]))
@@ -36,18 +67,6 @@ class StripeWebhookDb:
 
     async def execute(self, query: str, *params: object) -> str:
         normalized = " ".join(query.split())
-
-        if "INSERT INTO stripe_events" in normalized:
-            stripe_event_id = str(params[0])
-            self.stripe_events.setdefault(
-                stripe_event_id,
-                {
-                    "event_type": str(params[1]),
-                    "payload": str(params[2]),
-                    "processed_at": None,
-                },
-            )
-            return "INSERT 0 1"
 
         if "UPDATE stripe_events" in normalized:
             stripe_event_id = str(params[0])
@@ -280,3 +299,5 @@ def test_webhook_processing_is_idempotent_for_duplicate_event(
     assert second_response.json() == {"status": "duplicate", "duplicate": True}
     assert db.checkout_updates == 1
     assert len(db.stripe_events) == 1
+    assert db.transaction_entries == 1
+    assert db.transaction_exits == 1

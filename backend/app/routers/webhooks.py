@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from contextlib import asynccontextmanager
 from typing import Any, Mapping, cast
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
@@ -26,35 +27,55 @@ def _record_to_dict(record: Any | None) -> dict[str, Any] | None:
     return cast(dict[str, Any], dict(record))
 
 
-async def fetch_logged_event(db: Any, stripe_event_id: str) -> dict[str, Any] | None:
+@asynccontextmanager
+async def transaction_scope(db: Any):
+    transaction = getattr(db, "transaction", None)
+    if transaction is None:
+        yield
+        return
+
+    async with transaction():
+        yield
+
+
+async def fetch_logged_event(
+    db: Any,
+    stripe_event_id: str,
+    *,
+    for_update: bool = False,
+) -> dict[str, Any] | None:
+    lock_clause = " FOR UPDATE" if for_update else ""
     row = await db.fetchrow(
-        """
+        f"""
         SELECT stripe_event_id, processed_at
         FROM stripe_events
         WHERE stripe_event_id = $1
+        {lock_clause}
         """,
         stripe_event_id,
     )
     return _record_to_dict(row)
 
 
-async def log_raw_event(
+async def insert_logged_event(
     db: Any,
     *,
     stripe_event_id: str,
     event_type: str,
     payload: str,
-) -> None:
-    await db.execute(
+) -> dict[str, Any] | None:
+    row = await db.fetchrow(
         """
         INSERT INTO stripe_events (stripe_event_id, event_type, payload)
         VALUES ($1, $2, $3)
         ON CONFLICT (stripe_event_id) DO NOTHING
+        RETURNING stripe_event_id, processed_at
         """,
         stripe_event_id,
         event_type,
         payload,
     )
+    return _record_to_dict(row)
 
 
 async def mark_event_processed(db: Any, stripe_event_id: str) -> None:
@@ -131,21 +152,30 @@ async def handle_stripe_webhook(
     if existing and existing.get("processed_at") is not None:
         return StripeWebhookResponse(status="duplicate", duplicate=True)
 
-    await log_raw_event(
-        db,
-        stripe_event_id=stripe_event_id,
-        event_type=event_type,
-        payload=payload.decode("utf-8"),
-    )
+    async with transaction_scope(db):
+        inserted = await insert_logged_event(
+            db,
+            stripe_event_id=stripe_event_id,
+            event_type=event_type,
+            payload=payload.decode("utf-8"),
+        )
+        if inserted is None:
+            locked_event = await fetch_logged_event(
+                db,
+                stripe_event_id,
+                for_update=True,
+            )
+            if locked_event and locked_event.get("processed_at") is not None:
+                return StripeWebhookResponse(status="duplicate", duplicate=True)
 
-    try:
-        await process_stripe_event(db, event)
-    except stripe_service.StripeServiceError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail=str(exc),
-        ) from exc
+        try:
+            await process_stripe_event(db, event)
+        except stripe_service.StripeServiceError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=str(exc),
+            ) from exc
 
-    await mark_event_processed(db, stripe_event_id)
+        await mark_event_processed(db, stripe_event_id)
 
     return StripeWebhookResponse(status="ok", duplicate=False)
