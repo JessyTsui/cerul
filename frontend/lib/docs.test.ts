@@ -3,7 +3,7 @@ import { getDocBySlug, getDocsPageCanonical, getDocsStaticParams } from "./docs"
 
 describe("getDocBySlug", () => {
   it("returns the expected docs page", () => {
-    expect(getDocBySlug("quickstart")?.title).toBe("Quickstart");
+    expect(getDocBySlug("quickstart")?.title).toBe("Quickstart Guide");
   });
 
   it("returns undefined for unknown slugs", () => {

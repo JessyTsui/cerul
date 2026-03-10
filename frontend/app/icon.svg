@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <defs>
+    <linearGradient id="cerul-icon-gradient" x1="8" x2="56" y1="8" y2="56" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#60A5FA" />
+      <stop offset="1" stop-color="#F97316" />
+    </linearGradient>
+  </defs>
+  <rect width="64" height="64" rx="18" fill="#0A0A0F" />
+  <path
+    d="M44 16h-9.5c-10.2 0-18.5 7.6-18.5 16.9S24.3 49.7 34.5 49.7H44v-8.1h-9.2c-5.5 0-9.8-3.8-9.8-8.7s4.3-8.7 9.8-8.7H44V16Z"
+    fill="url(#cerul-icon-gradient)"
+  />
+</svg>

@@ -46,51 +46,61 @@ export function DashboardLiveStatus({ initialStatus }: DashboardLiveStatusProps)
   }, []);
 
   return (
-    <div className="rounded-[22px] border border-[var(--line)] bg-white/76 px-4 py-4">
+    <div className="rounded-lg border border-[var(--border)] bg-[var(--surface)] px-4 py-4">
       <div className="flex items-center justify-between gap-3">
-        <p className="font-mono text-xs uppercase tracking-[0.18em] text-[var(--muted)]">
+        <p className="font-mono text-xs uppercase tracking-[0.1em] text-[var(--foreground-tertiary)]">
           Live system state
         </p>
         <button
           type="button"
           onClick={() => void refreshStatus()}
-          className="rounded-full border border-[var(--line)] bg-white px-3 py-1 text-xs font-medium text-[var(--foreground)] transition hover:border-[rgba(10,142,216,0.24)]"
+          className="rounded-md border border-[var(--border)] bg-[var(--surface-elevated)] px-2.5 py-1 text-xs font-medium text-[var(--foreground-secondary)] transition hover:border-[var(--brand)] hover:text-[var(--foreground)]"
         >
-          {refreshing ? "Refreshing" : "Refresh"}
+          {refreshing ? (
+            <span className="flex items-center gap-1">
+              <svg className="h-3 w-3 animate-spin" viewBox="0 0 24 24" fill="none">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+              </svg>
+              Refreshing
+            </span>
+          ) : (
+            "Refresh"
+          )}
         </button>
       </div>
       <div className="mt-4 flex items-center justify-between gap-3">
         <div>
-          <p className="text-lg font-semibold">{status.health}</p>
-          <p className="mt-1 text-sm leading-6 text-[var(--muted)]">
+          <p className="text-lg font-semibold text-white">{status.health}</p>
+          <p className="mt-1 text-sm text-[var(--foreground-tertiary)]">
             {status.summary}
           </p>
         </div>
         <span
-          className={`rounded-full px-3 py-1 text-xs font-semibold ${
+          className={`rounded-full px-2.5 py-1 text-xs font-medium ${
             status.health === "Healthy"
-              ? "bg-emerald-100 text-emerald-700"
-              : "bg-amber-100 text-amber-700"
+              ? "bg-emerald-500/15 text-emerald-400"
+              : "bg-amber-500/15 text-amber-400"
           }`}
         >
           {status.freshness}
         </span>
       </div>
       <div className="mt-4 grid grid-cols-2 gap-3 text-sm">
-        <div className="rounded-[18px] bg-slate-900/4 px-3 py-3">
-          <p className="font-mono text-xs uppercase tracking-[0.14em] text-[var(--muted)]">
+        <div className="rounded-lg bg-[var(--surface-elevated)] px-3 py-3">
+          <p className="font-mono text-xs uppercase tracking-[0.1em] text-[var(--foreground-tertiary)]">
             Active workers
           </p>
-          <p className="mt-2 text-xl font-semibold">{status.activeWorkers}</p>
+          <p className="mt-2 text-xl font-bold text-white">{status.activeWorkers}</p>
         </div>
-        <div className="rounded-[18px] bg-slate-900/4 px-3 py-3">
-          <p className="font-mono text-xs uppercase tracking-[0.14em] text-[var(--muted)]">
+        <div className="rounded-lg bg-[var(--surface-elevated)] px-3 py-3">
+          <p className="font-mono text-xs uppercase tracking-[0.1em] text-[var(--foreground-tertiary)]">
             Queue depth
           </p>
-          <p className="mt-2 text-xl font-semibold">{status.queueDepth}</p>
+          <p className="mt-2 text-xl font-bold text-white">{status.queueDepth}</p>
         </div>
       </div>
-      <p className="mt-4 text-xs text-[var(--muted)]">Updated {status.updatedAt}</p>
+      <p className="mt-4 text-xs text-[var(--foreground-tertiary)]">Updated {status.updatedAt}</p>
     </div>
   );
 }

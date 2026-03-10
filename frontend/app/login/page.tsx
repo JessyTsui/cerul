@@ -16,22 +16,22 @@ export const metadata: Metadata = {
 
 export default function LoginPage() {
   return (
-    <div className="mx-auto flex min-h-screen max-w-[1440px] flex-col px-5 pb-8 pt-5 sm:px-8 lg:px-10">
+    <div className="mx-auto flex min-h-screen max-w-[1400px] flex-col px-4 pb-8 pt-4 sm:px-6 lg:px-8">
       <SiteHeader currentPath="/login" />
-      <main className="grid flex-1 gap-6 pb-8 pt-10 lg:grid-cols-[0.9fr_1.1fr]">
-        <section className="surface px-6 py-6 sm:px-8">
+      <main className="grid flex-1 gap-6 pb-8 pt-10 lg:grid-cols-2">
+        <section className="surface-elevated px-6 py-6 lg:px-8">
           <p className="eyebrow">Operator access</p>
-          <h1 className="display-title mt-3 text-5xl sm:text-6xl">
+          <h1 className="mt-3 text-3xl font-bold text-white sm:text-4xl">
             Sign in to manage keys and usage.
           </h1>
-          <div className="mt-6 space-y-4">
+          <div className="mt-6 space-y-3">
             {authValueProps.map((item) => (
               <div
                 key={item.title}
-                className="rounded-[22px] border border-[var(--line)] bg-white/76 px-4 py-4"
+                className="rounded-xl border border-[var(--border)] bg-[var(--surface)] px-4 py-4"
               >
-                <h2 className="text-lg font-semibold tracking-tight">{item.title}</h2>
-                <p className="mt-3 text-sm leading-6 text-[var(--muted)]">
+                <h2 className="font-semibold text-white">{item.title}</h2>
+                <p className="mt-2 text-sm text-[var(--foreground-tertiary)]">
                   {item.description}
                 </p>
               </div>
@@ -39,25 +39,25 @@ export default function LoginPage() {
           </div>
         </section>
 
-        <section className="surface px-6 py-6 sm:px-8">
-          <form className="rounded-[24px] border border-[var(--line)] bg-white/82 p-5">
-            <p className="font-mono text-xs uppercase tracking-[0.18em] text-[var(--muted)]">
-              Mock sign-in
+        <section className="surface-elevated px-6 py-6 lg:px-8">
+          <form className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-5">
+            <p className="font-mono text-xs uppercase tracking-[0.1em] text-[var(--foreground-tertiary)]">
+              Sign in
             </p>
             <div className="mt-5 space-y-4">
               <label className="block">
-                <span className="mb-2 block text-sm font-medium">Work email</span>
+                <span className="mb-2 block text-sm font-medium text-[var(--foreground-secondary)]">Work email</span>
                 <input
-                  className="h-12 w-full rounded-[18px] border border-[var(--line)] bg-transparent px-4 outline-none focus:border-[rgba(10,142,216,0.24)]"
+                  className="h-11 w-full rounded-lg border border-[var(--border)] bg-[var(--background)] px-4 text-white outline-none transition-all placeholder:text-[var(--foreground-tertiary)] focus:border-[var(--brand)] focus:ring-1 focus:ring-[var(--brand)]"
                   type="email"
                   placeholder="you@company.com"
                   autoComplete="email"
                 />
               </label>
               <label className="block">
-                <span className="mb-2 block text-sm font-medium">Password</span>
+                <span className="mb-2 block text-sm font-medium text-[var(--foreground-secondary)]">Password</span>
                 <input
-                  className="h-12 w-full rounded-[18px] border border-[var(--line)] bg-transparent px-4 outline-none focus:border-[rgba(10,142,216,0.24)]"
+                  className="h-11 w-full rounded-lg border border-[var(--border)] bg-[var(--background)] px-4 text-white outline-none transition-all placeholder:text-[var(--foreground-tertiary)] focus:border-[var(--brand)] focus:ring-1 focus:ring-[var(--brand)]"
                   type="password"
                   placeholder="••••••••"
                   autoComplete="current-password"
@@ -67,9 +67,9 @@ export default function LoginPage() {
             <button type="submit" className="button-primary mt-6 w-full">
               Continue to console
             </button>
-            <p className="mt-4 text-sm text-[var(--muted)]">
+            <p className="mt-4 text-sm text-[var(--foreground-tertiary)]">
               Need an account?{" "}
-              <Link href="/signup" className="font-semibold text-[var(--brand-deep)]">
+              <Link href="/signup" className="font-medium text-[var(--brand-bright)] hover:underline">
                 Create one
               </Link>
             </p>

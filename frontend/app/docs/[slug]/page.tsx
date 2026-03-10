@@ -1,8 +1,10 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { AIToolbar } from "@/components/ai-toolbar";
 import { DocsSidebar } from "@/components/docs-sidebar";
-import { SiteFooter } from "@/components/site-footer";
+import { DocsToc, type TocItem } from "@/components/docs-toc";
+import { CodeBlock } from "@/components/code-block";
 import { SiteHeader } from "@/components/site-header";
 import {
   getDocBySlug,
@@ -47,92 +49,156 @@ export default async function DocDetailPage({ params }: DocPageProps) {
     notFound();
   }
 
-  const anchors = page.sections.map((section, index) => ({
-    href: `#section-${index + 1}`,
-    label: section.title,
-    index: `${index + 1}`.padStart(2, "0"),
-  }));
+  const tocItems: TocItem[] = [
+    { id: "intro", text: page.title, level: 1 },
+    ...page.sections.map((section, index) => ({
+      id: `section-${index + 1}`,
+      text: section.title,
+      level: 1,
+    })),
+  ];
 
   return (
-    <div className="mx-auto flex min-h-screen max-w-[1440px] flex-col px-5 pb-8 pt-5 sm:px-8 lg:px-10">
+    <div className="mx-auto flex min-h-screen max-w-[1400px] flex-col px-4 pb-8 pt-4 sm:px-6 lg:px-8">
       <SiteHeader currentPath={`/docs/${slug}`} />
-      <main className="flex-1 pb-12 pt-10">
-        <section className="surface px-6 py-7 sm:px-8">
-          <div className="grid gap-8 lg:grid-cols-[0.92fr_1.08fr] lg:items-end">
-            <div>
-              <span className="label">{page.kicker}</span>
-              <h1 className="display-title mt-5 text-5xl sm:text-6xl">{page.title}</h1>
-            </div>
-            <div>
-              <p className="text-lg leading-8 text-[var(--muted)]">{page.summary}</p>
-              <div className="mt-5 flex flex-col gap-3 sm:flex-row">
-                <span className="rounded-full border border-[var(--line)] bg-white/72 px-4 py-2 font-mono text-xs uppercase tracking-[0.16em] text-[var(--muted)]">
-                  {page.readingTime}
-                </span>
-                <Link href="/docs" className="button-secondary">
-                  Back to docs
-                </Link>
-              </div>
-            </div>
-          </div>
-        </section>
 
-        <section className="grid gap-6 pt-10 lg:grid-cols-[280px_minmax(0,1fr)] lg:items-start">
-          <DocsSidebar currentSlug={slug} anchors={anchors} />
-          <div className="space-y-6">
+      <div className="mt-8 grid gap-8 lg:grid-cols-[280px_1fr_200px]">
+        {/* Left sidebar */}
+        <DocsSidebar currentSlug={slug} />
+
+        {/* Main content */}
+        <main className="min-w-0" data-ai-copy-root="true">
+          {/* Header */}
+          <div id="intro" className="mb-10 scroll-mt-24">
+            <section className="surface-elevated relative overflow-hidden px-6 py-7 sm:px-8">
+              <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-[var(--brand)] to-transparent opacity-80" />
+              <div className="grid gap-8 xl:grid-cols-[minmax(0,1fr)_240px]">
+                <div>
+                  <p className="eyebrow">{page.kicker}</p>
+                  <h1 className="mt-3 text-4xl font-bold tracking-tight text-white sm:text-5xl">
+                    {page.title}
+                  </h1>
+                  <p className="mt-4 max-w-2xl text-lg leading-8 text-[var(--foreground-secondary)]">
+                    {page.summary}
+                  </p>
+
+                  <div className="mt-5 flex flex-wrap items-center gap-3">
+                    <span className="rounded-full border border-[var(--border)] bg-[var(--surface)] px-3 py-1 font-mono text-xs text-[var(--foreground-tertiary)]">
+                      {page.readingTime}
+                    </span>
+                    <span className="rounded-full border border-[var(--border)] bg-[var(--surface)] px-3 py-1 font-mono text-xs text-[var(--foreground-tertiary)]">
+                      {page.sections.length} sections
+                    </span>
+                    <Link href="/docs" className="text-sm text-[var(--brand-bright)] hover:underline">
+                      ← Back to docs
+                    </Link>
+                  </div>
+
+                  <div className="mt-6">
+                    <AIToolbar
+                      copyRootSelector="[data-ai-copy-root='true']"
+                      pageUrl={`/docs/${slug}`}
+                      pageTitle={page.title}
+                    />
+                  </div>
+                </div>
+
+                <div className="grid gap-3 sm:grid-cols-3 xl:grid-cols-1">
+                  <div className="rounded-[18px] border border-[var(--border)] bg-[var(--surface)] px-4 py-4">
+                    <p className="font-mono text-[11px] uppercase tracking-[0.16em] text-[var(--brand-bright)]">
+                      Guide
+                    </p>
+                    <p className="mt-3 text-xl font-semibold text-white">{page.kicker}</p>
+                    <p className="mt-2 text-sm leading-6 text-[var(--foreground-secondary)]">
+                      Built to be operator-readable before you wire in automation.
+                    </p>
+                  </div>
+                  <div className="rounded-[18px] border border-[var(--border)] bg-[var(--surface)] px-4 py-4">
+                    <p className="font-mono text-[11px] uppercase tracking-[0.16em] text-[var(--brand-bright)]">
+                      Read time
+                    </p>
+                    <p className="mt-3 text-xl font-semibold text-white">{page.readingTime}</p>
+                    <p className="mt-2 text-sm leading-6 text-[var(--foreground-secondary)]">
+                      Quick enough for onboarding, specific enough for implementation.
+                    </p>
+                  </div>
+                  <div className="rounded-[18px] border border-[var(--border)] bg-[var(--surface)] px-4 py-4">
+                    <p className="font-mono text-[11px] uppercase tracking-[0.16em] text-[var(--brand-bright)]">
+                      Focus
+                    </p>
+                    <p className="mt-3 text-xl font-semibold text-white">Practical API use</p>
+                    <p className="mt-2 text-sm leading-6 text-[var(--foreground-secondary)]">
+                      Examples, request shape, and the minimum context needed to ship.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </section>
+          </div>
+
+          {/* Sections */}
+          <div className="space-y-12">
             {page.sections.map((section, index) => (
               <section
                 key={section.title}
                 id={`section-${index + 1}`}
-                className="surface scroll-mt-28 px-6 py-6 sm:px-8"
+                className="scroll-mt-24 rounded-[24px] border border-[var(--border)] bg-[linear-gradient(180deg,rgba(255,255,255,0.04),rgba(255,255,255,0.02))] p-6 sm:p-8"
               >
-                <p className="font-mono text-xs uppercase tracking-[0.18em] text-[var(--brand-deep)]">
-                  {`${index + 1}`.padStart(2, "0")}
+                <p className="font-mono text-xs uppercase tracking-[0.1em] text-[var(--brand-bright)] mb-2">
+                  {String(index + 1).padStart(2, "0")}
                 </p>
-                <h2 className="mt-3 text-3xl font-semibold tracking-tight sm:text-4xl">
-                  {section.title}
-                </h2>
-                <p className="mt-4 text-base leading-7 text-[var(--muted)]">
-                  {section.body}
-                </p>
+                <h2 className="text-2xl font-bold text-white">{section.title}</h2>
+                <p className="mt-3 max-w-3xl text-[var(--foreground-secondary)]">{section.body}</p>
+
                 {section.bullets?.length ? (
-                  <ul className="mt-6 grid gap-3 sm:grid-cols-2">
+                  <ul className="mt-5 grid gap-3 sm:grid-cols-2">
                     {section.bullets.map((bullet) => (
                       <li
                         key={bullet}
-                        className="rounded-[22px] border border-[var(--line)] bg-white/72 px-4 py-3 text-sm leading-6"
+                        className="flex items-start gap-2 rounded-2xl border border-[var(--border)] bg-[var(--surface)] px-4 py-3 text-sm text-[var(--foreground-secondary)]"
                       >
+                        <span className="mt-1.5 h-1.5 w-1.5 flex-shrink-0 rounded-full bg-[var(--brand)]" />
                         {bullet}
                       </li>
                     ))}
                   </ul>
                 ) : null}
+
                 {section.code ? (
-                  <div className="code-window mt-7 px-5 py-5 sm:px-6">
-                    <pre>{section.code}</pre>
+                  <div className="mt-6">
+                    <CodeBlock
+                      code={section.code}
+                      filename={section.filename || "example.sh"}
+                      language={section.language || "bash"}
+                    />
                   </div>
                 ) : null}
               </section>
             ))}
-
-            <section className="surface-strong px-6 py-6 sm:px-8">
-              <p className="eyebrow">Next surface</p>
-              <h2 className="display-title mt-3 text-4xl sm:text-5xl">
-                Inspect how the same contract shows up in the operator console.
-              </h2>
-              <div className="mt-6 flex flex-col gap-3 sm:flex-row">
-                <Link href="/dashboard" className="button-primary">
-                  Open dashboard
-                </Link>
-                <Link href="/pricing" className="button-secondary">
-                  Review pricing
-                </Link>
-              </div>
-            </section>
           </div>
-        </section>
-      </main>
-      <SiteFooter />
+
+          {/* Next steps */}
+          <div className="surface-gradient mt-12 p-6">
+            <h3 className="text-lg font-semibold text-white">Continue Reading</h3>
+            <p className="mt-2 text-[var(--foreground-secondary)]">
+              Explore more guides or try the API in the dashboard.
+            </p>
+            <div className="mt-4 flex flex-wrap gap-3">
+              <Link href="/docs" className="button-secondary">
+                All Guides
+              </Link>
+              <Link href="/dashboard" className="button-primary">
+                Open Dashboard
+              </Link>
+            </div>
+          </div>
+        </main>
+
+        {/* Right TOC */}
+        <div className="hidden lg:block">
+          <DocsToc items={tocItems} />
+        </div>
+      </div>
     </div>
   );
 }

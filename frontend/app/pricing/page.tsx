@@ -14,18 +14,19 @@ export const metadata: Metadata = {
 
 export default function PricingPage() {
   return (
-    <div className="mx-auto flex min-h-screen max-w-[1440px] flex-col px-5 pb-8 pt-5 sm:px-8 lg:px-10">
+    <div className="mx-auto flex min-h-screen max-w-[1400px] flex-col px-4 pb-8 pt-4 sm:px-6 lg:px-8">
       <SiteHeader currentPath="/pricing" />
-      <main className="flex-1 pb-12 pt-10">
-        <section className="surface px-6 py-7 sm:px-8">
-          <div className="grid gap-8 lg:grid-cols-[0.9fr_1.1fr] lg:items-end">
-            <div>
-              <span className="label">Pricing</span>
-              <h1 className="display-title mt-5 text-5xl sm:text-6xl">
+      <main className="flex-1">
+        {/* Hero */}
+        <section className="surface-elevated mt-8 px-6 py-10 lg:px-10">
+          <div className="grid gap-8 lg:grid-cols-2 lg:items-end">
+            <div className="space-y-4">
+              <span className="label label-brand">Pricing</span>
+              <h1 className="text-4xl font-bold tracking-tight text-white sm:text-5xl">
                 Credits that map cleanly to product value.
               </h1>
             </div>
-            <p className="text-lg leading-8 text-[var(--muted)]">
+            <p className="max-w-lg text-lg text-[var(--foreground-secondary)]">
               Cerul prices the same public API surface used by direct clients, docs,
               and installable skills. Start with evaluation credits, then scale into
               predictable operator workflows.
@@ -33,43 +34,74 @@ export default function PricingPage() {
           </div>
         </section>
 
-        <section className="grid gap-5 pt-8 lg:grid-cols-3">
-          {pricingTiers.map((tier) => (
+        {/* Pricing tiers */}
+        <section className="mt-8 grid gap-4 lg:grid-cols-3">
+          {pricingTiers.map((tier, index) => (
             <article
               key={tier.name}
               className={`surface px-6 py-6 ${
-                tier.accent === "orange"
-                  ? "bg-[linear-gradient(180deg,rgba(255,240,230,0.92),rgba(255,252,247,0.88))]"
+                index === 1
+                  ? "relative border-[var(--accent)]/40 lg:scale-105"
                   : ""
               }`}
             >
-              <p className="font-mono text-xs uppercase tracking-[0.18em] text-[var(--brand-deep)]">
+              {index === 1 && (
+                <div className="absolute -top-3 left-1/2 -translate-x-1/2 rounded-full bg-[var(--accent)] px-3 py-1 text-xs font-semibold text-white">
+                  Most Popular
+                </div>
+              )}
+              <p className="font-mono text-xs uppercase tracking-[0.15em] text-[var(--brand-bright)]">
                 {tier.name}
               </p>
-              <div className="mt-4 flex items-end gap-3">
-                <p className="text-5xl font-semibold tracking-tight">{tier.price}</p>
-                <p className="pb-2 text-sm text-[var(--muted)]">{tier.cadence}</p>
+              <div className="mt-4 flex items-end gap-2">
+                <p className="text-5xl font-bold text-white">{tier.price}</p>
+                <p className="mb-2 text-sm text-[var(--foreground-tertiary)]">
+                  {tier.cadence}
+                </p>
               </div>
-              <p className="mt-4 text-sm leading-7 text-[var(--muted)]">
+              <p className="mt-4 text-[var(--foreground-secondary)]">
                 {tier.description}
               </p>
               <ul className="mt-6 space-y-3">
                 {tier.features.map((feature) => (
                   <li
                     key={feature}
-                    className="rounded-[18px] border border-[var(--line)] bg-white/74 px-4 py-3 text-sm leading-6"
+                    className="flex items-start gap-3 text-sm text-[var(--foreground-secondary)]"
                   >
+                    <svg
+                      className="mt-0.5 h-5 w-5 flex-shrink-0 text-[var(--success)]"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                      stroke="currentColor"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M5 13l4 4L19 7"
+                      />
+                    </svg>
                     {feature}
                   </li>
                 ))}
               </ul>
               <div className="mt-6">
                 {tier.ctaHref.startsWith("mailto:") ? (
-                  <a href={tier.ctaHref} className="button-primary">
+                  <a
+                    href={tier.ctaHref}
+                    className={`w-full ${
+                      index === 1 ? "button-accent" : "button-secondary"
+                    }`}
+                  >
                     {tier.ctaLabel}
                   </a>
                 ) : (
-                  <Link href={tier.ctaHref} className="button-primary">
+                  <Link
+                    href={tier.ctaHref}
+                    className={`w-full ${
+                      index === 1 ? "button-accent" : "button-secondary"
+                    }`}
+                  >
                     {tier.ctaLabel}
                   </Link>
                 )}
@@ -78,28 +110,30 @@ export default function PricingPage() {
           ))}
         </section>
 
-        <section className="grid gap-5 pt-10 lg:grid-cols-[0.9fr_1.1fr]">
-          <article className="surface-strong px-6 py-6 sm:px-8">
+        {/* Commercial stance + FAQ */}
+        <section className="mt-10 grid gap-5 lg:grid-cols-2">
+          <article className="surface-gradient px-6 py-6 lg:px-8">
             <p className="eyebrow">Commercial stance</p>
-            <h2 className="display-title mt-3 text-4xl sm:text-5xl">
-              Keep public code open. Keep operational leverage in the service.
+            <h2 className="mt-3 text-3xl font-bold text-white">
+              Open core. Operational leverage in the service.
             </h2>
-            <p className="mt-4 text-base leading-7 text-[var(--muted)]">
+            <p className="mt-4 text-[var(--foreground-secondary)]">
               The repository stays infrastructure-oriented and public-safe, while the
               hosted product compounds through indexing assets, tuning, and operator
-              workflows. Pricing should follow that same split.
+              workflows.
             </p>
           </article>
-          <article className="surface px-6 py-6 sm:px-8">
-            <p className="eyebrow">Frequently asked</p>
+
+          <article className="surface px-6 py-6 lg:px-8">
+            <p className="eyebrow">FAQ</p>
             <div className="mt-5 space-y-4">
               {pricingFaqs.map((item) => (
                 <div
                   key={item.question}
-                  className="rounded-[22px] border border-[var(--line)] bg-white/76 px-4 py-4"
+                  className="rounded-lg border border-[var(--border)] bg-[var(--surface)] px-4 py-4"
                 >
-                  <h3 className="text-lg font-semibold tracking-tight">{item.question}</h3>
-                  <p className="mt-3 text-sm leading-6 text-[var(--muted)]">
+                  <h3 className="font-semibold text-white">{item.question}</h3>
+                  <p className="mt-2 text-sm leading-relaxed text-[var(--foreground-tertiary)]">
                     {item.answer}
                   </p>
                 </div>

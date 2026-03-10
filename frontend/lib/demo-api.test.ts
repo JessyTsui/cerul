@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { getDashboardSnapshot, simulateDemoSearch } from "./demo-api";
+import {
+  getDashboardSnapshot,
+  simulateDemoSearch,
+  validateDemoSearchRequestBody,
+} from "./demo-api";
 
 describe("simulateDemoSearch", () => {
   it("returns deterministic knowledge search structure", () => {
@@ -11,6 +15,32 @@ describe("simulateDemoSearch", () => {
     expect(response.mode).toBe("knowledge");
     expect(response.results.length).toBeGreaterThan(0);
     expect(response.requestId.startsWith("req_")).toBe(true);
+  });
+});
+
+describe("validateDemoSearchRequestBody", () => {
+  it("accepts valid payloads and fills defaults", () => {
+    expect(validateDemoSearchRequestBody({ mode: "broll" })).toEqual({
+      ok: true,
+      value: {
+        mode: "broll",
+        query: "",
+      },
+    });
+  });
+
+  it("rejects invalid modes", () => {
+    expect(validateDemoSearchRequestBody({ mode: "foo" })).toEqual({
+      ok: false,
+      error: "Invalid demo mode.",
+    });
+  });
+
+  it("rejects non-string queries", () => {
+    expect(validateDemoSearchRequestBody({ query: 42 })).toEqual({
+      ok: false,
+      error: "Query must be a string.",
+    });
   });
 });
 
