@@ -56,6 +56,11 @@ async def create_api_key(user_id: str, name: str) -> tuple[str, str]:
 
 
 async def revoke_api_key(key_id: str, user_id: str) -> bool:
+    try:
+        parsed_key_id = UUID(key_id)
+    except ValueError:
+        return False
+
     pool = await get_pool()
 
     async with pool.acquire() as db:
@@ -67,7 +72,7 @@ async def revoke_api_key(key_id: str, user_id: str) -> bool:
               AND user_id = $2
               AND is_active = TRUE
             """,
-            UUID(key_id),
+            parsed_key_id,
             user_id,
         )
 

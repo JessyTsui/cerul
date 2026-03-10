@@ -123,15 +123,31 @@ async def _enforce_rate_limit(
         raise _auth_error(status.HTTP_429_TOO_MANY_REQUESTS, "Rate limit exceeded.")
 
 
-async def _touch_api_key(db: asyncpg.Connection, api_key_id: str) -> None:
-    await db.execute(
+async def _reserve_api_key_slot(
+    db: asyncpg.Connection,
+    api_key_id: str,
+    rate_limit_per_sec: int,
+) -> None:
+    if rate_limit_per_sec <= 0:
+        return
+
+    updated = await db.fetchval(
         """
         UPDATE api_keys
         SET last_used_at = NOW(), updated_at = NOW()
         WHERE id = $1
+          AND (
+              last_used_at IS NULL
+              OR last_used_at <= NOW() - ($2 * INTERVAL '1 second')
+          )
+        RETURNING 1
         """,
         UUID(api_key_id),
+        1 / rate_limit_per_sec,
     )
+
+    if updated is None:
+        raise _auth_error(status.HTTP_429_TOO_MANY_REQUESTS, "Rate limit exceeded.")
 
 
 async def require_api_key(
@@ -154,6 +170,6 @@ async def require_api_key(
         raise _auth_error(status.HTTP_403_FORBIDDEN, "Monthly credit limit exhausted.")
 
     await _enforce_rate_limit(db, auth_context.user_id, auth_context.rate_limit_per_sec)
-    await _touch_api_key(db, auth_context.api_key_id)
+    await _reserve_api_key_slot(db, auth_context.api_key_id, auth_context.rate_limit_per_sec)
 
     return auth_context
