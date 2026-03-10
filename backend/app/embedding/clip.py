@@ -1,5 +1,6 @@
 from pathlib import Path
 from typing import Any
+import warnings
 
 from .base import EmbeddingBackend
 
@@ -13,6 +14,11 @@ class ClipEmbeddingBackend(EmbeddingBackend):
         pretrained: str = "openai",
         device: str | None = None,
     ) -> None:
+        warnings.warn(
+            "ClipEmbeddingBackend is deprecated; use GeminiEmbeddingBackend instead.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
         self._model_name = model_name
         self._pretrained = pretrained
         self._device_override = device
@@ -50,7 +56,7 @@ class ClipEmbeddingBackend(EmbeddingBackend):
             from PIL import Image
         except ImportError as exc:
             raise RuntimeError(
-                "ClipEmbeddingBackend requires Pillow. Install workers/requirements.txt."
+                "ClipEmbeddingBackend requires the optional Pillow dependency."
             ) from exc
 
         with Image.open(image_path) as image:
@@ -64,6 +70,12 @@ class ClipEmbeddingBackend(EmbeddingBackend):
 
         return features[0].detach().cpu().tolist()
 
+    def embed_video(self, video_path: str | Path) -> list[float]:
+        raise NotImplementedError(
+            "ClipEmbeddingBackend does not support video embeddings. "
+            "Use GeminiEmbeddingBackend instead."
+        )
+
     def _ensure_model(self) -> None:
         if self._model is not None:
             return
@@ -73,7 +85,7 @@ class ClipEmbeddingBackend(EmbeddingBackend):
             import torch
         except ImportError as exc:
             raise RuntimeError(
-                "ClipEmbeddingBackend requires open-clip-torch. Install workers/requirements.txt."
+                "ClipEmbeddingBackend requires the optional open-clip-torch dependency."
             ) from exc
 
         device = self._device_override or (
