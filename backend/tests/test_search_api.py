@@ -71,6 +71,21 @@ def test_search_endpoint_rejects_missing_auth_header() -> None:
     }
 
 
+def test_search_endpoint_rejects_malformed_api_key() -> None:
+    with TestClient(app) as client:
+        response = client.post(
+            "/v1/search",
+            headers={"Authorization": "Bearer cerul_sk_short"},
+            json={
+                "query": "cinematic drone shot",
+                "search_type": "broll",
+            },
+        )
+
+    assert response.status_code == 401
+    assert response.json()["error"]["code"] == "unauthorized"
+
+
 def test_search_endpoint_returns_documented_validation_shape() -> None:
     app.dependency_overrides[require_api_key] = override_auth
 

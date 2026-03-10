@@ -1,14 +1,12 @@
 from __future__ import annotations
 
-from datetime import date
-import os
 from typing import Any, Sequence
 
 from app.search.base import (
     DEFAULT_KNOWLEDGE_VECTOR_DIMENSION,
-    DEFAULT_MMR_LAMBDA,
     build_placeholder_vector,
     mmr_diversify,
+    resolve_mmr_lambda,
     vector_to_literal,
 )
 from app.search.models import KnowledgeFilters, KnowledgeResult, SearchRequest
@@ -16,11 +14,8 @@ from app.search.models import KnowledgeFilters, KnowledgeResult, SearchRequest
 
 class KnowledgeSearchService:
     def __init__(self, db: Any, *, mmr_lambda: float | None = None) -> None:
-        configured_mmr = os.getenv("MMR_LAMBDA")
         self.db = db
-        self.mmr_lambda = (
-            float(configured_mmr) if configured_mmr is not None else mmr_lambda
-        ) or DEFAULT_MMR_LAMBDA
+        self.mmr_lambda = resolve_mmr_lambda(mmr_lambda)
 
     def build_query(
         self,

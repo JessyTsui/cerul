@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import math
+import os
 from typing import Sequence, TypeVar
 
 T = TypeVar("T")
@@ -9,6 +10,22 @@ T = TypeVar("T")
 DEFAULT_MMR_LAMBDA = 0.75
 DEFAULT_BROLL_VECTOR_DIMENSION = 512
 DEFAULT_KNOWLEDGE_VECTOR_DIMENSION = 1536
+
+
+def resolve_mmr_lambda(override: float | None = None) -> float:
+    candidate = override
+    if candidate is None:
+        configured = os.getenv("MMR_LAMBDA")
+        if configured is None:
+            return DEFAULT_MMR_LAMBDA
+        try:
+            candidate = float(configured)
+        except ValueError:
+            return DEFAULT_MMR_LAMBDA
+
+    if candidate is None or not 0.0 <= candidate <= 1.0:
+        return DEFAULT_MMR_LAMBDA
+    return candidate
 
 
 def build_placeholder_vector(seed_text: str, dimension: int) -> list[float]:

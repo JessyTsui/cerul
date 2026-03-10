@@ -47,7 +47,9 @@ def generate_request_id() -> str:
 def resolve_search_service(search_type: str, db: Any) -> BrollSearchService | KnowledgeSearchService:
     if search_type == "broll":
         return BrollSearchService(db)
-    return KnowledgeSearchService(db)
+    if search_type == "knowledge":
+        return KnowledgeSearchService(db)
+    raise ValueError(f"Unsupported search_type: {search_type}")
 
 
 async def append_query_log(

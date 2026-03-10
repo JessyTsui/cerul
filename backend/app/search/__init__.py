@@ -1,4 +1,5 @@
 from app.search.broll import BrollSearchService
+from app.search.base import resolve_mmr_lambda
 from app.search.knowledge import KnowledgeSearchService
 from app.search.models import (
     BrollFilters,
@@ -20,6 +21,7 @@ __all__ = [
     "KnowledgeFilters",
     "KnowledgeResult",
     "KnowledgeSearchService",
+    "resolve_mmr_lambda",
     "SearchRequest",
     "SearchResponse",
     "SearchResult",

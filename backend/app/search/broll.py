@@ -1,13 +1,12 @@
 from __future__ import annotations
 
-import os
 from typing import Any, Sequence
 
 from app.search.base import (
     DEFAULT_BROLL_VECTOR_DIMENSION,
-    DEFAULT_MMR_LAMBDA,
     build_placeholder_vector,
     mmr_diversify,
+    resolve_mmr_lambda,
     vector_to_literal,
 )
 from app.search.models import BrollFilters, SearchRequest, SearchResult
@@ -15,11 +14,8 @@ from app.search.models import BrollFilters, SearchRequest, SearchResult
 
 class BrollSearchService:
     def __init__(self, db: Any, *, mmr_lambda: float | None = None) -> None:
-        configured_mmr = os.getenv("MMR_LAMBDA")
         self.db = db
-        self.mmr_lambda = (
-            float(configured_mmr) if configured_mmr is not None else mmr_lambda
-        ) or DEFAULT_MMR_LAMBDA
+        self.mmr_lambda = resolve_mmr_lambda(mmr_lambda)
 
     def build_query(
         self,
@@ -74,7 +70,7 @@ class BrollSearchService:
             )
         )
         sql, params = self.build_query(request, resolved_query_vector)
-        rows = await self._fetch_rows(request, resolved_query_vector, sql, params)
+        rows = await self._fetch_rows(request, sql, params)
         results = [self._row_to_result(row) for row in rows]
         embeddings = [row.get("embedding") for row in rows]
         relevance_scores = [float(row.get("score", 0.0)) for row in rows]
@@ -89,7 +85,6 @@ class BrollSearchService:
     async def _fetch_rows(
         self,
         request: SearchRequest,
-        query_vector: Sequence[float],
         sql: str,
         params: Sequence[Any],
     ) -> list[dict[str, Any]]:
