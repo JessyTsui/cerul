@@ -4,6 +4,12 @@ import os
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.encoders import jsonable_encoder
+from fastapi.exception_handlers import (
+    http_exception_handler as fastapi_http_exception_handler,
+)
+from fastapi.exception_handlers import (
+    request_validation_exception_handler as fastapi_request_validation_exception_handler,
+)
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 
@@ -59,12 +65,18 @@ def error_response(status_code: int, code: str, message: str) -> JSONResponse:
     )
 
 
+def uses_public_api_error_shape(request: Request) -> bool:
+    return request.url.path.startswith("/v1")
+
+
 @app.exception_handler(RequestValidationError)
 async def request_validation_exception_handler(
     request: Request,
     exc: RequestValidationError,
 ) -> JSONResponse:
-    _ = request
+    if not uses_public_api_error_shape(request):
+        return await fastapi_request_validation_exception_handler(request, exc)
+
     first_error = exc.errors()[0] if exc.errors() else {"msg": "Invalid request"}
     return error_response(400, "invalid_request", str(first_error["msg"]))
 
@@ -74,7 +86,9 @@ async def http_exception_handler(
     request: Request,
     exc: HTTPException,
 ) -> JSONResponse:
-    _ = request
+    if not uses_public_api_error_shape(request):
+        return await fastapi_http_exception_handler(request, exc)
+
     error_code = {
         400: "invalid_request",
         401: "unauthorized",
@@ -85,7 +99,10 @@ async def http_exception_handler(
     error_message = (
         exc.detail if isinstance(exc.detail, str) else jsonable_encoder(exc.detail)
     )
-    return error_response(exc.status_code, error_code, str(error_message))
+    normalized_message = str(error_message)
+    if normalized_message.endswith("."):
+        normalized_message = normalized_message.removesuffix(".")
+    return error_response(exc.status_code, error_code, normalized_message)
 
 
 @app.get("/", tags=["meta"])

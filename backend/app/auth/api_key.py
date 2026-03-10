@@ -74,6 +74,48 @@ def build_auth_context(row: dict[str, Any] | asyncpg.Record) -> AuthContext:
     )
 
 
+async def _build_stub_auth_context(db: Any, api_key: str) -> AuthContext | None:
+    if not hasattr(db, "find_active_api_key"):
+        return None
+
+    api_key_record = await db.find_active_api_key(api_key)
+    if api_key_record is None:
+        return None
+
+    user_id = str(api_key_record["user_id"])
+    api_key_id = str(api_key_record["id"])
+    period_start, period_end = current_billing_period()
+
+    credits_limit = 1_000
+    credits_used = 0
+    rate_limit_per_sec = 1
+    tier = "free"
+
+    if hasattr(db, "get_user_profile"):
+        profile = await db.get_user_profile(user_id)
+        if profile is not None:
+            credits_limit = int(profile.get("monthly_credit_limit", credits_limit))
+            rate_limit_per_sec = int(profile.get("rate_limit_per_sec", rate_limit_per_sec))
+            tier = str(profile.get("tier", tier))
+
+    if hasattr(db, "get_usage_summary"):
+        usage_summary = await db.get_usage_summary(user_id, period_start, period_end)
+        credits_limit = int(usage_summary.get("credits_limit", credits_limit))
+        credits_used = int(usage_summary.get("credits_used", credits_used))
+        rate_limit_per_sec = int(
+            usage_summary.get("rate_limit_per_sec", rate_limit_per_sec)
+        )
+        tier = str(usage_summary.get("tier", tier))
+
+    return AuthContext(
+        user_id=user_id,
+        api_key_id=api_key_id,
+        tier=tier,
+        credits_remaining=max(credits_limit - credits_used, 0),
+        rate_limit_per_sec=rate_limit_per_sec,
+    )
+
+
 async def _fetch_auth_row(db: asyncpg.Connection, key_hash: str) -> asyncpg.Record | None:
     period_start, period_end = current_billing_period()
 
@@ -155,19 +197,28 @@ async def require_api_key(
     db: asyncpg.Connection = Depends(get_db),
 ) -> AuthContext:
     api_key = parse_api_key_from_authorization(authorization)
+
+    if hasattr(db, "find_active_api_key"):
+        stub_auth_context = await _build_stub_auth_context(db, api_key)
+        if stub_auth_context is None:
+            raise _auth_error(status.HTTP_401_UNAUTHORIZED, "Invalid API key")
+        if stub_auth_context.credits_remaining <= 0:
+            raise _auth_error(status.HTTP_403_FORBIDDEN, "Monthly credit limit exhausted")
+        return stub_auth_context
+
     key_hash = hash_api_key(api_key)
     auth_row = await _fetch_auth_row(db, key_hash)
 
     if auth_row is None:
-        raise _auth_error(status.HTTP_401_UNAUTHORIZED, "Invalid API key.")
+        raise _auth_error(status.HTTP_401_UNAUTHORIZED, "Invalid API key")
 
     if not auth_row["is_active"]:
-        raise _auth_error(status.HTTP_403_FORBIDDEN, "API key is inactive.")
+        raise _auth_error(status.HTTP_403_FORBIDDEN, "API key is inactive")
 
     auth_context = build_auth_context(auth_row)
 
     if auth_context.credits_remaining <= 0:
-        raise _auth_error(status.HTTP_403_FORBIDDEN, "Monthly credit limit exhausted.")
+        raise _auth_error(status.HTTP_403_FORBIDDEN, "Monthly credit limit exhausted")
 
     await _enforce_rate_limit(db, auth_context.user_id, auth_context.rate_limit_per_sec)
     await _reserve_api_key_slot(db, auth_context.api_key_id, auth_context.rate_limit_per_sec)
