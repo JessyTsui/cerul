@@ -1,19 +1,21 @@
 import asyncio
-import os
 from collections.abc import AsyncIterator
 
 import asyncpg
+
+from app.config import get_settings
 
 _pool: asyncpg.Pool | None = None
 _pool_lock = asyncio.Lock()
 
 
 def database_url_configured() -> bool:
-    return bool(os.getenv("DATABASE_URL", "").strip())
+    database_url = get_settings().database.url
+    return bool(database_url and database_url.strip())
 
 
 def get_database_url() -> str:
-    database_url = os.getenv("DATABASE_URL", "").strip()
+    database_url = (get_settings().database.url or "").strip()
 
     if not database_url:
         raise RuntimeError("DATABASE_URL is not set.")

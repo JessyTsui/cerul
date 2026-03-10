@@ -1,6 +1,7 @@
 fastapi>=0.116,<1
 httpx>=0.28,<1
 asyncpg>=0.30,<1
+PyYAML>=6.0,<7
 pytest>=8.4,<10
 stripe>=11,<15
 uvicorn[standard]>=0.35,<1

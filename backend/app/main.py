@@ -1,6 +1,5 @@
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
-import os
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.encoders import jsonable_encoder
@@ -13,6 +12,7 @@ from fastapi.exception_handlers import (
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 
+from .config import get_settings
 from .db import close_pool, database_url_configured, get_pool
 from .routers.dashboard import router as dashboard_router
 from .routers.health import router as health_router
@@ -23,7 +23,7 @@ from .search import ErrorDetail, ErrorResponse
 
 
 def current_environment() -> str:
-    return os.getenv("CERUL_ENV", "development")
+    return get_settings().environment
 
 
 @asynccontextmanager

@@ -2,11 +2,12 @@
 
 from __future__ import annotations
 
-import os
 import json
 from typing import Any, Mapping, cast
 
 import stripe
+
+from app.config import get_settings
 
 from . import monthly_credit_limit_for_tier
 
@@ -23,22 +24,20 @@ class StripeWebhookVerificationError(StripeServiceError):
 
 
 def _web_base_url() -> str:
-    return (
-        os.getenv("WEB_BASE_URL")
-        or os.getenv("NEXT_PUBLIC_SITE_URL")
-        or "http://127.0.0.1:3000"
-    ).rstrip("/")
+    return get_settings().public.web_base_url.rstrip("/")
 
 
-def _require_env(name: str) -> str:
-    value = os.getenv(name)
+def _require_setting(name: str, value: str | None) -> str:
     if not value:
         raise StripeServiceError(f"{name} is not configured.")
     return value
 
 
 def _stripe_client() -> Any:
-    stripe.api_key = _require_env("STRIPE_SECRET_KEY")
+    stripe.api_key = _require_setting(
+        "STRIPE_SECRET_KEY",
+        get_settings().stripe.secret_key,
+    )
     return stripe
 
 
@@ -74,7 +73,15 @@ def create_checkout_session(
     client = _stripe_client()
     session_payload: dict[str, Any] = {
         "mode": "subscription",
-        "line_items": [{"price": _require_env("STRIPE_PRO_PRICE_ID"), "quantity": 1}],
+        "line_items": [
+            {
+                "price": _require_setting(
+                    "STRIPE_PRO_PRICE_ID",
+                    get_settings().stripe.pro_price_id,
+                ),
+                "quantity": 1,
+            }
+        ],
         "client_reference_id": user_id,
         "metadata": {"user_id": user_id},
         "success_url": f"{_web_base_url()}/dashboard?checkout=success",
@@ -121,7 +128,10 @@ def construct_webhook_event(
         event = stripe.Webhook.construct_event(
             payload=payload,
             sig_header=signature_header,
-            secret=_require_env("STRIPE_WEBHOOK_SECRET"),
+            secret=_require_setting(
+                "STRIPE_WEBHOOK_SECRET",
+                get_settings().stripe.webhook_secret,
+            ),
         )
     except ValueError as exc:
         raise StripeWebhookVerificationError("Invalid Stripe payload.") from exc

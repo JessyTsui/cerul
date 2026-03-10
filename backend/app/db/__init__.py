@@ -1,7 +1,8 @@
 from __future__ import annotations
 
-import os
 from collections.abc import AsyncIterator
+
+from app.config import get_settings
 
 from .connection import (
     close_pool,
@@ -20,7 +21,7 @@ async def get_db() -> AsyncIterator[object]:
             yield connection
         return
 
-    if os.getenv("CERUL_ENV", "development").lower() in {"development", "test"}:
+    if get_settings().environment in {"development", "test"}:
         # STUB: keep local dev and unit tests runnable before DB wiring is mandatory.
         yield _stub_database
         return
