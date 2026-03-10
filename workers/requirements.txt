@@ -1,4 +1,4 @@
 httpx>=0.28,<1
 open-clip-torch>=2.26,<3
 Pillow>=11,<12
-pytest>=8.4,<9
+pytest>=8.4,<10
