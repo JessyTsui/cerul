@@ -59,6 +59,39 @@ describe("buildUsageChartData", () => {
     ]);
   });
 
+  it("does not extend charts into future dates for an active billing period", () => {
+    const points = buildUsageChartData(
+      {
+        periodStart: "2026-03-01",
+        periodEnd: "2026-03-31",
+        dailyBreakdown: [
+          {
+            date: "2026-03-09",
+            creditsUsed: 18,
+            requestCount: 6,
+          },
+          {
+            date: "2026-03-10",
+            creditsUsed: 12,
+            requestCount: 4,
+          },
+        ],
+      },
+      {
+        referenceDate: "2026-03-10",
+      },
+    );
+
+    expect(points.at(-1)).toEqual({
+      date: "2026-03-10",
+      shortLabel: "3/10",
+      fullLabel: "Mar 10",
+      creditsUsed: 12,
+      requestCount: 4,
+    });
+    expect(points).toHaveLength(10);
+  });
+
   it("ignores malformed day entries without throwing", () => {
     const points = buildUsageChartData({
       periodStart: "2026-03-01",
@@ -145,5 +178,31 @@ describe("dashboard helpers", () => {
         ],
       }),
     ).toBe(6);
+  });
+
+  it("uses elapsed days instead of the full future billing window for averages", () => {
+    expect(
+      getAverageDailyCredits(
+        {
+          periodStart: "2026-03-01",
+          periodEnd: "2026-03-31",
+          dailyBreakdown: [
+            {
+              date: "2026-03-09",
+              creditsUsed: 18,
+              requestCount: 6,
+            },
+            {
+              date: "2026-03-10",
+              creditsUsed: 12,
+              requestCount: 4,
+            },
+          ],
+        },
+        {
+          referenceDate: "2026-03-10",
+        },
+      ),
+    ).toBe(3);
   });
 });

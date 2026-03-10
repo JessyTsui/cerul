@@ -8,6 +8,10 @@ export type UsageChartPoint = {
   requestCount: number;
 };
 
+type UsageTimelineOptions = {
+  referenceDate?: Date | string;
+};
+
 const DAY_LABEL_FORMATTER = new Intl.DateTimeFormat("en-US", {
   month: "short",
   day: "numeric",
@@ -74,6 +78,43 @@ function enumerateUtcDays(startDate: string, endDate: string): string[] {
   return dates;
 }
 
+function getReferenceDateKey(referenceDate?: Date | string): string | null {
+  if (!referenceDate) {
+    return new Date().toISOString().slice(0, 10);
+  }
+
+  if (referenceDate instanceof Date) {
+    if (Number.isNaN(referenceDate.getTime())) {
+      return null;
+    }
+
+    return referenceDate.toISOString().slice(0, 10);
+  }
+
+  return toUtcDateKey(referenceDate);
+}
+
+function getEffectivePeriodEnd(
+  periodEnd: string,
+  options?: UsageTimelineOptions,
+): string | null {
+  const normalizedPeriodEnd = toUtcDateKey(periodEnd);
+
+  if (!normalizedPeriodEnd) {
+    return null;
+  }
+
+  const referenceDateKey = getReferenceDateKey(options?.referenceDate);
+
+  if (!referenceDateKey) {
+    return normalizedPeriodEnd;
+  }
+
+  return normalizedPeriodEnd < referenceDateKey
+    ? normalizedPeriodEnd
+    : referenceDateKey;
+}
+
 export function formatNumber(value: number): string {
   return NUMBER_FORMATTER.format(value);
 }
@@ -125,7 +166,14 @@ export function getCreditsPercent(used: number, limit: number): number {
 
 export function buildUsageChartData(
   usage: Pick<DashboardMonthlyUsage, "periodStart" | "periodEnd" | "dailyBreakdown">,
+  options?: UsageTimelineOptions,
 ): UsageChartPoint[] {
+  const effectivePeriodEnd = getEffectivePeriodEnd(usage.periodEnd, options);
+
+  if (!effectivePeriodEnd) {
+    return [];
+  }
+
   const usageByDate = new Map(
     usage.dailyBreakdown
       .map((entry) => {
@@ -146,7 +194,7 @@ export function buildUsageChartData(
       .filter((entry): entry is readonly [string, { creditsUsed: number; requestCount: number }] => entry !== null),
   );
 
-  return enumerateUtcDays(usage.periodStart, usage.periodEnd).map((date) => {
+  return enumerateUtcDays(usage.periodStart, effectivePeriodEnd).map((date) => {
     const values = usageByDate.get(date) ?? {
       creditsUsed: 0,
       requestCount: 0,
@@ -165,14 +213,16 @@ export function buildUsageChartData(
 export function getRecentUsageChartData(
   usage: Pick<DashboardMonthlyUsage, "periodStart" | "periodEnd" | "dailyBreakdown">,
   days: number,
+  options?: UsageTimelineOptions,
 ): UsageChartPoint[] {
-  return buildUsageChartData(usage).slice(-days);
+  return buildUsageChartData(usage, options).slice(-days);
 }
 
 export function getAverageDailyCredits(
   usage: Pick<DashboardMonthlyUsage, "periodStart" | "periodEnd" | "dailyBreakdown">,
+  options?: UsageTimelineOptions,
 ): number {
-  const points = buildUsageChartData(usage);
+  const points = buildUsageChartData(usage, options);
 
   if (points.length === 0) {
     return 0;
