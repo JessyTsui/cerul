@@ -155,7 +155,7 @@ export const pricingTiers = [
   },
   {
     name: "Builder",
-    price: "$99",
+    price: "$20",
     cadence: "per month",
     description:
       "For teams building agent workflows that need predictable usage and more active keys.",
@@ -163,7 +163,7 @@ export const pricingTiers = [
     ctaHref: "/login",
     accent: "orange",
     features: [
-      "50,000 monthly credits",
+      "10,000 monthly credits",
       "5 active API keys",
       "Usage insights and search logs",
       "Priority email support",

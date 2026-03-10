@@ -23,32 +23,32 @@ export function DashboardShell({
   actions,
 }: DashboardShellProps) {
   return (
-    <div className="mx-auto flex min-h-screen max-w-[1440px] flex-col px-5 pb-8 pt-5 sm:px-8 lg:px-10">
+    <div className="mx-auto flex min-h-screen max-w-[1400px] flex-col px-4 pb-8 pt-4 sm:px-6 lg:px-8">
       <SiteHeader currentPath={currentPath} />
-      <main className="flex-1 pb-8 pt-10">
-        <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+      <main className="flex-1 pt-8">
+        <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
           <div>
-            <p className="eyebrow">Private console</p>
-            <h1 className="display-title mt-2 text-5xl sm:text-6xl">{title}</h1>
-            <p className="mt-4 max-w-3xl text-base leading-7 text-[var(--muted)] sm:text-lg">
+            <p className="eyebrow">Console</p>
+            <h1 className="mt-2 text-3xl font-bold text-white sm:text-4xl">{title}</h1>
+            <p className="mt-3 max-w-2xl text-[var(--foreground-secondary)]">
               {description}
             </p>
           </div>
-          <div className="flex flex-col gap-3 sm:flex-row">{actions}</div>
+          <div className="flex flex-wrap gap-3">{actions}</div>
         </div>
 
-        <section className="grid gap-6 xl:grid-cols-[300px_minmax(0,1fr)]">
-          <aside className="surface h-fit px-5 py-5">
-            <div className="rounded-[24px] bg-[var(--surface-dark)] px-4 py-4 text-white">
-              <p className="font-mono text-xs uppercase tracking-[0.18em] text-white/68">
+        <section className="grid gap-6 lg:grid-cols-[280px_minmax(0,1fr)]">
+          <aside className="surface h-fit px-4 py-4">
+            <div className="rounded-xl bg-gradient-to-br from-[var(--brand)]/20 to-[var(--accent)]/10 px-4 py-4">
+              <p className="font-mono text-xs uppercase tracking-[0.1em] text-[var(--brand-bright)]">
                 Workspace
               </p>
-              <p className="mt-3 text-2xl font-semibold">Cerul Sandbox</p>
-              <p className="mt-2 text-sm leading-6 text-white/68">
+              <p className="mt-2 text-xl font-bold text-white">Cerul Sandbox</p>
+              <p className="mt-1 text-sm text-[var(--foreground-secondary)]">
                 Shared platform for b-roll and knowledge search.
               </p>
             </div>
-            <nav className="mt-5 space-y-2">
+            <nav className="mt-4 space-y-1">
               {dashboardRoutes.map((item) => (
                 <Link
                   key={item.href}
@@ -60,16 +60,16 @@ export function DashboardShell({
                   }`}
                 >
                   <span>{item.label}</span>
-                  <span className="font-mono text-xs">{item.meta}</span>
+                  <span className="font-mono text-xs text-[var(--foreground-tertiary)]">{item.meta}</span>
                 </Link>
               ))}
             </nav>
-            <div className="mt-5">
+            <div className="mt-4">
               <DashboardLiveStatus initialStatus={snapshot.liveStatus} />
             </div>
           </aside>
 
-          <div className="space-y-6">{children}</div>
+          <div className="space-y-5">{children}</div>
         </section>
       </main>
     </div>

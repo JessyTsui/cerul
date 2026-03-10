@@ -1,16 +1,26 @@
 import { NextResponse } from "next/server";
-import { simulateDemoSearch } from "@/lib/demo-api";
-import type { DemoMode } from "@/lib/demo-api";
-
-type SearchRequestBody = {
-  mode?: DemoMode;
-  query?: string;
-};
+import { simulateDemoSearch, validateDemoSearchRequestBody } from "@/lib/demo-api";
 
 export async function POST(request: Request) {
-  const body = (await request.json()) as SearchRequestBody;
-  const mode = body.mode ?? "knowledge";
-  const query = body.query ?? "";
+  let body: unknown;
 
-  return NextResponse.json(simulateDemoSearch({ mode, query }));
+  try {
+    body = await request.json();
+  } catch {
+    return NextResponse.json(
+      { error: "Invalid JSON body." },
+      { status: 400 },
+    );
+  }
+
+  const validation = validateDemoSearchRequestBody(body);
+
+  if (!validation.ok) {
+    return NextResponse.json(
+      { error: validation.error },
+      { status: 400 },
+    );
+  }
+
+  return NextResponse.json(simulateDemoSearch(validation.value));
 }

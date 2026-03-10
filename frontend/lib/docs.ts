@@ -5,6 +5,8 @@ export type DocSection = {
   body: string;
   bullets?: string[];
   code?: string;
+  language?: string;
+  filename?: string;
 };
 
 export type DocPage = {
@@ -16,209 +18,327 @@ export type DocPage = {
   sections: DocSection[];
 };
 
+// Base URL for API
+export const API_BASE_URL = "https://api.cerul.ai";
+
 export const docsNavigation = [
-  { href: "#surface", label: "Public surface", index: "01" },
-  { href: "#search", label: "Search endpoint", index: "02" },
-  { href: "#usage", label: "Usage endpoint", index: "03" },
-  { href: "#architecture", label: "Platform model", index: "04" },
-  { href: "#config", label: "Runtime config", index: "05" },
+  { href: "#introduction", label: "Introduction", index: "01" },
+  { href: "#authentication", label: "Authentication", index: "02" },
+  { href: "#search", label: "Search API", index: "03" },
+  { href: "#usage", label: "Usage API", index: "04" },
+  { href: "#response", label: "Response Format", index: "05" },
 ] as const;
 
 export const docsLandingSections = [
   {
-    id: "surface",
-    kicker: "Public surface",
-    title: "Start with the smallest stable contract.",
+    id: "introduction",
+    kicker: "Getting Started",
+    title: "Cerul API Overview",
     description:
-      "Cerul intentionally avoids a sprawling first release. The public API focuses on search and usage, while dashboard features stay on a private surface and ingestion remains worker-owned.",
+      "The Cerul API provides video understanding capabilities for AI agents. Search what is shown in videos, not just what is said. All API requests are made to the base URL with your API key included in the Authorization header.",
     list: [
-      "POST /v1/search for b-roll and knowledge retrieval",
-      "GET /v1/usage for tier and credit visibility",
-      "Dashboard-only endpoints stay private",
-      "Agent skills call the same HTTP surface as direct users",
+      "Base URL: https://api.cerul.ai",
+      "All requests require Bearer token authentication",
+      "JSON request and response bodies",
+      "UTF-8 encoding required",
     ],
     code: undefined,
+  },
+  {
+    id: "authentication",
+    kicker: "Authentication",
+    title: "API Key Authentication",
+    description:
+      "All API requests must include your API key in the Authorization header using the Bearer token format. You can create and manage API keys from your dashboard.",
+    list: [
+      "Include API key in every request",
+      "Use 'Authorization: Bearer YOUR_API_KEY' header",
+      "Keep your API keys secure",
+      "Rotate keys periodically from the dashboard",
+    ],
+    code: `curl "${API_BASE_URL}/v1/search" \\
+  -H "Authorization: Bearer YOUR_CERUL_API_KEY" \\
+  -H "Content-Type: application/json"`,
+    language: "bash",
+    filename: "auth.sh",
   },
   {
     id: "search",
-    kicker: "Search endpoint",
-    title: "One request shape, different retrieval behaviors.",
+    kicker: "Search Endpoint",
+    title: "POST /v1/search",
     description:
-      "Search stays structurally uniform even as the backing retrieval changes. B-roll returns asset-level matches, while knowledge search returns segment-level evidence and optional generated answers.",
+      "The search endpoint is the primary interface for retrieving video content. Use search_type to specify whether you want b-roll footage or knowledge segments. The endpoint returns matching results with metadata and direct video URLs.",
     list: [
-      "Consistent request envelope across tracks",
-      "Search type routes to the correct service internally",
-      "Failure does not spend credits",
-      "Result IDs are captured in query logs for later evaluation",
+      "search_type: 'broll' for stock footage",
+      "search_type: 'knowledge' for educational content",
+      "max_results: 1-50 (default: 10)",
+      "include_answer: true for AI-generated summaries",
     ],
-    code: `POST /v1/search
-
-{
-  "query": "sam altman agi timeline",
-  "search_type": "knowledge",
-  "max_results": 5,
-  "include_answer": true,
-  "filters": {
-    "speaker": "Sam Altman",
-    "published_after": "2023-01-01"
-  }
-}`,
+    code: `curl "${API_BASE_URL}/v1/search" \\
+  -H "Authorization: Bearer YOUR_CERUL_API_KEY" \\
+  -H "Content-Type: application/json" \\
+  -d '{
+    "query": "cinematic drone shot of coastal highway at sunset",
+    "search_type": "broll",
+    "max_results": 5,
+    "filters": {
+      "min_duration": 5,
+      "max_duration": 30,
+      "source": "pexels"
+    }
+  }'`,
+    language: "bash",
+    filename: "search_broll.sh",
   },
   {
     id: "usage",
-    kicker: "Usage endpoint",
-    title: "Treat credits and rate limits as first-class product data.",
+    kicker: "Usage Endpoint",
+    title: "GET /v1/usage",
     description:
-      "Usage is not just billing plumbing. It is part of the operator experience, which is why the console and the public API should share the same underlying ledger and aggregation model.",
+      "Check your current usage, credit balance, and rate limits. This endpoint is useful for monitoring your consumption and preventing unexpected quota exhaustion.",
     list: [
-      "Credits limit and remaining balance",
-      "Active API key count",
-      "Monthly window visibility",
-      "Rate limit policy surfaced as product state",
+      "Returns current tier information",
+      "Shows credits used and remaining",
+      "Includes rate limit status",
+      "Real-time credit tracking",
     ],
-    code: `GET /v1/usage
-
-{
-  "tier": "free",
-  "period_start": "2026-03-01",
-  "period_end": "2026-03-31",
-  "credits_limit": 1000,
-  "credits_used": 128,
-  "credits_remaining": 872,
-  "rate_limit_per_sec": 1,
-  "api_keys_active": 1
+    code: `curl "${API_BASE_URL}/v1/usage" \\
+  -H "Authorization: Bearer YOUR_CERUL_API_KEY"`,
+    language: "bash",
+    filename: "usage.sh",
+  },
+  {
+    id: "response",
+    kicker: "Response Format",
+    title: "Understanding API Responses",
+    description:
+      "API responses follow a consistent JSON structure. Successful requests return HTTP 200 with result data. Errors return appropriate HTTP status codes with detailed error messages.",
+    list: [
+      "Results array contains video matches",
+      "Each result includes direct video URL",
+      "Score indicates relevance (0.0-1.0)",
+      "Metadata varies by search_type",
+    ],
+    code: `{
+  "results": [
+    {
+      "id": "pexels_28192743",
+      "score": 0.89,
+      "title": "Aerial drone shot of coastal highway",
+      "description": "Cinematic 4K drone footage of winding coastal road at golden hour",
+      "video_url": "https://videos.pexels.com/video-files/28192743/abc123.mp4",
+      "thumbnail_url": "https://images.pexels.com/photos/28192743/pexels-photo-28192743.jpeg",
+      "duration": 18,
+      "source": "pexels",
+      "license": "pexels-license"
+    }
+  ],
+  "credits_used": 1,
+  "credits_remaining": 999,
+  "request_id": "req_abc123xyz"
 }`,
-  },
-  {
-    id: "architecture",
-    kicker: "Platform model",
-    title: "Frontend stays presentational, workers keep the weight.",
-    description:
-      "The web app should explain, demo, and operate the system. It should not become the second business-logic core. Heavy media processing belongs in workers, and the API layer remains an orchestration plane.",
-    list: [
-      "Next.js for landing pages, docs, dashboard, and demo shells",
-      "FastAPI for auth, usage, routing, and thin orchestration",
-      "Python workers for ingestion, indexing, and media-heavy steps",
-      "Neon PostgreSQL + pgvector for usage and retrieval primitives",
-    ],
-    code: undefined,
-  },
-  {
-    id: "config",
-    kicker: "Runtime config",
-    title: "Public-safe defaults in YAML, secrets in environment.",
-    description:
-      "Frontend browser code should consume a derived public config subset. Raw secrets stay out of the browser and public-safe defaults stay versioned in config/*.yaml.",
-    list: [
-      "CERUL_ENV selects development or production profile",
-      "Public web and API URLs derive from config plus optional env overrides",
-      "Search tuning values should remain configurable, not hardcoded",
-      "Frontend should never read private repo config directly in browser code",
-    ],
-    code: `# Runtime profile
-CERUL_ENV=development
-
-# Optional public overrides
-API_BASE_URL=http://localhost:8000
-WEB_BASE_URL=http://localhost:3000`,
+    language: "json",
+    filename: "response.json",
   },
 ] as const;
 
 export const docsPages: DocPage[] = [
   {
     slug: "quickstart",
-    title: "Quickstart",
-    summary: "Get a local integration running with the smallest public setup.",
+    title: "Quickstart Guide",
+    summary: "Get up and running with the Cerul API in under 5 minutes. Learn how to make your first search request and understand the response format.",
     kicker: "Start here",
-    readingTime: "4 min read",
+    readingTime: "5 min read",
     sections: [
       {
-        title: "Environment shape",
+        title: "Get your API key",
         body:
-          "Cerul keeps public-safe defaults in versioned YAML and secrets in environment variables. The frontend should consume a derived public config subset, while API and worker runtimes read the full private configuration set.",
+          "Before making any requests, you need an API key. Sign up for a free account at cerul.ai and create your first API key from the dashboard. The free tier includes 1,000 credits to get started.",
         bullets: [
-          "Copy .env.example to .env",
-          "Set CERUL_ENV to development or production",
-          "Provide DATABASE_URL and provider keys outside public docs examples",
+          "Create account at https://cerul.ai",
+          "Navigate to Dashboard > API Keys",
+          "Click 'Create new key'",
+          "Copy your key (starts with 'cerul_')",
         ],
       },
       {
-        title: "First request",
+        title: "Make your first request",
         body:
-          "The first public integration path is direct HTTP. Keep the client thin, use API keys, and treat b-roll and knowledge as the same route with different search_type values.",
-        code: `curl "${"${CERUL_BASE_URL:-https://api.cerul.ai}"}/v1/search" \\
-  -H "Authorization: Bearer $CERUL_API_KEY" \\
+          "Use curl to make a test request. Replace YOUR_CERUL_API_KEY with your actual API key. This example searches for b-roll footage of coastal highways.",
+        code: `curl "${API_BASE_URL}/v1/search" \\
+  -H "Authorization: Bearer YOUR_CERUL_API_KEY" \\
   -H "Content-Type: application/json" \\
   -d '{
-    "query": "cinematic drone shot of coastal highway at sunset",
+    "query": "cinematic drone shot of coastal highway",
     "search_type": "broll",
-    "max_results": 5
+    "max_results": 3
   }'`,
+        language: "bash",
+        filename: "first_request.sh",
       },
       {
-        title: "What comes next",
+        title: "Understanding the response",
         body:
-          "Once the search path is working, operators should move immediately to usage visibility, API key rotation, and demo instrumentation. Those surfaces share the same request and credit model.",
+          "The API returns a JSON object containing an array of results. Each result includes a direct video_url you can use to download or embed the video, along with metadata like duration, source, and relevance score.",
+        code: `{
+  "results": [
+    {
+      "id": "pexels_28192743",
+      "score": 0.89,
+      "title": "Aerial drone shot of coastal highway",
+      "video_url": "https://videos.pexels.com/video-files/28192743/abc123.mp4",
+      "thumbnail_url": "https://images.pexels.com/photos/28192743/pexels-photo-28192743.jpeg",
+      "duration": 18,
+      "source": "pexels"
+    }
+  ],
+  "credits_used": 1,
+  "credits_remaining": 999
+}`,
+        language: "json",
+        filename: "first_response.json",
+      },
+      {
+        title: "Using the video URL",
+        body:
+          "The video_url in the response is a direct link to the video file. You can use this URL to embed the video in your application, download it for processing, or serve it to your users. The URL is valid for 24 hours.",
+        bullets: [
+          "video_url: Direct link to MP4 file",
+          "thumbnail_url: Preview image",
+          "duration: Length in seconds",
+          "License info included for compliance",
+        ],
       },
     ],
   },
   {
     slug: "search-api",
-    title: "Search API",
-    summary: "Understand request shape, routing behavior, and response differences by track.",
-    kicker: "Public endpoint",
-    readingTime: "6 min read",
+    title: "Search API Reference",
+    summary: "Complete reference for the /v1/search endpoint. Learn about request parameters, filters, and response fields for both b-roll and knowledge searches.",
+    kicker: "API Reference",
+    readingTime: "8 min read",
     sections: [
       {
-        title: "One route, two tracks",
+        title: "Endpoint",
         body:
-          "Cerul exposes a single search entrypoint, but the underlying retrieval stack differs by track. B-roll resolves at the asset level, while knowledge resolves at segment granularity with optional answer generation.",
-        bullets: [
-          "Set search_type to broll for asset retrieval",
-          "Set search_type to knowledge for segment retrieval",
-          "Do not treat answer generation as mandatory for every request",
-        ],
+          "The search endpoint accepts POST requests with a JSON body containing your search parameters.",
+        code: `POST ${API_BASE_URL}/v1/search
+Content-Type: application/json
+Authorization: Bearer YOUR_CERUL_API_KEY`,
+        language: "http",
+        filename: "endpoint.http",
       },
       {
-        title: "Request example",
+        title: "Request parameters",
         body:
-          "The request envelope is intentionally stable. Filters may vary by track, but the core shape remains the same for clients and skills.",
+          "All search requests share a common structure. The search_type parameter determines which retrieval system to use.",
         code: `{
-  "query": "sam altman agi timeline",
-  "search_type": "knowledge",
-  "max_results": 5,
-  "include_answer": true,
-  "filters": {
-    "speaker": "Sam Altman",
-    "published_after": "2023-01-01"
+  "query": string,           // Required: Search query
+  "search_type": string,     // Required: "broll" or "knowledge"
+  "max_results": number,     // Optional: 1-50 (default: 10)
+  "include_answer": boolean, // Optional: AI summary (default: false)
+  "filters": {               // Optional: Track-specific filters
+    "min_duration": number,
+    "max_duration": number,
+    "source": string
   }
 }`,
+        language: "json",
+        filename: "request_params.json",
       },
       {
-        title: "Response contract",
+        title: "B-roll search example",
         body:
-          "Clients should expect result IDs, source URLs, and track-specific metadata. Knowledge results can include timestamps and answer text, while b-roll focuses on preview assets and descriptive metadata.",
+          "Search for stock footage and b-roll content. Results include direct video URLs from sources like Pexels and Pixabay.",
+        code: `curl "${API_BASE_URL}/v1/search" \\
+  -H "Authorization: Bearer YOUR_CERUL_API_KEY" \\
+  -H "Content-Type: application/json" \\
+  -d '{
+    "query": "business handshake in modern office",
+    "search_type": "broll",
+    "max_results": 5,
+    "filters": {
+      "min_duration": 3,
+      "max_duration": 15
+    }
+  }'`,
+        language: "bash",
+        filename: "broll_search.sh",
+      },
+      {
+        title: "Knowledge search example",
+        body:
+          "Search educational and informational video content. Results include timestamps and optional AI-generated answers.",
+        code: `curl "${API_BASE_URL}/v1/search" \\
+  -H "Authorization: Bearer YOUR_CERUL_API_KEY" \\
+  -H "Content-Type: application/json" \\
+  -d '{
+    "query": "sam altman explains the agi timeline",
+    "search_type": "knowledge",
+    "max_results": 5,
+    "include_answer": true,
+    "filters": {
+      "speaker": "Sam Altman",
+      "published_after": "2023-01-01"
+    }
+  }'`,
+        language: "bash",
+        filename: "knowledge_search.sh",
+      },
+      {
+        title: "Response fields",
+        body:
+          "The response contains an array of results, each with standardized fields and track-specific metadata.",
+        code: `{
+  "results": [{
+    "id": string,           // Unique result identifier
+    "score": number,        // Relevance score (0.0-1.0)
+    "title": string,        // Video title
+    "description": string,  // Video description
+    "video_url": string,    // Direct MP4 URL
+    "thumbnail_url": string,// Preview image
+    "duration": number,     // Length in seconds
+    "source": string,       // Content source
+
+    // B-roll specific:
+    "license": string,      // Usage license
+
+    // Knowledge specific:
+    "timestamp_start": number,
+    "timestamp_end": number,
+    "answer": string        // If include_answer: true
+  }],
+  "credits_used": number,
+  "credits_remaining": number,
+  "request_id": string
+}`,
+        language: "json",
+        filename: "response_fields.json",
       },
     ],
   },
   {
     slug: "usage-api",
-    title: "Usage API",
-    summary: "Expose credits, active keys, and rate limits as product-visible state.",
-    kicker: "Operational visibility",
+    title: "Usage API Reference",
+    summary: "Monitor your API consumption with the /v1/usage endpoint. Track credits, rate limits, and billing information.",
+    kicker: "API Reference",
     readingTime: "4 min read",
     sections: [
       {
-        title: "Why it exists",
+        title: "Check usage",
         body:
-          "Usage is a first-class operator surface, not a hidden billing detail. This endpoint keeps API clients and dashboard users aligned on one understanding of credits and limits.",
+          "The usage endpoint returns your current credit balance and consumption statistics. Use this to monitor your quota and prevent service interruption.",
+        code: `curl "${API_BASE_URL}/v1/usage" \\
+  -H "Authorization: Bearer YOUR_CERUL_API_KEY"`,
+        language: "bash",
+        filename: "check_usage.sh",
       },
       {
-        title: "Response example",
+        title: "Response format",
         body:
-          "The shape should remain simple enough for direct rendering in the dashboard and lightweight enough for programmatic polling.",
+          "The usage response includes your current tier, billing period, and credit information.",
         code: `{
-  "tier": "free",
+  "tier": "free",           // free, builder, or enterprise
   "period_start": "2026-03-01",
   "period_end": "2026-03-31",
   "credits_limit": 1000,
@@ -227,45 +347,72 @@ export const docsPages: DocPage[] = [
   "rate_limit_per_sec": 1,
   "api_keys_active": 1
 }`,
+        language: "json",
+        filename: "usage_response.json",
       },
       {
-        title: "Implementation note",
+        title: "Rate limiting",
         body:
-          "The same underlying ledger should power both dashboard analytics and public usage responses. Search success writes usage and query logs together, while failures do not spend credits.",
+          "API requests are rate-limited based on your tier. The rate_limit_per_sec field shows your current limit. Exceeding the limit returns HTTP 429.",
+        bullets: [
+          "Free tier: 1 request/second",
+          "Builder tier: 10 requests/second",
+          "Enterprise: Custom limits",
+          "Rate limit resets every second",
+        ],
       },
     ],
   },
   {
     slug: "architecture",
-    title: "Architecture",
-    summary: "Map the shared platform backbone across frontend, API, workers, and storage.",
-    kicker: "System model",
-    readingTime: "7 min read",
+    title: "System Architecture",
+    summary: "Understand how Cerul processes video search requests. Learn about our distributed architecture and data flow.",
+    kicker: "System Design",
+    readingTime: "6 min read",
     sections: [
       {
-        title: "Boundary discipline",
+        title: "Request flow",
         body:
-          "Cerul's product quality depends on not collapsing all logic into one surface. The frontend explains and operates the system, the API orchestrates requests, and workers own heavy ingestion and indexing.",
+          "When you make a search request, it travels through several components to deliver results. Understanding this flow helps optimize your integration.",
         bullets: [
-          "Next.js for public pages, docs, and dashboard surfaces",
-          "FastAPI for auth, usage, thin orchestration, and public responses",
-          "Python workers for ingestion, indexing, and media-heavy computation",
+          "1. API Gateway validates your API key",
+          "2. Query is parsed and routed to the correct search track",
+          "3. Vector search retrieves matching candidates",
+          "4. Results are ranked and formatted",
+          "5. Direct video URLs are generated",
+          "6. Response is returned with usage tracking",
         ],
       },
       {
-        title: "Shared retrieval foundation",
+        title: "B-roll vs Knowledge",
         body:
-          "B-roll and knowledge differ in workload shape, but they should share the same underlying platform services: auth, usage, storage, and retrieval abstractions.",
+          "The two search tracks use different indexing strategies and data sources, but share the same API interface.",
+        code: `B-roll Track:
+- Sources: Pexels, Pixabay (stock footage)
+- Indexing: CLIP visual embeddings
+- Results: Asset-level (entire video)
+- Metadata: License, duration, resolution
+
+Knowledge Track:
+- Sources: YouTube educational content
+- Indexing: Whisper + GPT-4o + CLIP
+- Results: Segment-level (timestamped clips)
+- Metadata: Speaker, transcript, timestamps`,
+        language: "text",
+        filename: "track_comparison.txt",
       },
       {
-        title: "Open-source boundary",
+        title: "Technology stack",
         body:
-          "Public code should remain reusable and infrastructure-oriented. Production indexes, prompts, tuned ranking parameters, and internal evaluation assets stay out of the repository.",
-        code: `frontend/   Next.js application
-backend/    FastAPI orchestration layer
-workers/    Ingestion and indexing pipelines
-db/         Public-safe migrations and seed artifacts
-skills/     Installable agent skills`,
+          "Cerul is built on modern infrastructure designed for scalability and reliability.",
+        bullets: [
+          "Frontend: Next.js 16 with React Server Components",
+          "API: FastAPI with async request handling",
+          "Database: Neon PostgreSQL with pgvector",
+          "Search: Vector similarity with HNSW indexing",
+          "Workers: Python for video processing and indexing",
+          "CDN: Global edge caching for video delivery",
+        ],
       },
     ],
   },
@@ -286,7 +433,7 @@ export function getDocsIndexCards() {
     summary: page.summary,
     kicker: page.kicker,
     readingTime: page.readingTime,
-    href: `/docs/${page.slug}`,
+    href: `/docs/${page.slug}` as const,
   }));
 }
 

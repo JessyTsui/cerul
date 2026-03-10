@@ -23,6 +23,21 @@ export type DemoSearchResponse = {
   results: DemoSearchResult[];
 };
 
+export type DemoSearchInput = {
+  mode: DemoMode;
+  query: string;
+};
+
+export type DemoSearchRequestValidation =
+  | {
+      ok: true;
+      value: DemoSearchInput;
+    }
+  | {
+      ok: false;
+      error: string;
+    };
+
 export type OverviewCard = {
   label: string;
   value: string;
@@ -172,10 +187,49 @@ const templateResults: Record<DemoMode, Omit<DemoSearchResult, "score">[]> = {
   ],
 };
 
-export function simulateDemoSearch(input: {
-  mode: DemoMode;
-  query: string;
-}): DemoSearchResponse {
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+export function validateDemoSearchRequestBody(
+  input: unknown,
+): DemoSearchRequestValidation {
+  if (!isPlainObject(input)) {
+    return {
+      ok: false,
+      error: "Request body must be a JSON object.",
+    };
+  }
+
+  const { mode, query } = input;
+
+  if (
+    mode !== undefined &&
+    (typeof mode !== "string" || !Object.hasOwn(demoModes, mode))
+  ) {
+    return {
+      ok: false,
+      error: "Invalid demo mode.",
+    };
+  }
+
+  if (query !== undefined && typeof query !== "string") {
+    return {
+      ok: false,
+      error: "Query must be a string.",
+    };
+  }
+
+  return {
+    ok: true,
+    value: {
+      mode: (mode as DemoMode | undefined) ?? "knowledge",
+      query: query ?? "",
+    },
+  };
+}
+
+export function simulateDemoSearch(input: DemoSearchInput): DemoSearchResponse {
   const normalizedQuery = input.query.trim() || demoModes[input.mode].query;
   const seed = hashString(`${input.mode}:${normalizedQuery}`);
   const latencyMs = 120 + (seed % 95);
