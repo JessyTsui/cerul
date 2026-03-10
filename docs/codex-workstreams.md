@@ -48,11 +48,19 @@ Read these files first for full context:
 ### 1. Database migrations — `db/migrations/`
 
 Create the initial migration SQL file `db/migrations/001_initial_schema.sql` containing
-the full schema from ARCHITECTURE.md section 8.2. This includes:
+the full schema from ARCHITECTURE.md section 8.2, with one important change:
+
+**Vector dimension update**: Both `broll_assets.embedding` and `knowledge_segments.embedding`
+should use `VECTOR(768)` instead of the original VECTOR(512) and VECTOR(1536).
+We are switching to Gemini Embedding 2 (`gemini-embedding-2-preview`) as the unified
+multimodal embedding model for both product lines. It supports 768/1536/3072 dimensions;
+we use 768 as the default for storage efficiency.
+
+Tables to create:
 - pgcrypto and vector extensions
 - user_profiles, api_keys, usage_events, usage_monthly, stripe_events
 - query_logs, content_sources, processing_jobs, processing_job_steps
-- broll_assets, knowledge_videos, knowledge_segments
+- broll_assets (embedding VECTOR(768)), knowledge_videos, knowledge_segments (embedding VECTOR(768))
 - All indexes as specified
 
 ### 2. Database connection module — `backend/app/db/`
@@ -110,7 +118,7 @@ Update `backend/app/main.py`:
 
 ### Acceptance Criteria
 
-- [ ] `db/migrations/001_initial_schema.sql` matches ARCHITECTURE.md section 8.2
+- [ ] `db/migrations/001_initial_schema.sql` based on ARCHITECTURE.md section 8.2, with both embedding columns as VECTOR(768)
 - [ ] `backend/app/db/connection.py` creates async pool from DATABASE_URL
 - [ ] `backend/app/auth/api_key.py` exposes `require_api_key` FastAPI dependency
 - [ ] `backend/app/auth/key_manager.py` has create/revoke/list functions
@@ -190,17 +198,19 @@ Create `backend/app/search/__init__.py`, `backend/app/search/broll.py`, `backend
 
 BrollSearchService:
 - Accept SearchRequest + db connection
-- Build pgvector cosine similarity query against broll_assets
+- Build pgvector cosine similarity query against broll_assets (VECTOR(768))
 - Apply filters (source, duration range)
 - Return top-N candidates
 - Apply MMR diversification (lambda=0.75 from config)
-- For now: implement the SQL query structure, use a placeholder for CLIP embedding generation
-  (accept a list[float] as the query vector, don't call CLIP directly)
+- For now: implement the SQL query structure, use a placeholder for embedding generation
+  (accept a list[float] of length 768 as the query vector)
+- Note: both product lines now use Gemini Embedding 2 (`gemini-embedding-2-preview`)
+  as the unified multimodal embedding model, dimension=768
 
 KnowledgeSearchService:
-- Similar structure against knowledge_segments
+- Similar structure against knowledge_segments (VECTOR(768))
 - Apply filters (speaker, published_after via join to knowledge_videos)
-- Placeholder for text-embedding-3-small vector
+- Placeholder for Gemini Embedding 2 query vector (768-dim)
 - Placeholder for LLM rerank step
 - Placeholder for answer generation when include_answer=true
 
@@ -229,7 +239,7 @@ Update `backend/app/main.py` to include the search and usage routers.
 
 - Python, snake_case, 4-space indent
 - Only modify/create files within the scope listed above (+ main.py router registration)
-- Do NOT implement actual CLIP/OpenAI API calls — use placeholder vectors
+- Do NOT implement actual Gemini/OpenAI API calls — use placeholder 768-dim vectors
 - Do NOT touch frontend/, workers/, db/migrations/, config/
 - If you start the backend to verify, use port 9102: `--port 9102`
 ```
@@ -267,8 +277,30 @@ Read these files first for full context:
 - ARCHITECTURE.md (sections 10 and 11 for pipeline pattern and embedding design)
 - PIPELINE_PATTERN.md (detailed pipeline pattern documentation)
 - AGENTS.md (coding conventions)
-- .env.example (PEXELS_API_KEY, PIXABAY_API_KEY, OPENAI_API_KEY)
+- .env.example (PEXELS_API_KEY, PIXABAY_API_KEY)
 - config/base.yaml (search config values)
+
+## Important — Embedding model change
+
+The architecture doc originally specified CLIP ViT-B/32 (512-dim) for B-roll and
+text-embedding-3-small (1536-dim) for knowledge. We are now switching BOTH product lines
+to **Gemini Embedding 2** (`gemini-embedding-2-preview`), Google's natively multimodal
+embedding model released March 2026. It maps text, images, video, and audio into a
+single unified vector space.
+
+Key facts about Gemini Embedding 2:
+- Model ID: `gemini-embedding-2-preview`
+- Supports: text (≤8192 tokens), images (≤6 per request, PNG/JPEG),
+  video (≤128s, MP4/MOV), audio (≤80s, MP3/WAV)
+- Output dimensions: 3072 / 1536 / 768 (we use 768 for storage efficiency)
+- All modalities share one vector space — text-to-image and text-to-video search work natively
+- API: `google-genai` Python SDK (`from google import genai`)
+- Auth: GEMINI_API_KEY environment variable
+
+This means:
+- No local CLIP model, no open-clip-torch dependency, no GPU needed
+- B-roll embedding uses image (preview frame) → 768-dim vector via Gemini API
+- DB column is VECTOR(768) for both broll_assets and knowledge_segments
 
 ## Deliverables
 
@@ -287,18 +319,28 @@ Implement exactly the pattern from ARCHITECTURE.md section 10.2:
 ### 2. Embedding abstraction — `backend/app/embedding/`
 
 Create `backend/app/embedding/__init__.py`, `backend/app/embedding/base.py`,
-`backend/app/embedding/clip.py`:
+`backend/app/embedding/gemini.py`:
 
-EmbeddingBackend protocol (from ARCHITECTURE.md 11.1):
-- name, dimension(), embed_text(), embed_image()
+EmbeddingBackend protocol (based on ARCHITECTURE.md 11.1, updated for Gemini):
+- name: str
+- dimension() -> int
+- embed_text(text: str) -> list[float]
+- embed_image(image_bytes: bytes, mime_type: str) -> list[float]
+- embed_video(video_bytes: bytes, mime_type: str) -> list[float]
 
-ClipEmbeddingBackend:
-- Uses OpenAI CLIP ViT-B/32 via the `open_clip` library
-- dimension() returns 512
-- embed_text(text) -> list[float]
-- embed_image(image_path) -> list[float]
-- Lazy model loading (load on first call, not on import)
-- Add open-clip-torch and Pillow to a new `workers/requirements.txt`
+GeminiEmbeddingBackend:
+- Uses `google-genai` SDK: `from google import genai`
+- Model: `gemini-embedding-2-preview`
+- dimension() returns 768
+- embed_text(text): call client.models.embed_content with text Part
+- embed_image(image_bytes, mime_type): call client.models.embed_content with
+  Part.from_bytes(data=image_bytes, mime_type=mime_type)
+- embed_video(video_bytes, mime_type): call client.models.embed_content with
+  Part.from_bytes(data=video_bytes, mime_type=mime_type)
+- Configure output_dimensionality=768 in the embed_content call
+- Read GEMINI_API_KEY from environment
+- Lazy client initialization (create on first call, not on import)
+- Add `google-genai` to `workers/requirements.txt`
 
 ### 3. B-roll pipeline steps — `workers/broll/`
 
@@ -317,8 +359,9 @@ b) `FetchAssetMetadataStep`: For each raw asset, normalize metadata into a commo
 c) `DownloadPreviewFrameStep`: Download thumbnail or preview image for each asset.
    Save to a temp directory. Write paths to context.data["frame_paths"].
 
-d) `GenerateClipEmbeddingStep`: Use ClipEmbeddingBackend to generate 512-dim embeddings
-   from the preview frames. Write to context.data["embeddings"].
+d) `GenerateEmbeddingStep`: Use GeminiEmbeddingBackend to generate 768-dim embeddings
+   from the preview frame images. Read image bytes from the downloaded files, pass to
+   embed_image() with appropriate mime_type. Write to context.data["embeddings"].
 
 e) `PersistBrollAssetStep`: Upsert each asset + embedding into broll_assets table.
    Use ON CONFLICT (source, source_asset_id) DO UPDATE for idempotency.
@@ -362,7 +405,7 @@ Create `workers/tests/test_pipeline.py`:
 Create `workers/tests/test_broll_steps.py`:
 - Test FetchAssetMetadataStep normalizes Pexels response correctly
 - Test FetchAssetMetadataStep normalizes Pixabay response correctly
-- Test GenerateClipEmbeddingStep produces 512-dim vector (can mock the model)
+- Test GenerateEmbeddingStep produces 768-dim vector (mock the Gemini API client)
 
 ## Constraints
 
@@ -377,8 +420,10 @@ Create `workers/tests/test_broll_steps.py`:
 ### Acceptance Criteria
 
 - [ ] `workers/common/pipeline/` implements the full Step Pipeline pattern
-- [ ] `backend/app/embedding/clip.py` wraps CLIP with the EmbeddingBackend protocol
+- [ ] `backend/app/embedding/gemini.py` wraps Gemini Embedding 2 with the EmbeddingBackend protocol
+- [ ] EmbeddingBackend supports embed_text, embed_image, and embed_video methods
 - [ ] All 6 B-roll pipeline steps are implemented in `workers/broll/steps/`
+- [ ] GenerateEmbeddingStep produces 768-dim vectors via Gemini API
 - [ ] Pexels and Pixabay API clients handle real API responses
 - [ ] `scripts/seed_broll.py` can be run end-to-end (with valid API keys)
 - [ ] Tests pass with `pytest workers/tests/`
@@ -648,3 +693,16 @@ After merging, remove all `# STUB` markers and run full integration tests.
 - Do NOT create .env files with real secrets.
 - Do NOT modify ARCHITECTURE.md, AGENTS.md, README.md, or PIPELINE_PATTERN.md.
 - Each PR should include a summary of changes, affected directories, and test status.
+
+### Embedding model decision (2026-03-11)
+
+We are using **Gemini Embedding 2** (`gemini-embedding-2-preview`) as the unified
+multimodal embedding model for both B-roll and Knowledge product lines. This replaces
+the original plan of CLIP ViT-B/32 for B-roll and OpenAI text-embedding-3-small for Knowledge.
+
+Implications:
+- Single model, single vector space, single dimension (768) for all content types
+- DB schema uses `VECTOR(768)` for both `broll_assets` and `knowledge_segments`
+- No local model dependencies (no open-clip-torch, no GPU)
+- New env var: `GEMINI_API_KEY` (add to .env.example in the relevant task)
+- The `EmbeddingBackend` protocol now includes `embed_video()` in addition to `embed_text()` and `embed_image()`
