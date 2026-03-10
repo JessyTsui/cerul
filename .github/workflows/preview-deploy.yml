@@ -11,7 +11,7 @@ jobs:
   preview:
     name: Deploy Preview
     runs-on: ubuntu-latest
-    if: github.event.pull_request.head.repo.fork == false
+    if: github.event.pull_request.head.repo.fork == false && github.actor != 'dependabot[bot]'
     permissions:
       contents: read
       issues: write

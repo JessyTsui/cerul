@@ -37,7 +37,7 @@ jobs:
           PGDATABASE: cerul_test
         run: |
           echo "Running all migration files in order..."
-          for f in db/migrations/*.sql; do
+          find db/migrations -type f -name '*.sql' | sort | while IFS= read -r f; do
             echo "==> Applying $f"
             psql -v ON_ERROR_STOP=1 -f "$f"
             echo "    OK"
