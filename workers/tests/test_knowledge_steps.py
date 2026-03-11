@@ -46,25 +46,73 @@ class FakeEmbeddingBackend:
 
 class FakeHtmlResponse:
     def __init__(self) -> None:
-        self.content = b"<html>watch page</html>"
         self.headers = {"content-type": "text/html; charset=utf-8"}
 
     def raise_for_status(self) -> None:
         return None
 
+    async def aiter_bytes(self):
+        yield b"<html>watch page</html>"
 
-class FakeHtmlAsyncClient:
-    def __init__(self, *args, **kwargs) -> None:
+
+class FakeStreamResponse:
+    def __init__(self, chunks: list[bytes]) -> None:
+        self._chunks = chunks
+        self.headers = {"content-type": "video/mp4"}
+
+    def raise_for_status(self) -> None:
         return None
 
-    async def __aenter__(self) -> "FakeHtmlAsyncClient":
+    async def aiter_bytes(self):
+        for chunk in self._chunks:
+            yield chunk
+
+
+class FakeStreamContext:
+    def __init__(self, response: FakeStreamResponse) -> None:
+        self._response = response
+
+    async def __aenter__(self) -> FakeStreamResponse:
+        return self._response
+
+    async def __aexit__(self, exc_type, exc, tb) -> bool:
+        return False
+
+
+class FakeStreamingClient:
+    def __init__(self, *args, **kwargs) -> None:
+        self.response = FakeStreamResponse([b"fake-", b"video-", b"bytes"])
+
+    async def __aenter__(self) -> "FakeStreamingClient":
         return self
 
     async def __aexit__(self, exc_type, exc, tb) -> bool:
         return False
 
-    async def get(self, url: str) -> FakeHtmlResponse:
+    def stream(self, method: str, url: str) -> FakeStreamContext:
+        return FakeStreamContext(self.response)
+
+
+class FakeHtmlStreamContext:
+    async def __aenter__(self) -> FakeHtmlResponse:
         return FakeHtmlResponse()
+
+    async def __aexit__(self, exc_type, exc, tb) -> bool:
+        return False
+
+
+class FakeHtmlStreamingClient:
+    def __init__(self, *args, **kwargs) -> None:
+        return None
+
+    async def __aenter__(self) -> "FakeHtmlStreamingClient":
+        return self
+
+    async def __aexit__(self, exc_type, exc, tb) -> bool:
+        return False
+
+    def stream(self, method: str, url: str) -> FakeHtmlStreamContext:
+        return FakeHtmlStreamContext()
 
 
 def _write_video(path: Path) -> Path:
@@ -142,9 +190,27 @@ def test_download_knowledge_video_step_requires_explicit_download_url() -> None:
         asyncio.run(step.run(context))
 
 
-def test_download_knowledge_video_step_rejects_non_video_content_type(
-    tmp_path: Path,
-) -> None:
+def test_download_knowledge_video_step_streams_bytes_to_disk(tmp_path: Path) -> None:
+    step = DownloadKnowledgeVideoStep(video_downloader=HttpVideoDownloader())
+    context = PipelineContext(
+        data={
+            "video_metadata": {
+                "source": "youtube",
+                "source_video_id": "openai-devday",
+                "download_url": "https://cdn.example.com/openai-devday.mp4",
+            }
+        }
+    )
+
+    with patch("workers.knowledge.runtime.httpx.AsyncClient", FakeStreamingClient):
+        asyncio.run(step.run(context))
+
+    downloaded_path = Path(context.data["video_path"])
+    assert downloaded_path.exists()
+    assert downloaded_path.read_bytes() == b"fake-video-bytes"
+
+
+def test_download_knowledge_video_step_rejects_non_video_content_type() -> None:
     step = DownloadKnowledgeVideoStep(video_downloader=HttpVideoDownloader())
     context = PipelineContext(
         data={
@@ -156,7 +222,7 @@ def test_download_knowledge_video_step_rejects_non_video_content_type(
         }
     )
 
-    with patch("workers.knowledge.runtime.httpx.AsyncClient", FakeHtmlAsyncClient):
+    with patch("workers.knowledge.runtime.httpx.AsyncClient", FakeHtmlStreamingClient):
         with pytest.raises(ValueError, match="unsupported content-type"):
             asyncio.run(step.run(context))
 

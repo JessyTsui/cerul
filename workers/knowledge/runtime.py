@@ -109,20 +109,24 @@ class HttpVideoDownloader:
             timeout=self._timeout,
             follow_redirects=True,
         ) as client:
-            response = await client.get(source)
-            response.raise_for_status()
-            content_type = response.headers.get("content-type")
-            if not _is_supported_download_content_type(content_type):
-                raise ValueError(
-                    "download_url returned unsupported content-type: "
-                    f"{content_type or 'unknown'}."
+            async with client.stream("GET", source) as response:
+                response.raise_for_status()
+                content_type = response.headers.get("content-type")
+                if not _is_supported_download_content_type(content_type):
+                    raise ValueError(
+                        "download_url returned unsupported content-type: "
+                        f"{content_type or 'unknown'}."
+                    )
+                extension = _guess_extension(
+                    source_url=source,
+                    content_type=content_type,
                 )
-            extension = _guess_extension(
-                source_url=source,
-                content_type=content_type,
-            )
-            destination = output_dir / f"{target_name}{extension}"
-            destination.write_bytes(response.content)
+                destination = output_dir / f"{target_name}{extension}"
+                with destination.open("wb") as handle:
+                    async for chunk in response.aiter_bytes():
+                        if chunk:
+                            handle.write(chunk)
+
             return str(destination)
 
 
