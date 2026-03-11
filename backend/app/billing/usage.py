@@ -8,14 +8,6 @@ from app.billing.credits import current_billing_period
 async def fetch_usage_summary(db: Any, user_id: str) -> dict[str, Any]:
     period_start, period_end = current_billing_period()
 
-    if hasattr(db, "get_usage_summary"):
-        summary = await db.get_usage_summary(user_id, period_start, period_end)
-        return {
-            **summary,
-            "period_start": period_start,
-            "period_end": period_end,
-        }
-
     row = await db.fetchrow(
         """
         SELECT
@@ -55,9 +47,6 @@ def calculate_credits_remaining(usage_summary: dict[str, Any]) -> int:
 
 
 async def count_active_api_keys(db: Any, user_id: str) -> int:
-    if hasattr(db, "count_active_api_keys"):
-        return int(await db.count_active_api_keys(user_id))
-
     row = await db.fetchrow(
         """
         SELECT COUNT(*) AS active_count

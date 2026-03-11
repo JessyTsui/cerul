@@ -13,7 +13,7 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 
 from .config import get_settings
-from .db import close_pool, database_url_configured, get_pool
+from .db import close_pool, get_pool
 from .routers.dashboard import router as dashboard_router
 from .routers.health import router as health_router
 from .routers.search import router as search_router
@@ -28,8 +28,7 @@ def current_environment() -> str:
 
 @asynccontextmanager
 async def lifespan(_: FastAPI) -> AsyncIterator[None]:
-    if database_url_configured():
-        await get_pool()
+    await get_pool()
 
     try:
         yield

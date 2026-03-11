@@ -6,6 +6,7 @@ from app.search.base import (
     DEFAULT_KNOWLEDGE_VECTOR_DIMENSION,
     build_placeholder_vector,
     mmr_diversify,
+    parse_vector,
     resolve_mmr_lambda,
     vector_to_literal,
 )
@@ -37,19 +38,19 @@ class KnowledgeSearchService:
         params.append(min(request.max_results * 4, 50))
         sql = f"""
             SELECT
-                ks.id,
+                ks.id::text AS id,
                 kv.title,
                 ks.description,
                 kv.video_url,
                 kv.thumbnail_url,
-                kv.duration,
+                kv.duration_seconds AS duration,
                 kv.source,
                 kv.license,
                 kv.speaker,
                 kv.published_at,
                 ks.timestamp_start,
                 ks.timestamp_end,
-                ks.embedding,
+                ks.embedding::text AS embedding,
                 1 - (ks.embedding <=> $1::vector) AS score
             FROM knowledge_segments AS ks
             JOIN knowledge_videos AS kv
@@ -75,7 +76,7 @@ class KnowledgeSearchService:
         rows = await self._fetch_rows(request, sql, params)
         rows = self._placeholder_rerank(rows)
         results = [self._row_to_result(request, row) for row in rows]
-        embeddings = [row.get("embedding") for row in rows]
+        embeddings = [parse_vector(row.get("embedding")) for row in rows]
         relevance_scores = [float(row.get("score", 0.0)) for row in rows]
         return mmr_diversify(
             results,
@@ -91,20 +92,7 @@ class KnowledgeSearchService:
         sql: str,
         params: Sequence[Any],
     ) -> list[dict[str, Any]]:
-        filters = request.filters if isinstance(request.filters, KnowledgeFilters) else None
-        limit = min(request.max_results * 4, 50)
-
-        if hasattr(self.db, "search_knowledge_segments"):
-            return await self.db.search_knowledge_segments(
-                speaker=None if filters is None else filters.speaker,
-                published_after=None if filters is None else filters.published_after,
-                limit=limit,
-            )
-
-        if hasattr(self.db, "fetch"):
-            return list(await self.db.fetch(sql, *params))
-
-        return []
+        return list(await self.db.fetch(sql, *params))
 
     def _placeholder_rerank(self, rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
         return sorted(rows, key=lambda row: row.get("score", 0.0), reverse=True)
@@ -126,7 +114,7 @@ class KnowledgeSearchService:
 
         return KnowledgeResult(
             id=row["id"],
-            score=float(row["score"]),
+            score=max(float(row["score"]), 0.0),
             title=row["title"],
             description=row["description"],
             video_url=row["video_url"],

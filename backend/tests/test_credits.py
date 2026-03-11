@@ -1,70 +1,94 @@
 import asyncio
 
+import asyncpg
+
 from app.billing.credits import current_billing_period, deduct_credits
-from app.db import create_stub_database
+
+TEST_USER_ID = "user_stub"
+TEST_API_KEY_ID = "00000000-0000-0000-0000-000000000001"
 
 
-def test_deduct_credits_returns_expected_costs() -> None:
+def test_deduct_credits_returns_expected_costs(database) -> None:
     async def run_test() -> None:
-        db = create_stub_database()
+        db = await asyncpg.connect(database.database_url)
 
-        broll_credits = await deduct_credits(
-            db,
-            "user_stub",
-            "key_stub",
-            "req_aaaaaaaaaaaaaaaaaaaaaaaa",
-            "broll",
-            False,
-        )
-        knowledge_credits = await deduct_credits(
-            db,
-            "user_stub",
-            "key_stub",
-            "req_bbbbbbbbbbbbbbbbbbbbbbbb",
-            "knowledge",
-            False,
-        )
-        answered_credits = await deduct_credits(
-            db,
-            "user_stub",
-            "key_stub",
-            "req_cccccccccccccccccccccccc",
-            "knowledge",
-            True,
-        )
+        try:
+            broll_credits = await deduct_credits(
+                db,
+                TEST_USER_ID,
+                TEST_API_KEY_ID,
+                "req_aaaaaaaaaaaaaaaaaaaaaaaa",
+                "broll",
+                False,
+            )
+            knowledge_credits = await deduct_credits(
+                db,
+                TEST_USER_ID,
+                TEST_API_KEY_ID,
+                "req_bbbbbbbbbbbbbbbbbbbbbbbb",
+                "knowledge",
+                False,
+            )
+            answered_credits = await deduct_credits(
+                db,
+                TEST_USER_ID,
+                TEST_API_KEY_ID,
+                "req_cccccccccccccccccccccccc",
+                "knowledge",
+                True,
+            )
 
-        assert broll_credits == 1
-        assert knowledge_credits == 2
-        assert answered_credits == 3
+            assert broll_credits == 1
+            assert knowledge_credits == 2
+            assert answered_credits == 3
+        finally:
+            await db.close()
 
     asyncio.run(run_test())
 
 
-def test_deduct_credits_is_idempotent_per_request_id() -> None:
+def test_deduct_credits_is_idempotent_per_request_id(database) -> None:
     async def run_test() -> None:
-        db = create_stub_database()
+        db = await asyncpg.connect(database.database_url)
         period_start, period_end = current_billing_period()
 
-        first_charge = await deduct_credits(
-            db,
-            "user_stub",
-            "key_stub",
-            "req_dddddddddddddddddddddddd",
-            "knowledge",
-            True,
-        )
-        second_charge = await deduct_credits(
-            db,
-            "user_stub",
-            "key_stub",
-            "req_dddddddddddddddddddddddd",
-            "knowledge",
-            True,
-        )
+        try:
+            first_charge = await deduct_credits(
+                db,
+                TEST_USER_ID,
+                TEST_API_KEY_ID,
+                "req_dddddddddddddddddddddddd",
+                "knowledge",
+                True,
+            )
+            second_charge = await deduct_credits(
+                db,
+                TEST_USER_ID,
+                TEST_API_KEY_ID,
+                "req_dddddddddddddddddddddddd",
+                "knowledge",
+                True,
+            )
 
-        assert first_charge == 3
-        assert second_charge == 3
-        assert db.usage_monthly[("user_stub", period_start, period_end)]["credits_used"] == 3
-        assert len(db.usage_events) == 1
+            assert first_charge == 3
+            assert second_charge == 3
+            assert (
+                await database.fetchval_async(
+                    """
+                    SELECT credits_used
+                    FROM usage_monthly
+                    WHERE user_id = $1
+                      AND period_start = $2
+                      AND period_end = $3
+                    """,
+                    TEST_USER_ID,
+                    period_start,
+                    period_end,
+                )
+                == 3
+            )
+            assert await database.fetchval_async("SELECT COUNT(*) FROM usage_events") == 1
+        finally:
+            await db.close()
 
     asyncio.run(run_test())
