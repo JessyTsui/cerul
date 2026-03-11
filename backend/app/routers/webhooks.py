@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from contextlib import asynccontextmanager
-import json
 from typing import Any, Mapping, cast
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
@@ -63,7 +62,7 @@ async def insert_logged_event(
     *,
     stripe_event_id: str,
     event_type: str,
-    payload: Mapping[str, Any],
+    payload: str,
 ) -> dict[str, Any] | None:
     row = await db.fetchrow(
         """
@@ -158,7 +157,7 @@ async def handle_stripe_webhook(
             db,
             stripe_event_id=stripe_event_id,
             event_type=event_type,
-            payload=cast(dict[str, Any], json.loads(payload.decode("utf-8"))),
+            payload=payload.decode("utf-8"),
         )
         if inserted is None:
             locked_event = await fetch_logged_event(

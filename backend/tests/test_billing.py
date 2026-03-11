@@ -580,6 +580,7 @@ def test_webhook_checkout_session_completed_promotes_user(
     assert db.profiles["user_123"]["monthly_credit_limit"] == 10_000
     assert db.profiles["user_123"]["stripe_customer_id"] == "cus_123"
     assert db.profiles["user_123"]["stripe_subscription_id"] == "sub_123"
+    assert isinstance(db.stripe_events["evt_checkout"]["payload"], str)
 
 
 def test_webhook_subscription_deleted_downgrades_user(
