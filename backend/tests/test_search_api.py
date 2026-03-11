@@ -3,27 +3,23 @@ import re
 from fastapi.testclient import TestClient
 
 from app.auth import AuthContext, require_api_key
-from app.db import create_stub_database, get_db
 from app.main import app
+
+TEST_USER_ID = "user_stub"
+TEST_API_KEY_ID = "00000000-0000-0000-0000-000000000001"
 
 
 def override_auth() -> AuthContext:
     return AuthContext(
-        user_id="user_stub",
-        api_key_id="key_stub",
+        user_id=TEST_USER_ID,
+        api_key_id=TEST_API_KEY_ID,
         tier="free",
         credits_remaining=1000,
-        rate_limit_per_sec=1,
+        rate_limit_per_sec=10,
     )
 
 
-def test_search_endpoint_records_usage_and_query_logs() -> None:
-    db = create_stub_database()
-
-    async def override_db():
-        yield db
-
-    app.dependency_overrides[get_db] = override_db
+def test_search_endpoint_records_usage_and_query_logs(database) -> None:
     app.dependency_overrides[require_api_key] = override_auth
 
     with TestClient(app) as client:
@@ -49,7 +45,7 @@ def test_search_endpoint_records_usage_and_query_logs() -> None:
     assert payload["credits_remaining"] == 999
     assert re.fullmatch(r"req_[a-f0-9]{24}", payload["request_id"])
     assert payload["results"][0]["id"] == "pexels_28192743"
-    assert len(db.query_logs) == 1
+    assert database.fetchval("SELECT COUNT(*) FROM query_logs") == 1
 
 
 def test_search_endpoint_rejects_missing_auth_header() -> None:
@@ -121,13 +117,7 @@ def test_search_endpoint_returns_documented_validation_shape() -> None:
     assert "Field required" in response.json()["error"]["message"]
 
 
-def test_search_endpoint_reports_persisted_remaining_credits() -> None:
-    db = create_stub_database()
-
-    async def override_db():
-        yield db
-
-    app.dependency_overrides[get_db] = override_db
+def test_search_endpoint_reports_persisted_remaining_credits(database) -> None:
     app.dependency_overrides[require_api_key] = override_auth
 
     with TestClient(app) as client:
@@ -152,15 +142,10 @@ def test_search_endpoint_reports_persisted_remaining_credits() -> None:
     assert second_response.status_code == 200
     assert first_response.json()["credits_remaining"] == 999
     assert second_response.json()["credits_remaining"] == 998
+    assert database.fetchval("SELECT COUNT(*) FROM usage_events") == 2
 
 
-def test_usage_endpoint_returns_current_summary() -> None:
-    db = create_stub_database()
-
-    async def override_db():
-        yield db
-
-    app.dependency_overrides[get_db] = override_db
+def test_usage_endpoint_returns_current_summary(database) -> None:
     app.dependency_overrides[require_api_key] = override_auth
 
     with TestClient(app) as client:

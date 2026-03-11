@@ -2,7 +2,8 @@ from __future__ import annotations
 
 import calendar
 from datetime import date
-from typing import Any
+
+import asyncpg
 
 
 def calculate_credit_cost(search_type: str, include_answer: bool) -> int:
@@ -23,7 +24,7 @@ def current_billing_period(today: date | None = None) -> tuple[date, date]:
 
 
 async def deduct_credits(
-    db: Any,
+    db: asyncpg.Connection,
     user_id: str,
     api_key_id: str,
     request_id: str,
@@ -32,18 +33,6 @@ async def deduct_credits(
 ) -> int:
     credits_used = calculate_credit_cost(search_type, include_answer)
     period_start, period_end = current_billing_period()
-
-    if hasattr(db, "record_usage_charge"):
-        return await db.record_usage_charge(
-            user_id=user_id,
-            api_key_id=api_key_id,
-            request_id=request_id,
-            search_type=search_type,
-            include_answer=include_answer,
-            period_start=period_start,
-            period_end=period_end,
-            credits_used=credits_used,
-        )
 
     existing_usage = await db.fetchrow(
         """
@@ -63,12 +52,10 @@ async def deduct_credits(
             user_id,
             api_key_id,
             search_type,
-            credits_used,
             include_answer,
-            period_start,
-            period_end
+            credits_used
         )
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+        VALUES ($1, $2, $3::uuid, $4, $5, $6)
         ON CONFLICT (request_id) DO NOTHING
         RETURNING credits_used
         """,
@@ -76,10 +63,8 @@ async def deduct_credits(
         user_id,
         api_key_id,
         search_type,
-        credits_used,
         include_answer,
-        period_start,
-        period_end,
+        credits_used,
     )
     if inserted_usage is None:
         existing_usage = await db.fetchrow(
@@ -98,12 +83,26 @@ async def deduct_credits(
             user_id,
             period_start,
             period_end,
-            credits_used
+            credits_limit,
+            credits_used,
+            request_count
         )
-        VALUES ($1, $2, $3, $4)
-        ON CONFLICT (user_id, period_start, period_end)
+        SELECT
+            up.id,
+            $2,
+            $3,
+            up.monthly_credit_limit,
+            $4,
+            1
+        FROM user_profiles AS up
+        WHERE up.id = $1
+        ON CONFLICT (user_id, period_start)
         DO UPDATE SET
-            credits_used = usage_monthly.credits_used + EXCLUDED.credits_used
+            period_end = EXCLUDED.period_end,
+            credits_limit = EXCLUDED.credits_limit,
+            credits_used = usage_monthly.credits_used + EXCLUDED.credits_used,
+            request_count = usage_monthly.request_count + EXCLUDED.request_count,
+            updated_at = NOW()
         """,
         user_id,
         period_start,

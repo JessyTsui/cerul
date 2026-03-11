@@ -32,12 +32,8 @@ router = APIRouter(
 
 @asynccontextmanager
 async def transaction_context(db: Any) -> AsyncIterator[Any]:
-    if hasattr(db, "transaction"):
-        async with db.transaction():
-            yield db
-        return
-
-    yield db
+    async with db.transaction():
+        yield db
 
 
 def generate_request_id() -> str:
@@ -61,18 +57,6 @@ async def append_query_log(
     results_count: int,
 ) -> None:
     filters_payload = payload.model_dump(mode="json").get("filters")
-    if hasattr(db, "append_query_log"):
-        await db.append_query_log(
-            request_id=request_id,
-            user_id=auth.user_id,
-            api_key_id=auth.api_key_id,
-            search_type=payload.search_type,
-            query_text=payload.query,
-            include_answer=payload.include_answer,
-            filters=filters_payload,
-            results_count=results_count,
-        )
-        return
 
     await db.execute(
         """
@@ -82,19 +66,21 @@ async def append_query_log(
             api_key_id,
             search_type,
             query_text,
+            filters,
+            max_results,
             include_answer,
-            filters_json,
-            results_count
+            result_count
         )
-        VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb, $8)
+        VALUES ($1, $2, $3::uuid, $4, $5, $6::jsonb, $7, $8, $9)
         """,
         request_id,
         auth.user_id,
         auth.api_key_id,
         payload.search_type,
         payload.query,
+        json.dumps(filters_payload or {}),
+        payload.max_results,
         payload.include_answer,
-        json.dumps(filters_payload),
         results_count,
     )
 

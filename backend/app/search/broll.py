@@ -6,6 +6,7 @@ from app.search.base import (
     DEFAULT_BROLL_VECTOR_DIMENSION,
     build_placeholder_vector,
     mmr_diversify,
+    parse_vector,
     resolve_mmr_lambda,
     vector_to_literal,
 )
@@ -28,11 +29,11 @@ class BrollSearchService:
 
         if filters is not None and filters.min_duration is not None:
             params.append(filters.min_duration)
-            conditions.append(f"duration >= ${len(params)}")
+            conditions.append(f"duration_seconds >= ${len(params)}")
 
         if filters is not None and filters.max_duration is not None:
             params.append(filters.max_duration)
-            conditions.append(f"duration <= ${len(params)}")
+            conditions.append(f"duration_seconds <= ${len(params)}")
 
         if filters is not None and filters.source is not None:
             params.append(filters.source)
@@ -41,15 +42,15 @@ class BrollSearchService:
         params.append(min(request.max_results * 4, 50))
         sql = f"""
             SELECT
-                id,
+                source_asset_id AS id,
                 title,
                 description,
                 video_url,
                 thumbnail_url,
-                duration,
+                duration_seconds AS duration,
                 source,
                 license,
-                embedding,
+                embedding::text AS embedding,
                 1 - (embedding <=> $1::vector) AS score
             FROM broll_assets
             WHERE {' AND '.join(conditions)}
@@ -72,7 +73,7 @@ class BrollSearchService:
         sql, params = self.build_query(request, resolved_query_vector)
         rows = await self._fetch_rows(request, sql, params)
         results = [self._row_to_result(row) for row in rows]
-        embeddings = [row.get("embedding") for row in rows]
+        embeddings = [parse_vector(row.get("embedding")) for row in rows]
         relevance_scores = [float(row.get("score", 0.0)) for row in rows]
         return mmr_diversify(
             results,
@@ -88,26 +89,12 @@ class BrollSearchService:
         sql: str,
         params: Sequence[Any],
     ) -> list[dict[str, Any]]:
-        filters = request.filters if isinstance(request.filters, BrollFilters) else None
-        limit = min(request.max_results * 4, 50)
-
-        if hasattr(self.db, "search_broll_assets"):
-            return await self.db.search_broll_assets(
-                min_duration=None if filters is None else filters.min_duration,
-                max_duration=None if filters is None else filters.max_duration,
-                source=None if filters is None else filters.source,
-                limit=limit,
-            )
-
-        if hasattr(self.db, "fetch"):
-            return list(await self.db.fetch(sql, *params))
-
-        return []
+        return list(await self.db.fetch(sql, *params))
 
     def _row_to_result(self, row: dict[str, Any]) -> SearchResult:
         return SearchResult(
             id=row["id"],
-            score=float(row["score"]),
+            score=max(float(row["score"]), 0.0),
             title=row["title"],
             description=row["description"],
             video_url=row["video_url"],

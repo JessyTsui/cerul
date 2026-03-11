@@ -49,6 +49,21 @@ def vector_to_literal(vector: Sequence[float]) -> str:
     return "[" + ",".join(f"{value:.8f}" for value in vector) + "]"
 
 
+def parse_vector(raw_value: Sequence[float] | str | None) -> list[float] | None:
+    if raw_value is None:
+        return None
+
+    if isinstance(raw_value, str):
+        clean_value = raw_value.strip()
+        if clean_value.startswith("[") and clean_value.endswith("]"):
+            clean_value = clean_value[1:-1]
+        if not clean_value:
+            return []
+        return [float(component) for component in clean_value.split(",")]
+
+    return [float(component) for component in raw_value]
+
+
 def cosine_similarity(left: Sequence[float], right: Sequence[float]) -> float:
     numerator = sum(left_value * right_value for left_value, right_value in zip(left, right))
     left_norm = math.sqrt(sum(value * value for value in left))
