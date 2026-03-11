@@ -69,30 +69,50 @@ def _wait_for_database(database_url: str, *, timeout_seconds: int = 60) -> None:
     )
 
 
+def _run_migration(database_url: str, migration_file: Path) -> None:
+    completed = subprocess.run(
+        [
+            "psql",
+            database_url,
+            "-v",
+            "ON_ERROR_STOP=1",
+            "-f",
+            str(migration_file),
+        ],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    if completed.returncode != 0:
+        raise RuntimeError(
+            f"Migration {migration_file.name} failed: "
+            f"{completed.stderr.strip() or completed.stdout.strip()}"
+        )
+
+
 async def _ensure_schema(database_url: str) -> None:
     migration_files = sorted(MIGRATIONS_DIR.glob("*.sql"))
     if not migration_files:
         raise RuntimeError(f"No migration files found in {MIGRATIONS_DIR}")
 
-    for migration_file in migration_files:
-        completed = subprocess.run(
-            [
-                "psql",
-                database_url,
-                "-v",
-                "ON_ERROR_STOP=1",
-                "-f",
-                str(migration_file),
-            ],
-            check=False,
-            capture_output=True,
-            text=True,
+    connection = await asyncpg.connect(database_url)
+    try:
+        schema_exists = (
+            await connection.fetchval("SELECT to_regclass('public.user_profiles')")
+            is not None
         )
-        if completed.returncode != 0:
-            raise RuntimeError(
-                f"Migration {migration_file.name} failed: "
-                f"{completed.stderr.strip() or completed.stdout.strip()}"
-            )
+    finally:
+        await connection.close()
+
+    if schema_exists:
+        # Schema already exists — only run migrations after the initial one.
+        for migration_file in migration_files:
+            if migration_file.name.startswith("001_"):
+                continue
+            _run_migration(database_url, migration_file)
+    else:
+        for migration_file in migration_files:
+            _run_migration(database_url, migration_file)
 
 
 async def _reset_database_state(database_url: str) -> None:
