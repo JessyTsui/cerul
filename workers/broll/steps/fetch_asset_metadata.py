@@ -77,17 +77,24 @@ class FetchAssetMetadataStep(PipelineStep):
 
     def _normalize_pixabay_asset(self, payload: dict[str, Any]) -> dict[str, Any]:
         source_asset_id = str(payload["id"])
-        picture_id = payload.get("picture_id")
+        selected_video = self._pick_pixabay_video_variant(payload)
+        tags = self._normalize_tags(payload.get("tags"))
         return {
             "id": f"pixabay_{source_asset_id}",
             "source": "pixabay",
             "source_asset_id": source_asset_id,
             "source_url": payload.get("pageURL") or self._pick_pixabay_video_url(payload),
-            "thumbnail_url": self._build_pixabay_thumbnail_url(picture_id),
-            "video_url": self._pick_pixabay_video_url(payload),
+            "thumbnail_url": self._pick_pixabay_thumbnail_url(
+                payload,
+                selected_video=selected_video,
+            ),
+            "video_url": selected_video.get("url") if selected_video else None,
             "duration": payload.get("duration"),
-            "title": payload.get("title") or f"Pixabay video {source_asset_id}",
-            "tags": self._normalize_tags(payload.get("tags")),
+            "title": payload.get("title") or self._build_tag_title(
+                tags,
+                fallback=f"Pixabay video {source_asset_id}",
+            ),
+            "tags": tags,
             "license": payload.get("license") or "Pixabay License",
             "creator": payload.get("user"),
         }
@@ -108,17 +115,67 @@ class FetchAssetMetadataStep(PipelineStep):
         return ranked_video_files[0]["link"] if ranked_video_files else None
 
     def _pick_pixabay_video_url(self, payload: dict[str, Any]) -> str | None:
-        videos = payload.get("videos") or {}
-        for size in ("large", "medium", "small", "tiny"):
-            video = videos.get(size) or {}
-            if video.get("url"):
-                return video["url"]
-        return None
+        selected_video = self._pick_pixabay_video_variant(payload)
+        if selected_video is None:
+            return None
+        video_url = selected_video.get("url")
+        return str(video_url) if video_url else None
+
+    def _pick_pixabay_thumbnail_url(
+        self,
+        payload: dict[str, Any],
+        *,
+        selected_video: dict[str, Any] | None = None,
+    ) -> str | None:
+        preferred_video = selected_video or self._pick_pixabay_video_variant(payload)
+        if preferred_video is not None and preferred_video.get("thumbnail"):
+            return str(preferred_video["thumbnail"])
+
+        for video in self._iter_pixabay_video_variants(payload):
+            if video.get("thumbnail"):
+                return str(video["thumbnail"])
+
+        return self._build_pixabay_thumbnail_url(payload.get("picture_id"))
 
     def _build_pixabay_thumbnail_url(self, picture_id: str | None) -> str | None:
         if not picture_id:
             return None
         return f"https://i.vimeocdn.com/video/{picture_id}_640x360.jpg"
+
+    def _pick_pixabay_video_variant(
+        self,
+        payload: dict[str, Any],
+    ) -> dict[str, Any] | None:
+        for video in self._iter_pixabay_video_variants(payload):
+            if video.get("url"):
+                return video
+        return None
+
+    def _iter_pixabay_video_variants(self, payload: dict[str, Any]) -> list[dict[str, Any]]:
+        videos = payload.get("videos") or {}
+        if not isinstance(videos, dict):
+            return []
+
+        ranked_videos: list[tuple[tuple[int, int, int, int], dict[str, Any]]] = []
+        size_order = {"tiny": 0, "small": 1, "medium": 2, "large": 3}
+        for size_name, video in videos.items():
+            if not isinstance(video, dict):
+                continue
+
+            ranked_videos.append(
+                (
+                    (
+                        1 if video.get("url") else 0,
+                        (video.get("width") or 0) * (video.get("height") or 0),
+                        size_order.get(str(size_name), -1),
+                        1 if video.get("thumbnail") else 0,
+                    ),
+                    video,
+                )
+            )
+
+        ranked_videos.sort(key=lambda item: item[0], reverse=True)
+        return [video for _, video in ranked_videos]
 
     def _normalize_tags(self, raw_tags: Any) -> list[str]:
         if raw_tags is None:
@@ -128,6 +185,11 @@ class FetchAssetMetadataStep(PipelineStep):
         if isinstance(raw_tags, list):
             return [str(tag).strip() for tag in raw_tags if str(tag).strip()]
         return [str(raw_tags).strip()]
+
+    def _build_tag_title(self, tags: list[str], fallback: str) -> str:
+        if not tags:
+            return fallback
+        return " ".join(tags[:3]).title()
 
     def _asset_error_key(self, raw_asset: Any, index: int) -> str:
         if not isinstance(raw_asset, dict):

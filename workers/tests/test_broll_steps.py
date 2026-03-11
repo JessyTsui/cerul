@@ -10,6 +10,8 @@ from workers.broll.steps import (
     GenerateEmbeddingStep,
 )
 from workers.broll.steps import download_preview_frame as download_preview_frame_module
+from workers.common.sources import PixabayClient
+import workers.common.sources.pixabay as pixabay_source_module
 from workers.common.pipeline import PipelineContext
 
 
@@ -30,15 +32,69 @@ class FakeEmbeddingBackend:
 
 
 class FakeSourceClient:
-    def __init__(self, payload: list[dict[str, object]]) -> None:
+    def __init__(
+        self,
+        payload: list[dict[str, object]],
+        *,
+        error: Exception | None = None,
+    ) -> None:
         self._payload = payload
+        self._error = error
+        self.calls: list[dict[str, object]] = []
 
     async def search_videos(
         self,
         query: str,
         per_page: int = 50,
+        **kwargs: object,
     ) -> list[dict[str, object]]:
+        self.calls.append(
+            {
+                "query": query,
+                "per_page": per_page,
+                **kwargs,
+            }
+        )
+        if self._error is not None:
+            raise self._error
         return self._payload
+
+
+class StrictPixabaySourceClient:
+    def __init__(self) -> None:
+        self.calls: list[dict[str, object]] = []
+
+    async def search_videos(
+        self,
+        query: str,
+        per_page: int = 50,
+        *,
+        page: int = 1,
+        order: str = "popular",
+        safesearch: bool = True,
+        video_type: str = "film",
+        category: str | None = None,
+        editors_choice: bool | None = None,
+        min_width: int | None = None,
+        min_height: int | None = None,
+        lang: str | None = None,
+    ) -> list[dict[str, object]]:
+        self.calls.append(
+            {
+                "query": query,
+                "per_page": per_page,
+                "page": page,
+                "order": order,
+                "safesearch": safesearch,
+                "video_type": video_type,
+                "category": category,
+                "editors_choice": editors_choice,
+                "min_width": min_width,
+                "min_height": min_height,
+                "lang": lang,
+            }
+        )
+        return []
 
 
 class PerAssetEmbeddingBackend(FakeEmbeddingBackend):
@@ -69,6 +125,43 @@ class FakeAsyncClient:
 
     async def get(self, url: str) -> FakeResponse:
         return FakeResponse()
+
+
+class FakePixabayApiResponse:
+    def __init__(self, payload: dict[str, object]) -> None:
+        self._payload = payload
+
+    def raise_for_status(self) -> None:
+        return None
+
+    def json(self) -> dict[str, object]:
+        return self._payload
+
+
+class RecordingPixabayAsyncClient:
+    last_request: dict[str, object] | None = None
+
+    def __init__(self, *args, **kwargs) -> None:
+        return None
+
+    async def __aenter__(self) -> "RecordingPixabayAsyncClient":
+        return self
+
+    async def __aexit__(self, exc_type, exc, tb) -> bool:
+        return False
+
+    async def get(
+        self,
+        url: str,
+        params: dict[str, object],
+    ) -> FakePixabayApiResponse:
+        type(self).last_request = {
+            "url": url,
+            "params": params,
+        }
+        return FakePixabayApiResponse(
+            {"hits": [{"id": 987}, "ignore-me", {"id": 654}]}
+        )
 
 
 def test_fetch_asset_metadata_step_normalizes_pexels_payload() -> None:
@@ -183,6 +276,119 @@ def test_discover_asset_step_allows_empty_successful_results() -> None:
     assert context.data["discovered_assets_count"] == 0
 
 
+def test_discover_asset_step_passes_pixabay_search_options() -> None:
+    pixabay_client = FakeSourceClient([])
+    step = DiscoverAssetStep(pixabay_client=pixabay_client)
+    context = PipelineContext(
+        conf={
+            "sources": "pixabay",
+            "per_page": 24,
+            "pixabay_page": 3,
+            "pixabay_search_options": {
+                "video_type": "all",
+                "order": "latest",
+                "min_width": 1920,
+            },
+            "safesearch": False,
+            "pixabay_editors_choice": True,
+        },
+        data={"query": "city skyline"},
+    )
+
+    asyncio.run(step.run(context))
+
+    assert pixabay_client.calls == [
+        {
+            "query": "city skyline",
+            "per_page": 24,
+            "page": 3,
+            "video_type": "all",
+            "order": "latest",
+            "min_width": 1920,
+            "safesearch": False,
+            "editors_choice": True,
+        }
+    ]
+
+
+def test_discover_asset_step_filters_unsupported_pixabay_search_options() -> None:
+    pixabay_client = StrictPixabaySourceClient()
+    step = DiscoverAssetStep(pixabay_client=pixabay_client)
+    context = PipelineContext(
+        conf={
+            "sources": ["pixabay"],
+            "pixabay_search_options": {
+                "page": 2,
+                "video_type": "all",
+                "foo": "bar",
+            },
+            "pixabay_bar": "baz",
+        },
+        data={"query": "forest river"},
+    )
+
+    asyncio.run(step.run(context))
+
+    assert pixabay_client.calls == [
+        {
+            "query": "forest river",
+            "per_page": 50,
+            "page": 2,
+            "order": "popular",
+            "safesearch": True,
+            "video_type": "all",
+            "category": None,
+            "editors_choice": None,
+            "min_width": None,
+            "min_height": None,
+            "lang": None,
+        }
+    ]
+    assert context.data["raw_assets"] == []
+    assert context.data["discovered_assets_count"] == 0
+
+
+def test_discover_asset_step_normalizes_pixabay_search_option_types() -> None:
+    pixabay_client = StrictPixabaySourceClient()
+    step = DiscoverAssetStep(pixabay_client=pixabay_client)
+    context = PipelineContext(
+        conf={
+            "sources": ["pixabay"],
+            "pixabay_search_options": {
+                "page": "2",
+                "safesearch": "false",
+                "editors_choice": "true",
+                "min_width": "1920",
+                "min_height": "1080",
+                "video_type": "all",
+            },
+            "pixabay_order": " latest ",
+            "pixabay_lang": " en ",
+        },
+        data={"query": "forest river"},
+    )
+
+    asyncio.run(step.run(context))
+
+    assert pixabay_client.calls == [
+        {
+            "query": "forest river",
+            "per_page": 50,
+            "page": 2,
+            "order": "latest",
+            "safesearch": False,
+            "video_type": "all",
+            "category": None,
+            "editors_choice": True,
+            "min_width": 1920,
+            "min_height": 1080,
+            "lang": "en",
+        }
+    ]
+    assert context.data["raw_assets"] == []
+    assert context.data["discovered_assets_count"] == 0
+
+
 def test_fetch_asset_metadata_step_normalizes_pixabay_payload() -> None:
     repository = InMemoryBrollAssetRepository()
     step = FetchAssetMetadataStep(repository=repository)
@@ -198,7 +404,12 @@ def test_fetch_asset_metadata_step_normalizes_pixabay_payload() -> None:
                         "duration": 20,
                         "videos": {
                             "medium": {
-                                "url": "https://cdn.pixabay.com/videos/987_medium.mp4"
+                                "url": "https://cdn.pixabay.com/videos/987_medium.mp4",
+                                "width": 1280,
+                                "height": 720,
+                                "thumbnail": (
+                                    "https://cdn.pixabay.com/video/987_medium.jpg"
+                                ),
                             }
                         },
                         "picture_id": "567890",
@@ -215,13 +426,88 @@ def test_fetch_asset_metadata_step_normalizes_pixabay_payload() -> None:
     assert asset["id"] == "pixabay_987"
     assert asset["source_asset_id"] == "987"
     assert asset["video_url"] == "https://cdn.pixabay.com/videos/987_medium.mp4"
-    assert (
-        asset["thumbnail_url"]
-        == "https://i.vimeocdn.com/video/567890_640x360.jpg"
-    )
+    assert asset["thumbnail_url"] == "https://cdn.pixabay.com/video/987_medium.jpg"
+    assert asset["title"] == "City Skyline Night"
     assert asset["license"] == "Pixabay License"
     assert asset["creator"] == "Riley"
     assert asset["tags"] == ["city", "skyline", "night"]
+
+
+def test_fetch_asset_metadata_step_falls_back_to_legacy_pixabay_picture_id() -> None:
+    repository = InMemoryBrollAssetRepository()
+    step = FetchAssetMetadataStep(repository=repository)
+    context = PipelineContext(
+        data={
+            "raw_assets": [
+                {
+                    "source": "pixabay",
+                    "payload": {
+                        "id": 654,
+                        "pageURL": "https://pixabay.com/videos/id-654/",
+                        "tags": "forest, river",
+                        "duration": 12,
+                        "videos": {
+                            "small": {
+                                "url": "https://cdn.pixabay.com/videos/654_small.mp4",
+                                "width": 960,
+                                "height": 540,
+                            }
+                        },
+                        "picture_id": "123456",
+                    },
+                }
+            ]
+        }
+    )
+
+    asyncio.run(step.run(context))
+
+    asset = context.data["assets"][0]
+    assert asset["thumbnail_url"] == "https://i.vimeocdn.com/video/123456_640x360.jpg"
+
+
+def test_pixabay_client_builds_expected_request_params() -> None:
+    client = PixabayClient(api_key="pixabay-test-key")
+
+    with patch.object(
+        pixabay_source_module.httpx,
+        "AsyncClient",
+        RecordingPixabayAsyncClient,
+    ):
+        hits = asyncio.run(
+            client.search_videos(
+                query="city skyline",
+                per_page=24,
+                page=3,
+                order="latest",
+                safesearch=False,
+                video_type="all",
+                category="travel",
+                editors_choice=True,
+                min_width=1920,
+                min_height=1080,
+                lang="en",
+            )
+        )
+
+    assert hits == [{"id": 987}, {"id": 654}]
+    assert RecordingPixabayAsyncClient.last_request == {
+        "url": "https://pixabay.com/api/videos/",
+        "params": {
+            "key": "pixabay-test-key",
+            "q": "city skyline",
+            "per_page": 24,
+            "page": 3,
+            "order": "latest",
+            "safesearch": "false",
+            "video_type": "all",
+            "category": "travel",
+            "editors_choice": "true",
+            "min_width": 1920,
+            "min_height": 1080,
+            "lang": "en",
+        },
+    }
 
 
 def test_generate_embedding_step_produces_expected_dimension() -> None:
