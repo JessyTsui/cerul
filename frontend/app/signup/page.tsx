@@ -1,6 +1,9 @@
 import type { Metadata } from "next";
-import Link from "next/link";
+import { redirect } from "next/navigation";
 import { SiteHeader } from "@/components/site-header";
+import { normalizeAuthRedirectPath } from "@/lib/auth-shared";
+import { getServerSession } from "@/lib/auth-server";
+import { SignupForm } from "./signup-form";
 
 export const metadata: Metadata = {
   title: "Sign Up",
@@ -13,7 +16,25 @@ export const metadata: Metadata = {
   },
 };
 
-export default function SignupPage() {
+type SignupPageProps = {
+  searchParams: Promise<{
+    next?: string | string[];
+  }>;
+};
+
+export default async function SignupPage({ searchParams }: SignupPageProps) {
+  const session = await getServerSession();
+
+  if (session?.user?.id) {
+    redirect("/dashboard");
+  }
+
+  const resolvedSearchParams = await searchParams;
+  const nextValue = Array.isArray(resolvedSearchParams.next)
+    ? resolvedSearchParams.next[0]
+    : resolvedSearchParams.next;
+  const nextPath = normalizeAuthRedirectPath(nextValue);
+
   return (
     <div className="mx-auto flex min-h-screen max-w-[1400px] flex-col px-4 pb-8 pt-4 sm:px-6 lg:px-8">
       <SiteHeader currentPath="/signup" />
@@ -31,7 +52,7 @@ export default function SignupPage() {
             {[
               "Start with the free sandbox tier",
               "Use the same public API shape shown in the docs",
-              "Expand into operators, billing, and private ingestion later",
+              "Access the dashboard immediately after email/password signup",
             ].map((item) => (
               <div
                 key={item}
@@ -44,57 +65,7 @@ export default function SignupPage() {
           </div>
         </section>
         <section className="surface-elevated px-6 py-6 lg:px-8">
-          <form className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-5">
-            <p className="font-mono text-xs uppercase tracking-[0.1em] text-[var(--foreground-tertiary)]">
-              Create account
-            </p>
-            <div className="mt-5 grid gap-4 sm:grid-cols-2">
-              <label className="block">
-                <span className="mb-2 block text-sm font-medium text-[var(--foreground-secondary)]">First name</span>
-                <input
-                  className="h-11 w-full rounded-lg border border-[var(--border)] bg-[var(--background)] px-4 text-white outline-none transition-all placeholder:text-[var(--foreground-tertiary)] focus:border-[var(--brand)] focus:ring-1 focus:ring-[var(--brand)]"
-                  type="text"
-                  placeholder="Jessy"
-                  autoComplete="given-name"
-                />
-              </label>
-              <label className="block">
-                <span className="mb-2 block text-sm font-medium text-[var(--foreground-secondary)]">Last name</span>
-                <input
-                  className="h-11 w-full rounded-lg border border-[var(--border)] bg-[var(--background)] px-4 text-white outline-none transition-all placeholder:text-[var(--foreground-tertiary)] focus:border-[var(--brand)] focus:ring-1 focus:ring-[var(--brand)]"
-                  type="text"
-                  placeholder="Tsui"
-                  autoComplete="family-name"
-                />
-              </label>
-              <label className="block sm:col-span-2">
-                <span className="mb-2 block text-sm font-medium text-[var(--foreground-secondary)]">Work email</span>
-                <input
-                  className="h-11 w-full rounded-lg border border-[var(--border)] bg-[var(--background)] px-4 text-white outline-none transition-all placeholder:text-[var(--foreground-tertiary)] focus:border-[var(--brand)] focus:ring-1 focus:ring-[var(--brand)]"
-                  type="email"
-                  placeholder="you@company.com"
-                  autoComplete="email"
-                />
-              </label>
-              <label className="block sm:col-span-2">
-                <span className="mb-2 block text-sm font-medium text-[var(--foreground-secondary)]">Team goal</span>
-                <select className="h-11 w-full rounded-lg border border-[var(--border)] bg-[var(--background)] px-4 text-white outline-none transition-all focus:border-[var(--brand)] focus:ring-1 focus:ring-[var(--brand)]">
-                  <option>Evaluate b-roll demo search</option>
-                  <option>Prototype knowledge retrieval</option>
-                  <option>Prepare enterprise pilot</option>
-                </select>
-              </label>
-            </div>
-            <button type="submit" className="button-accent mt-6 w-full">
-              Create workspace
-            </button>
-            <p className="mt-4 text-sm text-[var(--foreground-tertiary)]">
-              Already have an account?{" "}
-              <Link href="/login" className="font-medium text-[var(--brand-bright)] hover:underline">
-                Sign in
-              </Link>
-            </p>
-          </form>
+          <SignupForm nextPath={nextPath} />
         </section>
       </main>
     </div>
