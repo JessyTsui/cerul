@@ -14,6 +14,10 @@ function getAuthSecret(): string {
     return configuredSecret;
   }
 
+  if (process.env.NODE_ENV === "production") {
+    throw new Error("BETTER_AUTH_SECRET must be set in production.");
+  }
+
   return DEFAULT_DEV_AUTH_SECRET;
 }
 

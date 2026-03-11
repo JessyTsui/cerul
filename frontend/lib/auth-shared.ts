@@ -7,11 +7,17 @@ export function normalizeAuthRedirectPath(
     return DEFAULT_AUTH_REDIRECT_PATH;
   }
 
-  if (!nextPath.startsWith("/") || nextPath.startsWith("//")) {
+  const trimmedPath = nextPath.trim();
+
+  if (
+    !trimmedPath.startsWith("/") ||
+    trimmedPath.startsWith("//") ||
+    trimmedPath.includes("\\")
+  ) {
     return DEFAULT_AUTH_REDIRECT_PATH;
   }
 
-  return nextPath;
+  return trimmedPath;
 }
 
 export function getAuthErrorMessage(

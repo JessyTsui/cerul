@@ -25,6 +25,9 @@ describe("normalizeAuthRedirectPath", () => {
     expect(normalizeAuthRedirectPath("//evil.example")).toBe(
       DEFAULT_AUTH_REDIRECT_PATH,
     );
+    expect(normalizeAuthRedirectPath("/\\evil.example")).toBe(
+      DEFAULT_AUTH_REDIRECT_PATH,
+    );
   });
 });
 
