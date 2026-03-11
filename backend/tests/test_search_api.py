@@ -4,6 +4,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 import app.auth.api_key as api_key_module
+import app.routers.search as search_router
 from app.auth import AuthContext, require_api_key
 from app.auth.api_key import hash_api_key
 from app.embedding.gemini import GeminiEmbeddingBackend
@@ -171,6 +172,52 @@ def test_search_endpoint_reports_persisted_remaining_credits(database) -> None:
     assert first_response.json()["credits_remaining"] == 999
     assert second_response.json()["credits_remaining"] == 998
     assert database.fetchval("SELECT COUNT(*) FROM usage_events") == 2
+
+
+def test_search_endpoint_rejects_request_when_remaining_credits_are_below_cost() -> None:
+    def override_low_credit_auth() -> AuthContext:
+        return AuthContext(
+            user_id=TEST_USER_ID,
+            api_key_id=TEST_API_KEY_ID,
+            tier="free",
+            credits_remaining=2,
+            rate_limit_per_sec=10,
+        )
+
+    search_called = False
+
+    class StubService:
+        async def search(self, payload) -> list[object]:
+            nonlocal search_called
+            search_called = True
+            return []
+
+    app.dependency_overrides[require_api_key] = override_low_credit_auth
+
+    with pytest.MonkeyPatch.context() as monkeypatch:
+        monkeypatch.setattr(search_router, "resolve_search_service", lambda *_args, **_kwargs: StubService())
+
+        with TestClient(app) as client:
+            response = client.post(
+                "/v1/search",
+                json={
+                    "query": "agent workflows",
+                    "search_type": "knowledge",
+                    "include_answer": True,
+                    "max_results": 1,
+                },
+            )
+
+    app.dependency_overrides.clear()
+
+    assert response.status_code == 403
+    assert response.json() == {
+        "error": {
+            "code": "forbidden",
+            "message": "Insufficient credits for this request",
+        }
+    }
+    assert search_called is False
 
 
 def test_usage_endpoint_returns_current_summary(database) -> None:

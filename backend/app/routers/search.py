@@ -10,6 +10,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from app.auth import AuthContext, require_api_key
 from app.billing import (
     InsufficientCreditsError,
+    calculate_credit_cost,
     calculate_credits_remaining,
     deduct_credits,
     fetch_usage_summary,
@@ -51,6 +52,22 @@ def resolve_search_service(search_type: str, db: Any) -> BrollSearchService | Kn
     if search_type == "knowledge":
         return KnowledgeSearchService(db)
     raise ValueError(f"Unsupported search_type: {search_type}")
+
+
+def ensure_request_credits_available(
+    auth: AuthContext,
+    payload: SearchRequest,
+) -> None:
+    request_credit_cost = calculate_credit_cost(
+        payload.search_type,
+        payload.include_answer,
+    )
+
+    if auth.credits_remaining < request_credit_cost:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Insufficient credits for this request.",
+        )
 
 
 async def append_query_log(
@@ -97,6 +114,7 @@ async def search_v1(
     db: Any = Depends(get_db),
 ) -> SearchResponse:
     request_id = generate_request_id()
+    ensure_request_credits_available(auth, payload)
     service = resolve_search_service(payload.search_type, db)
     results = await service.search(payload)
 
