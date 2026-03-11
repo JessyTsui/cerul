@@ -54,7 +54,8 @@ def resolve_search_service(search_type: str, db: Any) -> BrollSearchService | Kn
     raise ValueError(f"Unsupported search_type: {search_type}")
 
 
-def ensure_request_credits_available(
+async def ensure_request_credits_available(
+    db: Any,
     auth: AuthContext,
     payload: SearchRequest,
 ) -> None:
@@ -63,7 +64,10 @@ def ensure_request_credits_available(
         payload.include_answer,
     )
 
-    if auth.credits_remaining < request_credit_cost:
+    usage_summary = await fetch_usage_summary(db, auth.user_id)
+    credits_remaining = calculate_credits_remaining(usage_summary)
+
+    if credits_remaining < request_credit_cost:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Insufficient credits for this request.",
@@ -114,7 +118,7 @@ async def search_v1(
     db: Any = Depends(get_db),
 ) -> SearchResponse:
     request_id = generate_request_id()
-    ensure_request_credits_available(auth, payload)
+    await ensure_request_credits_available(db, auth, payload)
     service = resolve_search_service(payload.search_type, db)
     results = await service.search(payload)
 

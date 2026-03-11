@@ -174,15 +174,12 @@ def test_search_endpoint_reports_persisted_remaining_credits(database) -> None:
     assert database.fetchval("SELECT COUNT(*) FROM usage_events") == 2
 
 
-def test_search_endpoint_rejects_request_when_remaining_credits_are_below_cost() -> None:
-    def override_low_credit_auth() -> AuthContext:
-        return AuthContext(
-            user_id=TEST_USER_ID,
-            api_key_id=TEST_API_KEY_ID,
-            tier="free",
-            credits_remaining=2,
-            rate_limit_per_sec=10,
-        )
+def test_search_endpoint_rejects_request_when_remaining_credits_are_below_cost(database) -> None:
+    # Set monthly_credit_limit to 2 so a knowledge+answer query (cost 3) is rejected.
+    database.fetchval(
+        "UPDATE user_profiles SET monthly_credit_limit = 2 WHERE id = $1 RETURNING id",
+        TEST_USER_ID,
+    )
 
     search_called = False
 
@@ -192,7 +189,7 @@ def test_search_endpoint_rejects_request_when_remaining_credits_are_below_cost()
             search_called = True
             return []
 
-    app.dependency_overrides[require_api_key] = override_low_credit_auth
+    app.dependency_overrides[require_api_key] = override_auth
 
     with pytest.MonkeyPatch.context() as monkeypatch:
         monkeypatch.setattr(search_router, "resolve_search_service", lambda *_args, **_kwargs: StubService())
