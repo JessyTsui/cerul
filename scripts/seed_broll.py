@@ -167,6 +167,9 @@ async def run_seed(
     completed_queries = [
         query for query in queries if state.get(query, {}).get("status") == "completed"
     ]
+    failed_queries = [
+        query for query in queries if state.get(query, {}).get("status") == "failed"
+    ]
     total_indexed = sum(
         int(state[query].get("assets_indexed", 0)) for query in completed_queries
     )
@@ -174,6 +177,9 @@ async def run_seed(
         f"Total: {total_indexed:,} assets indexed across "
         f"{len(completed_queries)} queries"
     )
+    if failed_queries:
+        print(f"Warning: {len(failed_queries)} queries failed")
+        return 1
     return 0
 
 

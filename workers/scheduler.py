@@ -8,7 +8,7 @@ import os
 import signal
 import sys
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -329,7 +329,7 @@ class ContentScheduler:
                 key=lambda item: self._parse_datetime(
                     self._coerce_string(item.get("published_at"))
                 )
-                or datetime.min.replace(tzinfo=UTC),
+                or datetime.min.replace(tzinfo=timezone.utc),
             )
             return self._coerce_string(latest_item.get("published_at"))
 
@@ -503,7 +503,9 @@ class ContentScheduler:
         if isinstance(value, str):
             stripped = value.strip()
             return stripped or None
-        return None
+        if value is None:
+            return None
+        return str(value)
 
     def _coerce_mapping(self, value: Any) -> dict[str, Any] | None:
         if isinstance(value, dict):
@@ -528,8 +530,8 @@ class ContentScheduler:
         except ValueError:
             return None
         if parsed.tzinfo is None:
-            return parsed.replace(tzinfo=UTC)
-        return parsed.astimezone(UTC)
+            return parsed.replace(tzinfo=timezone.utc)
+        return parsed.astimezone(timezone.utc)
 
 
 async def main() -> None:

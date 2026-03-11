@@ -250,6 +250,7 @@ class JobWorker:
         conn = await asyncpg.connect(self.db_url)
 
         try:
+            await self.release_locked_jobs(conn)
             while not self._shutdown_event.is_set():
                 job = await self.claim_job(conn)
                 if job is None:
