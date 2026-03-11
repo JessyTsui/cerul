@@ -2,6 +2,7 @@ from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, HTTPException, Request
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.encoders import jsonable_encoder
 from fastapi.exception_handlers import (
     http_exception_handler as fastapi_http_exception_handler,
@@ -26,6 +27,25 @@ def current_environment() -> str:
     return get_settings().environment
 
 
+def allowed_web_origins() -> list[str]:
+    origins = []
+
+    for value in (
+        os.getenv("WEB_BASE_URL"),
+        os.getenv("NEXT_PUBLIC_SITE_URL"),
+        "http://localhost:3000",
+        "http://127.0.0.1:3000",
+    ):
+        if not value:
+            continue
+
+        normalized = value.rstrip("/")
+        if normalized and normalized not in origins:
+            origins.append(normalized)
+
+    return origins
+
+
 @asynccontextmanager
 async def lifespan(_: FastAPI) -> AsyncIterator[None]:
     await get_pool()
@@ -47,6 +67,14 @@ app = FastAPI(
     redoc_url=None,
     openapi_url="/openapi.json",
     lifespan=lifespan,
+)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=allowed_web_origins(),
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 app.include_router(health_router)
