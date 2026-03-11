@@ -12,6 +12,8 @@ type UsageTimelineOptions = {
   referenceDate?: Date | string;
 };
 
+export type DashboardBillingAction = "checkout" | "portal" | null;
+
 const DAY_LABEL_FORMATTER = new Intl.DateTimeFormat("en-US", {
   month: "short",
   day: "numeric",
@@ -149,11 +151,28 @@ export function getTierLabel(tier: string): string {
     return "Pro";
   }
 
+  if (normalizedTier === "builder") {
+    return "Builder";
+  }
+
   if (normalizedTier === "enterprise") {
     return "Enterprise";
   }
 
   return "Free";
+}
+
+export function resolveDashboardBillingAction(
+  tier: string,
+  hasStripeCustomer: boolean,
+): DashboardBillingAction {
+  const normalizedTier = tier.toLowerCase();
+
+  if (normalizedTier === "free") {
+    return "checkout";
+  }
+
+  return hasStripeCustomer ? "portal" : null;
 }
 
 export function getCreditsPercent(used: number, limit: number): number {

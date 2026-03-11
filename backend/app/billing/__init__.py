@@ -2,7 +2,12 @@
 
 from __future__ import annotations
 
-from app.billing.credits import calculate_credit_cost, current_billing_period, deduct_credits
+from app.billing.credits import (
+    InsufficientCreditsError,
+    calculate_credit_cost,
+    current_billing_period,
+    deduct_credits,
+)
 from app.billing.usage import (
     calculate_credits_remaining,
     count_active_api_keys,
@@ -46,6 +51,7 @@ def is_paid_tier(tier: str | None) -> bool:
 
 __all__ = [
     "DEFAULT_MONTHLY_CREDIT_LIMITS",
+    "InsufficientCreditsError",
     "PAID_TIERS",
     "TIER_KEY_LIMITS",
     "calculate_credit_cost",
