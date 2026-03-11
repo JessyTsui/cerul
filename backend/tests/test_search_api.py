@@ -1,9 +1,12 @@
 import re
 
+import pytest
 from fastapi.testclient import TestClient
 
 from app.auth import AuthContext, require_api_key
+from app.embedding.gemini import GeminiEmbeddingBackend
 from app.main import app
+from app.search.base import build_placeholder_vector
 
 TEST_USER_ID = "user_stub"
 TEST_API_KEY_ID = "00000000-0000-0000-0000-000000000001"
@@ -17,6 +20,14 @@ def override_auth() -> AuthContext:
         credits_remaining=1000,
         rate_limit_per_sec=10,
     )
+
+
+@pytest.fixture(autouse=True)
+def stub_query_embeddings(monkeypatch: pytest.MonkeyPatch) -> None:
+    def fake_embed_text(self: GeminiEmbeddingBackend, text: str) -> list[float]:
+        return build_placeholder_vector(text, self.dimension())
+
+    monkeypatch.setattr(GeminiEmbeddingBackend, "embed_text", fake_embed_text)
 
 
 def test_search_endpoint_records_usage_and_query_logs(database) -> None:

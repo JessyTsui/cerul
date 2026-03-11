@@ -2,20 +2,29 @@ from __future__ import annotations
 
 from typing import Any, Sequence
 
+from app.embedding.base import EmbeddingBackend
+from app.embedding.gemini import GeminiEmbeddingBackend
 from app.search.base import (
     DEFAULT_KNOWLEDGE_VECTOR_DIMENSION,
-    build_placeholder_vector,
     mmr_diversify,
     parse_vector,
     resolve_mmr_lambda,
+    resolve_query_vector,
     vector_to_literal,
 )
 from app.search.models import KnowledgeFilters, KnowledgeResult, SearchRequest
 
 
 class KnowledgeSearchService:
-    def __init__(self, db: Any, *, mmr_lambda: float | None = None) -> None:
+    def __init__(
+        self,
+        db: Any,
+        *,
+        embedding_backend: EmbeddingBackend | None = None,
+        mmr_lambda: float | None = None,
+    ) -> None:
         self.db = db
+        self.embedding_backend = embedding_backend or GeminiEmbeddingBackend()
         self.mmr_lambda = resolve_mmr_lambda(mmr_lambda)
 
     def build_query(
@@ -66,11 +75,12 @@ class KnowledgeSearchService:
         request: SearchRequest,
         query_vector: Sequence[float] | None = None,
     ) -> list[KnowledgeResult]:
-        resolved_query_vector = list(
-            query_vector or build_placeholder_vector(
-                request.query,
-                DEFAULT_KNOWLEDGE_VECTOR_DIMENSION,
-            )
+        resolved_query_vector = resolve_query_vector(
+            query=request.query,
+            search_type="knowledge",
+            expected_dimension=DEFAULT_KNOWLEDGE_VECTOR_DIMENSION,
+            embedding_backend=self.embedding_backend,
+            query_vector=query_vector,
         )
         sql, params = self.build_query(request, resolved_query_vector)
         rows = await self._fetch_rows(request, sql, params)

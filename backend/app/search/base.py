@@ -1,12 +1,15 @@
 from __future__ import annotations
 
 import hashlib
+import logging
 import math
 from typing import Sequence, TypeVar
 
 from app.config import get_settings
+from app.embedding.base import EmbeddingBackend
 
 T = TypeVar("T")
+logger = logging.getLogger(__name__)
 
 DEFAULT_MMR_LAMBDA = 0.75
 # Placeholder query vectors must stay aligned with the stored embedding schema
@@ -46,6 +49,36 @@ def build_placeholder_vector(seed_text: str, dimension: int) -> list[float]:
     if norm == 0:
         return [0.0] * dimension
     return [value / norm for value in values]
+
+
+def resolve_query_vector(
+    *,
+    query: str,
+    search_type: str,
+    expected_dimension: int,
+    embedding_backend: EmbeddingBackend,
+    query_vector: Sequence[float] | None = None,
+) -> list[float]:
+    if query_vector is None:
+        resolved_vector = [float(value) for value in embedding_backend.embed_text(query)]
+        vector_source = embedding_backend.name
+    else:
+        resolved_vector = [float(value) for value in query_vector]
+        vector_source = "request override"
+
+    if len(resolved_vector) != expected_dimension:
+        raise ValueError(
+            "Query embedding dimension mismatch: "
+            f"expected {expected_dimension}, got {len(resolved_vector)}."
+        )
+
+    logger.info(
+        "Resolved %s query vector with %d dimensions via %s",
+        search_type,
+        len(resolved_vector),
+        vector_source,
+    )
+    return resolved_vector
 
 
 def vector_to_literal(vector: Sequence[float]) -> str:
