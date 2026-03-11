@@ -48,8 +48,9 @@ export function DashboardLayout({
                   Session-backed operator console
                 </p>
                 <p className="mt-2 text-sm leading-6 text-[var(--foreground-secondary)]">
-                  API keys, usage, and billing are pulled from the private backend
-                  surface. No demo snapshots are rendered on these pages anymore.
+                  API keys, usage, billing, and pipeline telemetry are pulled from
+                  the private backend surface. No demo snapshots are rendered on
+                  these pages anymore.
                 </p>
               </div>
 
@@ -86,8 +87,8 @@ export function DashboardLayout({
                   checkout logic in the UI.
                 </p>
                 <p>
-                  Pipeline telemetry is intentionally isolated until a dedicated
-                  backend endpoint exists.
+                  Pipeline telemetry stays summarized at the API boundary instead
+                  of leaking worker internals into the UI.
                 </p>
               </div>
             </div>

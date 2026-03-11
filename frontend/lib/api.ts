@@ -68,6 +68,66 @@ type BillingLinkWire = {
   portal_url?: string;
 };
 
+type JobStatusWire = "pending" | "running" | "retrying" | "completed" | "failed";
+type JobTrackWire = "broll" | "knowledge";
+type JobStepStatusWire = "completed" | "failed" | "skipped";
+
+type JobSummaryWire = {
+  id: string;
+  track: JobTrackWire;
+  job_type: string;
+  status: JobStatusWire;
+  attempts: number;
+  max_attempts: number;
+  error_message?: string | null;
+  created_at: string;
+  started_at?: string | null;
+  completed_at?: string | null;
+  updated_at: string;
+};
+
+type JobListWire = {
+  jobs?: JobSummaryWire[];
+  items?: JobSummaryWire[];
+  total_count?: number;
+  total?: number;
+};
+
+type JobStepDetailWire = {
+  id: string;
+  step_name: string;
+  status: JobStepStatusWire;
+  artifacts?: unknown;
+  error_message?: string | null;
+  started_at?: string | null;
+  completed_at?: string | null;
+  updated_at: string;
+};
+
+type JobDetailWire = JobSummaryWire & {
+  source_id?: string | null;
+  input_payload?: unknown;
+  locked_by?: string | null;
+  locked_at?: string | null;
+  next_retry_at?: string | null;
+  steps?: JobStepDetailWire[];
+};
+
+type JobStatsTrackWire = {
+  broll?: number;
+  knowledge?: number;
+};
+
+type JobStatsWire = {
+  total: number;
+  pending: number;
+  running: number;
+  retrying: number;
+  completed: number;
+  failed: number;
+  tracks?: JobStatsTrackWire;
+};
+
 export type DashboardApiKey = {
   id: string;
   name: string;
@@ -110,6 +170,69 @@ export type DashboardMonthlyUsage = {
 
 export type BillingRedirect = {
   url: string;
+};
+
+export type JobStatus = JobStatusWire;
+export type JobTrack = JobTrackWire;
+export type JobStepStatus = JobStepStatusWire;
+
+export type JobListParams = {
+  status?: JobStatus;
+  track?: JobTrack;
+  limit?: number;
+  offset?: number;
+};
+
+export type DashboardJobSummary = {
+  id: string;
+  track: JobTrack;
+  jobType: string;
+  status: JobStatus;
+  attempts: number;
+  maxAttempts: number;
+  errorMessage: string | null;
+  createdAt: string;
+  startedAt: string | null;
+  completedAt: string | null;
+  updatedAt: string;
+};
+
+export type DashboardJobStep = {
+  id: string;
+  stepName: string;
+  status: JobStepStatus;
+  artifacts: unknown;
+  errorMessage: string | null;
+  startedAt: string | null;
+  completedAt: string | null;
+  updatedAt: string;
+};
+
+export type DashboardJobDetail = DashboardJobSummary & {
+  sourceId: string | null;
+  inputPayload: unknown;
+  lockedBy: string | null;
+  lockedAt: string | null;
+  nextRetryAt: string | null;
+  steps: DashboardJobStep[];
+};
+
+export type DashboardJobList = {
+  jobs: DashboardJobSummary[];
+  totalCount: number;
+};
+
+export type DashboardJobStats = {
+  total: number;
+  pending: number;
+  running: number;
+  retrying: number;
+  completed: number;
+  failed: number;
+  tracks: {
+    broll: number;
+    knowledge: number;
+  };
 };
 
 export class ApiClientError extends Error {
@@ -230,6 +353,66 @@ function isDailyUsageWire(value: unknown): value is DailyUsageWire {
     typeof value.date === "string" &&
     (value.credits_used === undefined || isFiniteNumber(value.credits_used)) &&
     (value.request_count === undefined || isFiniteNumber(value.request_count))
+  );
+}
+
+function isJobStatus(value: unknown): value is JobStatus {
+  return (
+    value === "pending" ||
+    value === "running" ||
+    value === "retrying" ||
+    value === "completed" ||
+    value === "failed"
+  );
+}
+
+function isJobTrack(value: unknown): value is JobTrack {
+  return value === "broll" || value === "knowledge";
+}
+
+function isJobStepStatus(value: unknown): value is JobStepStatus {
+  return value === "completed" || value === "failed" || value === "skipped";
+}
+
+function isJobSummaryWire(value: unknown): value is JobSummaryWire {
+  return (
+    isPlainObject(value) &&
+    typeof value.id === "string" &&
+    isJobTrack(value.track) &&
+    typeof value.job_type === "string" &&
+    isJobStatus(value.status) &&
+    isFiniteNumber(value.attempts) &&
+    isFiniteNumber(value.max_attempts) &&
+    (value.error_message === undefined ||
+      value.error_message === null ||
+      typeof value.error_message === "string") &&
+    typeof value.created_at === "string" &&
+    (value.started_at === undefined ||
+      value.started_at === null ||
+      typeof value.started_at === "string") &&
+    (value.completed_at === undefined ||
+      value.completed_at === null ||
+      typeof value.completed_at === "string") &&
+    typeof value.updated_at === "string"
+  );
+}
+
+function isJobStepDetailWire(value: unknown): value is JobStepDetailWire {
+  return (
+    isPlainObject(value) &&
+    typeof value.id === "string" &&
+    typeof value.step_name === "string" &&
+    isJobStepStatus(value.status) &&
+    (value.error_message === undefined ||
+      value.error_message === null ||
+      typeof value.error_message === "string") &&
+    (value.started_at === undefined ||
+      value.started_at === null ||
+      typeof value.started_at === "string") &&
+    (value.completed_at === undefined ||
+      value.completed_at === null ||
+      typeof value.completed_at === "string") &&
+    typeof value.updated_at === "string"
   );
 }
 
@@ -373,6 +556,144 @@ function normalizeUsage(payload: unknown): DashboardMonthlyUsage {
   };
 }
 
+function normalizeJobSummary(input: JobSummaryWire): DashboardJobSummary {
+  return {
+    id: input.id,
+    track: input.track,
+    jobType: input.job_type,
+    status: input.status,
+    attempts: input.attempts,
+    maxAttempts: input.max_attempts,
+    errorMessage: input.error_message ?? null,
+    createdAt: input.created_at,
+    startedAt: input.started_at ?? null,
+    completedAt: input.completed_at ?? null,
+    updatedAt: input.updated_at,
+  };
+}
+
+function normalizeJobList(payload: unknown): DashboardJobList {
+  if (!isPlainObject(payload)) {
+    throw new ApiClientError("Invalid job list response.", {
+      status: 500,
+      code: "invalid_payload",
+      details: payload,
+    });
+  }
+
+  const items = Array.isArray(payload.jobs)
+    ? payload.jobs
+    : Array.isArray(payload.items)
+      ? payload.items
+      : null;
+  const totalCount =
+    typeof payload.total_count === "number"
+      ? payload.total_count
+      : typeof payload.total === "number"
+        ? payload.total
+        : null;
+
+  if (!items || totalCount === null) {
+    throw new ApiClientError("Job list response is missing pagination fields.", {
+      status: 500,
+      code: "invalid_payload",
+      details: payload,
+    });
+  }
+
+  const jobs = items
+    .filter((item): item is JobSummaryWire => isJobSummaryWire(item))
+    .map((item) => normalizeJobSummary(item));
+
+  if (items.length > 0 && jobs.length === 0) {
+    throw new ApiClientError("Job list response did not include valid jobs.", {
+      status: 500,
+      code: "invalid_payload",
+      details: payload,
+    });
+  }
+
+  return {
+    jobs,
+    totalCount,
+  };
+}
+
+function normalizeJobStep(input: JobStepDetailWire): DashboardJobStep {
+  return {
+    id: input.id,
+    stepName: input.step_name,
+    status: input.status,
+    artifacts: input.artifacts ?? {},
+    errorMessage: input.error_message ?? null,
+    startedAt: input.started_at ?? null,
+    completedAt: input.completed_at ?? null,
+    updatedAt: input.updated_at,
+  };
+}
+
+function normalizeJobDetail(payload: unknown): DashboardJobDetail {
+  if (!isPlainObject(payload) || !isJobSummaryWire(payload)) {
+    throw new ApiClientError("Invalid job detail response.", {
+      status: 500,
+      code: "invalid_payload",
+      details: payload,
+    });
+  }
+
+  const jobPayload = payload as JobDetailWire;
+  const steps = Array.isArray(jobPayload.steps)
+    ? jobPayload.steps
+        .filter((step): step is JobStepDetailWire => isJobStepDetailWire(step))
+        .map((step) => normalizeJobStep(step))
+    : [];
+
+  return {
+    ...normalizeJobSummary(jobPayload),
+    sourceId: typeof jobPayload.source_id === "string" ? jobPayload.source_id : null,
+    inputPayload: jobPayload.input_payload ?? {},
+    lockedBy: typeof jobPayload.locked_by === "string" ? jobPayload.locked_by : null,
+    lockedAt: typeof jobPayload.locked_at === "string" ? jobPayload.locked_at : null,
+    nextRetryAt:
+      typeof jobPayload.next_retry_at === "string" ? jobPayload.next_retry_at : null,
+    steps,
+  };
+}
+
+function normalizeJobStats(payload: unknown): DashboardJobStats {
+  if (
+    !isPlainObject(payload) ||
+    !isFiniteNumber(payload.total) ||
+    !isFiniteNumber(payload.pending) ||
+    !isFiniteNumber(payload.running) ||
+    !isFiniteNumber(payload.retrying) ||
+    !isFiniteNumber(payload.completed) ||
+    !isFiniteNumber(payload.failed) ||
+    !isPlainObject(payload.tracks)
+  ) {
+    throw new ApiClientError("Invalid job stats response.", {
+      status: 500,
+      code: "invalid_payload",
+      details: payload,
+    });
+  }
+
+  return {
+    total: payload.total,
+    pending: payload.pending,
+    running: payload.running,
+    retrying: payload.retrying,
+    completed: payload.completed,
+    failed: payload.failed,
+    tracks: {
+      broll: isFiniteNumber(payload.tracks.broll) ? payload.tracks.broll : 0,
+      knowledge: isFiniteNumber(payload.tracks.knowledge)
+        ? payload.tracks.knowledge
+        : 0,
+    },
+  };
+}
+
 function normalizeBillingLink(payload: unknown): BillingRedirect {
   if (!isPlainObject(payload)) {
     throw new ApiClientError("Invalid billing response.", {
@@ -400,6 +721,23 @@ function normalizeBillingLink(payload: unknown): BillingRedirect {
   }
 
   return { url };
+}
+
+function buildQueryString(
+  params: Record<string, string | number | null | undefined>,
+): string {
+  const searchParams = new URLSearchParams();
+
+  Object.entries(params).forEach(([key, value]) => {
+    if (value === undefined || value === null || value === "") {
+      return;
+    }
+
+    searchParams.set(key, String(value));
+  });
+
+  const queryString = searchParams.toString();
+  return queryString ? `?${queryString}` : "";
 }
 
 export async function fetchWithAuth<T>(
@@ -484,6 +822,44 @@ export const usage = {
     );
 
     return normalizeUsage(payload);
+  },
+};
+
+export const jobs = {
+  async list(params: JobListParams = {}): Promise<DashboardJobList> {
+    const queryString = buildQueryString({
+      status: params.status,
+      track: params.track,
+      limit: params.limit,
+      offset: params.offset,
+    });
+    const payload = await fetchWithAuth<JobListWire>(
+      `/dashboard/jobs${queryString}`,
+      {
+        method: "GET",
+        cache: "no-store",
+      },
+    );
+
+    return normalizeJobList(payload);
+  },
+
+  async get(jobId: string): Promise<DashboardJobDetail> {
+    const payload = await fetchWithAuth<JobDetailWire>(`/dashboard/jobs/${jobId}`, {
+      method: "GET",
+      cache: "no-store",
+    });
+
+    return normalizeJobDetail(payload);
+  },
+
+  async getStats(): Promise<DashboardJobStats> {
+    const payload = await fetchWithAuth<JobStatsWire>("/dashboard/jobs/stats", {
+      method: "GET",
+      cache: "no-store",
+    });
+
+    return normalizeJobStats(payload);
   },
 };
 
