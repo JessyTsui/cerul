@@ -8,6 +8,17 @@ from workers.common.sources import PexelsClient, PixabayClient
 
 class DiscoverAssetStep(PipelineStep):
     step_name = "DiscoverAssetStep"
+    _pixabay_option_names = (
+        "page",
+        "order",
+        "safesearch",
+        "video_type",
+        "category",
+        "editors_choice",
+        "min_width",
+        "min_height",
+        "lang",
+    )
 
     def __init__(
         self,
@@ -106,19 +117,15 @@ class DiscoverAssetStep(PipelineStep):
         pixabay_options: dict[str, Any] = {}
         raw_pixabay_options = conf.get("pixabay_search_options", {})
         if isinstance(raw_pixabay_options, Mapping):
-            pixabay_options.update(raw_pixabay_options)
+            pixabay_options.update(
+                {
+                    str(key): value
+                    for key, value in raw_pixabay_options.items()
+                    if str(key) in self._pixabay_option_names
+                }
+            )
 
-        for option_name in (
-            "page",
-            "order",
-            "safesearch",
-            "video_type",
-            "category",
-            "editors_choice",
-            "min_width",
-            "min_height",
-            "lang",
-        ):
+        for option_name in self._pixabay_option_names:
             if option_name in conf:
                 pixabay_options[option_name] = conf[option_name]
 

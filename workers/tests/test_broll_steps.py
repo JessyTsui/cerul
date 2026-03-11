@@ -60,6 +60,43 @@ class FakeSourceClient:
         return self._payload
 
 
+class StrictPixabaySourceClient:
+    def __init__(self) -> None:
+        self.calls: list[dict[str, object]] = []
+
+    async def search_videos(
+        self,
+        query: str,
+        per_page: int = 50,
+        *,
+        page: int = 1,
+        order: str = "popular",
+        safesearch: bool = True,
+        video_type: str = "film",
+        category: str | None = None,
+        editors_choice: bool | None = None,
+        min_width: int | None = None,
+        min_height: int | None = None,
+        lang: str | None = None,
+    ) -> list[dict[str, object]]:
+        self.calls.append(
+            {
+                "query": query,
+                "per_page": per_page,
+                "page": page,
+                "order": order,
+                "safesearch": safesearch,
+                "video_type": video_type,
+                "category": category,
+                "editors_choice": editors_choice,
+                "min_width": min_width,
+                "min_height": min_height,
+                "lang": lang,
+            }
+        )
+        return []
+
+
 class PerAssetEmbeddingBackend(FakeEmbeddingBackend):
     def embed_image(self, image_path: str) -> list[float]:
         if image_path.endswith("bad.jpg"):
@@ -272,6 +309,43 @@ def test_discover_asset_step_passes_pixabay_search_options() -> None:
             "editors_choice": True,
         }
     ]
+
+
+def test_discover_asset_step_filters_unsupported_pixabay_search_options() -> None:
+    pixabay_client = StrictPixabaySourceClient()
+    step = DiscoverAssetStep(pixabay_client=pixabay_client)
+    context = PipelineContext(
+        conf={
+            "sources": ["pixabay"],
+            "pixabay_search_options": {
+                "page": 2,
+                "video_type": "all",
+                "foo": "bar",
+            },
+            "pixabay_bar": "baz",
+        },
+        data={"query": "forest river"},
+    )
+
+    asyncio.run(step.run(context))
+
+    assert pixabay_client.calls == [
+        {
+            "query": "forest river",
+            "per_page": 50,
+            "page": 2,
+            "order": "popular",
+            "safesearch": True,
+            "video_type": "all",
+            "category": None,
+            "editors_choice": None,
+            "min_width": None,
+            "min_height": None,
+            "lang": None,
+        }
+    ]
+    assert context.data["raw_assets"] == []
+    assert context.data["discovered_assets_count"] == 0
 
 
 def test_fetch_asset_metadata_step_normalizes_pixabay_payload() -> None:
