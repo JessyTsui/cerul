@@ -10,6 +10,10 @@ updates:
     labels:
       - dependencies
       - frontend
+    ignore:
+      - dependency-name: "eslint"
+        update-types:
+          - "version-update:semver-major"
     groups:
       next-ecosystem:
         patterns:

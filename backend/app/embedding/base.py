@@ -14,3 +14,6 @@ class EmbeddingBackend(Protocol):
 
     def embed_image(self, image_path: str | Path) -> list[float]:
         ...
+
+    def embed_video(self, video_path: str | Path) -> list[float]:
+        ...

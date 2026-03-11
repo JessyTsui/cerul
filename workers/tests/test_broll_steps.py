@@ -1,27 +1,31 @@
 import asyncio
 from unittest.mock import patch
 
+from backend.app.embedding import GeminiEmbeddingBackend
 from workers.broll import BrollIndexingPipeline
 from workers.broll.repository import InMemoryBrollAssetRepository
 from workers.broll.steps import (
     DiscoverAssetStep,
     FetchAssetMetadataStep,
-    GenerateClipEmbeddingStep,
+    GenerateEmbeddingStep,
 )
 from workers.broll.steps import download_preview_frame as download_preview_frame_module
 from workers.common.pipeline import PipelineContext
 
 
 class FakeEmbeddingBackend:
-    name = "fake-clip"
+    name = "fake-gemini"
 
     def dimension(self) -> int:
-        return 512
+        return 768
 
     def embed_text(self, text: str) -> list[float]:
         return [0.0] * self.dimension()
 
     def embed_image(self, image_path: str) -> list[float]:
+        return [float(index) for index in range(self.dimension())]
+
+    def embed_video(self, video_path: str) -> list[float]:
         return [float(index) for index in range(self.dimension())]
 
 
@@ -220,8 +224,8 @@ def test_fetch_asset_metadata_step_normalizes_pixabay_payload() -> None:
     assert asset["tags"] == ["city", "skyline", "night"]
 
 
-def test_generate_clip_embedding_step_produces_expected_dimension() -> None:
-    step = GenerateClipEmbeddingStep(embedding_backend=FakeEmbeddingBackend())
+def test_generate_embedding_step_produces_expected_dimension() -> None:
+    step = GenerateEmbeddingStep(embedding_backend=FakeEmbeddingBackend())
     context = PipelineContext(
         data={
             "assets": [{"id": "pexels_123"}],
@@ -232,12 +236,12 @@ def test_generate_clip_embedding_step_produces_expected_dimension() -> None:
     asyncio.run(step.run(context))
 
     vector = context.data["embeddings"]["pexels_123"]
-    assert len(vector) == 512
-    assert context.data["embedding_dimension"] == 512
+    assert len(vector) == 768
+    assert context.data["embedding_dimension"] == 768
 
 
-def test_generate_clip_embedding_step_continues_after_single_asset_failure() -> None:
-    step = GenerateClipEmbeddingStep(embedding_backend=PerAssetEmbeddingBackend())
+def test_generate_embedding_step_continues_after_single_asset_failure() -> None:
+    step = GenerateEmbeddingStep(embedding_backend=PerAssetEmbeddingBackend())
     context = PipelineContext(
         data={
             "assets": [{"id": "good"}, {"id": "bad"}],
@@ -253,6 +257,12 @@ def test_generate_clip_embedding_step_continues_after_single_asset_failure() -> 
     assert "good" in context.data["embeddings"]
     assert "bad" not in context.data["embeddings"]
     assert context.data["embedding_errors"]["bad"] == "corrupt preview frame"
+
+
+def test_broll_indexing_pipeline_uses_gemini_backend_by_default() -> None:
+    pipeline = BrollIndexingPipeline()
+
+    assert isinstance(pipeline._embedding_backend, GeminiEmbeddingBackend)
 
 
 def test_broll_indexing_pipeline_runs_end_to_end_with_stubs() -> None:

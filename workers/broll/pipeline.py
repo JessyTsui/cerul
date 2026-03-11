@@ -1,7 +1,7 @@
 from collections.abc import Mapping
 from typing import Any
 
-from backend.app.embedding import ClipEmbeddingBackend, EmbeddingBackend
+from backend.app.embedding import EmbeddingBackend, GeminiEmbeddingBackend
 from workers.common.pipeline import PipelineContext, PipelineExecutor
 from workers.common.sources import PexelsClient, PixabayClient
 
@@ -10,7 +10,7 @@ from .steps import (
     DiscoverAssetStep,
     DownloadPreviewFrameStep,
     FetchAssetMetadataStep,
-    GenerateClipEmbeddingStep,
+    GenerateEmbeddingStep,
     MarkJobCompletedStep,
     PersistBrollAssetStep,
 )
@@ -26,7 +26,7 @@ class BrollIndexingPipeline:
         temp_dir_root: str | None = None,
     ) -> None:
         self._repository = repository or InMemoryBrollAssetRepository()
-        self._embedding_backend = embedding_backend or ClipEmbeddingBackend()
+        self._embedding_backend = embedding_backend or GeminiEmbeddingBackend()
         self._pexels_client = pexels_client or PexelsClient()
         self._pixabay_client = pixabay_client or PixabayClient()
         self._temp_dir_root = temp_dir_root
@@ -38,7 +38,7 @@ class BrollIndexingPipeline:
                 ),
                 FetchAssetMetadataStep(repository=self._repository),
                 DownloadPreviewFrameStep(),
-                GenerateClipEmbeddingStep(
+                GenerateEmbeddingStep(
                     embedding_backend=self._embedding_backend,
                 ),
                 PersistBrollAssetStep(repository=self._repository),
