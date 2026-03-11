@@ -241,6 +241,7 @@ def test_search_endpoint_rate_limit_recovers_after_one_second(
             "message": "Rate limit exceeded",
         }
     }
+    assert second.headers["Retry-After"] == "1"
     assert third.status_code == 200
     assert database.fetchval(
         "SELECT last_used_at IS NOT NULL FROM api_keys WHERE id = $1::uuid",

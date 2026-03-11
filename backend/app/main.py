@@ -85,11 +85,18 @@ app.include_router(dashboard_router)
 app.include_router(webhooks_router)
 
 
-def error_response(status_code: int, code: str, message: str) -> JSONResponse:
+def error_response(
+    status_code: int,
+    code: str,
+    message: str,
+    *,
+    headers: dict[str, str] | None = None,
+) -> JSONResponse:
     payload = ErrorResponse(error=ErrorDetail(code=code, message=message))
     return JSONResponse(
         status_code=status_code,
         content=jsonable_encoder(payload),
+        headers=headers,
     )
 
 
@@ -130,7 +137,12 @@ async def http_exception_handler(
     normalized_message = str(error_message)
     if normalized_message.endswith("."):
         normalized_message = normalized_message.removesuffix(".")
-    return error_response(exc.status_code, error_code, normalized_message)
+    return error_response(
+        exc.status_code,
+        error_code,
+        normalized_message,
+        headers=exc.headers,
+    )
 
 
 @app.get("/", tags=["meta"])
