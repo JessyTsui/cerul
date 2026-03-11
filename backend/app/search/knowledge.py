@@ -1,9 +1,12 @@
 from __future__ import annotations
 
+import logging
+import time
 from typing import Any, Sequence
 
 from app.embedding.base import EmbeddingBackend
 from app.embedding.gemini import GeminiEmbeddingBackend
+from app.search.answer import AnswerGenerator
 from app.search.base import (
     DEFAULT_KNOWLEDGE_VECTOR_DIMENSION,
     mmr_diversify,
@@ -13,6 +16,9 @@ from app.search.base import (
     vector_to_literal,
 )
 from app.search.models import KnowledgeFilters, KnowledgeResult, SearchRequest
+from app.search.rerank import LLMReranker
+
+logger = logging.getLogger(__name__)
 
 
 class KnowledgeSearchService:
@@ -21,10 +27,14 @@ class KnowledgeSearchService:
         db: Any,
         *,
         embedding_backend: EmbeddingBackend | None = None,
+        reranker: LLMReranker | None = None,
+        answer_generator: AnswerGenerator | None = None,
         mmr_lambda: float | None = None,
     ) -> None:
         self.db = db
         self.embedding_backend = embedding_backend or GeminiEmbeddingBackend()
+        self.reranker = reranker or LLMReranker()
+        self.answer_generator = answer_generator or AnswerGenerator()
         self.mmr_lambda = resolve_mmr_lambda(mmr_lambda)
 
     def build_query(
@@ -49,7 +59,10 @@ class KnowledgeSearchService:
             SELECT
                 ks.id::text AS id,
                 kv.title,
+                ks.title AS segment_title,
                 ks.description,
+                ks.transcript_text,
+                ks.visual_summary,
                 kv.video_url,
                 kv.thumbnail_url,
                 kv.duration_seconds AS duration,
@@ -84,17 +97,30 @@ class KnowledgeSearchService:
         )
         sql, params = self.build_query(request, resolved_query_vector)
         rows = await self._fetch_rows(request, sql, params)
-        rows = self._placeholder_rerank(rows)
-        results = [self._row_to_result(request, row) for row in rows]
-        embeddings = [parse_vector(row.get("embedding")) for row in rows]
-        relevance_scores = [float(row.get("score", 0.0)) for row in rows]
-        return mmr_diversify(
-            results,
-            embeddings,
-            limit=request.max_results,
-            lambda_multiplier=self.mmr_lambda,
-            relevance_scores=relevance_scores,
+        if not rows:
+            return []
+
+        rerank_started_at = time.perf_counter()
+        reranked_rows = await self.reranker.rerank(request.query, rows)
+        logger.info(
+            "Reranked %d knowledge candidates in %.2f ms",
+            min(len(rows), getattr(self.reranker, "top_n", len(rows))),
+            (time.perf_counter() - rerank_started_at) * 1000,
         )
+
+        selected_rows = self._diversify_rows(reranked_rows, limit=request.max_results)
+
+        answer: str | None = None
+        if request.include_answer and selected_rows:
+            answer_started_at = time.perf_counter()
+            answer = await self.answer_generator.generate(request.query, selected_rows)
+            logger.info(
+                "Generated knowledge answer from %d segments in %.2f ms",
+                len(selected_rows),
+                (time.perf_counter() - answer_started_at) * 1000,
+            )
+
+        return [self._row_to_result(row, answer=answer) for row in selected_rows]
 
     async def _fetch_rows(
         self,
@@ -104,27 +130,34 @@ class KnowledgeSearchService:
     ) -> list[dict[str, Any]]:
         return list(await self.db.fetch(sql, *params))
 
-    def _placeholder_rerank(self, rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
-        return sorted(rows, key=lambda row: row.get("score", 0.0), reverse=True)
-
-    def _placeholder_answer(self, query: str, row: dict[str, Any]) -> str:
-        return (
-            f"Potential answer for '{query}' based on {row['title']} "
-            f"from {row['timestamp_start']:.0f}s to {row['timestamp_end']:.0f}s."
+    def _diversify_rows(
+        self,
+        rows: list[dict[str, Any]],
+        *,
+        limit: int,
+    ) -> list[dict[str, Any]]:
+        embeddings = [parse_vector(row.get("embedding")) for row in rows]
+        relevance_scores = [
+            float(row.get("rerank_score", row.get("score", 0.0)))
+            for row in rows
+        ]
+        return mmr_diversify(
+            rows,
+            embeddings,
+            limit=limit,
+            lambda_multiplier=self.mmr_lambda,
+            relevance_scores=relevance_scores,
         )
 
     def _row_to_result(
         self,
-        request: SearchRequest,
         row: dict[str, Any],
+        *,
+        answer: str | None = None,
     ) -> KnowledgeResult:
-        answer: str | None = None
-        if request.include_answer:
-            answer = self._placeholder_answer(request.query, row)
-
         return KnowledgeResult(
             id=row["id"],
-            score=max(float(row["score"]), 0.0),
+            score=max(float(row.get("rerank_score", row.get("score", 0.0))), 0.0),
             title=row["title"],
             description=row["description"],
             video_url=row["video_url"],
