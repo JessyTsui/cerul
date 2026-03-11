@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { canonicalUrl } from "./site-url";
 import {
+  primaryNavigation,
   isDashboardRouteActive,
   isPrimaryNavigationActive,
   isPrimaryRoute,
@@ -16,6 +17,7 @@ describe("canonicalUrl", () => {
 describe("isPrimaryRoute", () => {
   it("returns true for known primary routes", () => {
     expect(isPrimaryRoute("/")).toBe(true);
+    expect(isPrimaryRoute("/search")).toBe(true);
     expect(isPrimaryRoute("/docs")).toBe(true);
     expect(isPrimaryRoute("/pricing")).toBe(true);
   });
@@ -27,6 +29,7 @@ describe("isPrimaryRoute", () => {
 
 describe("isPrimaryNavigationActive", () => {
   it("matches nested paths for non-root sections", () => {
+    expect(isPrimaryNavigationActive("/search", "/search")).toBe(true);
     expect(isPrimaryNavigationActive("/docs/search-api", "/docs")).toBe(true);
     expect(isPrimaryNavigationActive("/pricing", "/pricing")).toBe(true);
   });
@@ -34,6 +37,12 @@ describe("isPrimaryNavigationActive", () => {
   it("keeps the root route exact", () => {
     expect(isPrimaryNavigationActive("/", "/")).toBe(true);
     expect(isPrimaryNavigationActive("/docs", "/")).toBe(false);
+  });
+});
+
+describe("primaryNavigation", () => {
+  it("includes the public search demo entry", () => {
+    expect(primaryNavigation.some((item) => item.href === "/search")).toBe(true);
   });
 });
 

@@ -13,6 +13,7 @@ type ApiErrorPayload = {
     code?: string;
     message?: string;
   };
+  detail?: unknown;
 };
 
 type ApiKeyWire = {
@@ -55,6 +56,7 @@ type MonthlyUsageWire = {
   request_count?: number;
   api_keys_active?: number;
   rate_limit_per_sec?: number | null;
+  has_stripe_customer?: boolean;
   daily_breakdown?: DailyUsageWire[];
 };
 
@@ -165,6 +167,7 @@ export type DashboardMonthlyUsage = {
   requestCount: number;
   apiKeysActive: number;
   rateLimitPerSec: number | null;
+  hasStripeCustomer: boolean;
   dailyBreakdown: DashboardUsageDay[];
 };
 
@@ -315,6 +318,25 @@ async function parseResponseBody(response: Response): Promise<unknown> {
 
 function getErrorPayload(body: unknown): ApiErrorPayload["error"] | null {
   if (!isPlainObject(body) || !isPlainObject(body.error)) {
+    if (!isPlainObject(body)) {
+      return null;
+    }
+
+    if (typeof body.detail === "string") {
+      return {
+        message: body.detail,
+      };
+    }
+
+    if (Array.isArray(body.detail)) {
+      const firstItem = body.detail[0];
+      if (isPlainObject(firstItem) && typeof firstItem.msg === "string") {
+        return {
+          message: firstItem.msg,
+        };
+      }
+    }
+
     return null;
   }
 
@@ -552,6 +574,7 @@ function normalizeUsage(payload: unknown): DashboardMonthlyUsage {
       typeof usagePayload.rate_limit_per_sec === "number"
         ? usagePayload.rate_limit_per_sec
         : null,
+    hasStripeCustomer: usagePayload.has_stripe_customer === true,
     dailyBreakdown,
   };
 }

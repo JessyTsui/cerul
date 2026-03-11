@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useState } from "react";
 import { billing, getApiErrorMessage } from "@/lib/api";
-import { getTierLabel } from "@/lib/dashboard";
+import { getTierLabel, resolveDashboardBillingAction } from "@/lib/dashboard";
 import { DashboardLayout } from "./dashboard-layout";
 import {
   DashboardNotice,
@@ -14,6 +14,8 @@ import { useMonthlyUsage } from "./use-monthly-usage";
 
 const planDescriptions: Record<string, string> = {
   free: "Best for evaluating the public API surface and the operator workflow.",
+  builder:
+    "Built for teams that need predictable usage, more active keys, and a cleaner operator surface.",
   pro: "Built for active teams that need more credits, more keys, and direct billing controls.",
   enterprise:
     "Reserved for private ingestion, security review, and negotiated usage envelopes.",
@@ -26,9 +28,13 @@ export function DashboardSettingsScreen() {
   );
   const [billingError, setBillingError] = useState<string | null>(null);
   const normalizedTier = data?.tier.toLowerCase() ?? "free";
-  const canUpgrade = normalizedTier === "free";
-  const canManageSubscription =
-    normalizedTier === "pro" || normalizedTier === "enterprise";
+  const availableBillingAction = data
+    ? resolveDashboardBillingAction(data.tier, data.hasStripeCustomer)
+    : null;
+  const canUpgrade = availableBillingAction === "checkout";
+  const canManageSubscription = availableBillingAction === "portal";
+  const usesManualBilling =
+    data !== null && availableBillingAction === null && normalizedTier !== "free";
 
   async function handleCheckout() {
     setBillingAction("checkout");
@@ -182,6 +188,13 @@ export function DashboardSettingsScreen() {
                       ? "Opening portal..."
                       : "Manage Subscription"}
                   </button>
+                ) : null}
+
+                {usesManualBilling ? (
+                  <p className="text-sm leading-6 text-[var(--foreground-secondary)]">
+                    This plan is managed outside the self-serve Stripe portal.
+                    Contact Cerul if billing details need to change.
+                  </p>
                 ) : null}
               </div>
             </article>

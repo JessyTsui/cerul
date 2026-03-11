@@ -69,6 +69,9 @@ class MonthlyUsageResponse(BaseModel):
     credits_used: int
     credits_remaining: int
     request_count: int
+    api_keys_active: int
+    rate_limit_per_sec: int
+    has_stripe_customer: bool
     daily_breakdown: list[DailyUsagePoint]
 
 
@@ -184,7 +187,13 @@ def generate_api_key() -> tuple[str, str, str]:
 async def fetch_user_profile(db: Any, user_id: str) -> dict[str, Any] | None:
     row = await db.fetchrow(
         """
-        SELECT id, email, tier, monthly_credit_limit, stripe_customer_id
+        SELECT
+            id,
+            email,
+            tier,
+            monthly_credit_limit,
+            rate_limit_per_sec,
+            stripe_customer_id
         FROM user_profiles
         WHERE id = $1
         """,
@@ -289,20 +298,23 @@ async def fetch_daily_usage_breakdown(
     *,
     user_id: str,
     period_start: date,
+    period_end: date,
 ) -> list[dict[str, Any]]:
     rows = await db.fetch(
         """
-        SELECT DATE(created_at) AS date,
+        SELECT DATE(occurred_at) AS date,
                COUNT(*) AS request_count,
                COALESCE(SUM(credits_used), 0) AS credits_used
         FROM usage_events
         WHERE user_id = $1
-          AND created_at >= $2
-        GROUP BY DATE(created_at)
+          AND occurred_at >= $2
+          AND occurred_at < ($3::date + INTERVAL '1 day')
+        GROUP BY DATE(occurred_at)
         ORDER BY date ASC
         """,
         user_id,
         period_start,
+        period_end,
     )
     return [cast(dict[str, Any], _record_to_dict(row)) for row in rows]
 
@@ -568,7 +580,9 @@ async def get_monthly_usage(
         db,
         user_id=session.user_id,
         period_start=breakdown_start,
+        period_end=period_end,
     )
+    api_keys_active = await count_active_api_keys(db, session.user_id)
 
     tier = str(profile.get("tier") or "free").lower()
     credits_limit = int(
@@ -585,6 +599,9 @@ async def get_monthly_usage(
         credits_used=credits_used,
         credits_remaining=max(credits_limit - credits_used, 0),
         request_count=request_count,
+        api_keys_active=api_keys_active,
+        rate_limit_per_sec=int(profile.get("rate_limit_per_sec") or 0),
+        has_stripe_customer=bool(profile.get("stripe_customer_id")),
         daily_breakdown=daily_breakdown,
     )
 

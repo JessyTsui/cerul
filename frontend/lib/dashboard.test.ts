@@ -6,6 +6,7 @@ import {
   getAverageDailyCredits,
   getCreditsPercent,
   getTierLabel,
+  resolveDashboardBillingAction,
 } from "./dashboard";
 
 describe("buildUsageChartData", () => {
@@ -151,8 +152,16 @@ describe("dashboard helpers", () => {
 
   it("maps known plan labels", () => {
     expect(getTierLabel("free")).toBe("Free");
+    expect(getTierLabel("builder")).toBe("Builder");
     expect(getTierLabel("pro")).toBe("Pro");
     expect(getTierLabel("enterprise")).toBe("Enterprise");
+  });
+
+  it("resolves billing actions from tier and Stripe linkage", () => {
+    expect(resolveDashboardBillingAction("free", false)).toBe("checkout");
+    expect(resolveDashboardBillingAction("builder", true)).toBe("portal");
+    expect(resolveDashboardBillingAction("pro", true)).toBe("portal");
+    expect(resolveDashboardBillingAction("enterprise", false)).toBeNull();
   });
 
   it("falls back to the raw timestamp when a date is invalid", () => {

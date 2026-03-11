@@ -76,6 +76,30 @@ describe("fetchWithAuth", () => {
     );
   });
 
+  it("parses FastAPI detail errors for dashboard endpoints", async () => {
+    vi.mocked(global.fetch).mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          detail: "Stripe customer not found for this user.",
+        }),
+        {
+          status: 404,
+          headers: {
+            "Content-Type": "application/json",
+          },
+        },
+      ),
+    );
+
+    await expect(fetchWithAuth("/dashboard/billing/portal")).rejects.toEqual(
+      expect.objectContaining<ApiClientError>({
+        name: "ApiClientError",
+        status: 404,
+        message: "Stripe customer not found for this user.",
+      }),
+    );
+  });
+
   it("returns actionable guidance for network failures", () => {
     expect(getApiErrorMessage(new TypeError("Failed to fetch"))).toContain(
       "NEXT_PUBLIC_API_BASE_URL",
@@ -144,6 +168,8 @@ describe("dashboard API client", () => {
             credits_remaining: 7550,
             request_count: 812,
             api_keys_active: 3,
+            rate_limit_per_sec: 12,
+            has_stripe_customer: true,
             daily_breakdown: [
               {
                 date: "2026-03-01",
@@ -171,7 +197,8 @@ describe("dashboard API client", () => {
       creditsRemaining: 7550,
       requestCount: 812,
       apiKeysActive: 3,
-      rateLimitPerSec: null,
+      rateLimitPerSec: 12,
+      hasStripeCustomer: true,
       dailyBreakdown: [
         {
           date: "2026-03-01",
@@ -217,6 +244,7 @@ describe("dashboard API client", () => {
 
     await expect(usage.getMonthly()).resolves.toEqual(
       expect.objectContaining({
+        hasStripeCustomer: false,
         dailyBreakdown: [
           {
             date: "2026-03-01",
@@ -245,6 +273,26 @@ describe("dashboard API client", () => {
 
     await expect(billing.createCheckout()).resolves.toEqual({
       url: "https://billing.example/checkout",
+    });
+  });
+
+  it("normalizes portal redirect urls", async () => {
+    vi.mocked(global.fetch).mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          portal_url: "https://billing.example/portal",
+        }),
+        {
+          status: 200,
+          headers: {
+            "Content-Type": "application/json",
+          },
+        },
+      ),
+    );
+
+    await expect(billing.createPortal()).resolves.toEqual({
+      url: "https://billing.example/portal",
     });
   });
 
