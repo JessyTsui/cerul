@@ -7,6 +7,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from app.auth import SessionContext, require_session
+from app.config import reset_settings_cache
 from app.db import get_db
 from app.main import app
 from app.routers import dashboard
@@ -169,27 +170,35 @@ class DashboardDb:
         raise AssertionError(f"Unhandled fetch query: {normalized}")
 
 
-def session_override() -> SessionContext:
-    return SessionContext(user_id="user_123", email="owner@example.com")
-
-
 @pytest.fixture
-def client() -> TestClient:
+def client(monkeypatch: pytest.MonkeyPatch) -> TestClient:
     db = DashboardDb()
+    monkeypatch.setenv("DASHBOARD_OPERATOR_EMAILS", "owner@example.com")
+    reset_settings_cache()
 
     async def get_db_override() -> DashboardDb:
         return db
+
+    def session_override() -> SessionContext:
+        return cast(SessionContext, app.state.test_session)
 
     app.dependency_overrides[get_db] = get_db_override
     app.dependency_overrides[require_session] = session_override
 
     with TestClient(app) as test_client:
         test_client.app.state.test_db = db
+        test_client.app.state.test_session = SessionContext(
+            user_id="user_123",
+            email="owner@example.com",
+        )
         yield test_client
 
     app.dependency_overrides.clear()
+    reset_settings_cache()
     if hasattr(app.state, "test_db"):
         delattr(app.state, "test_db")
+    if hasattr(app.state, "test_session"):
+        delattr(app.state, "test_session")
 
 
 def test_api_key_creation_respects_free_tier_limit(client: TestClient) -> None:
@@ -519,6 +528,53 @@ def test_job_stats_returns_status_and_track_counts(client: TestClient) -> None:
             "knowledge": 3,
         },
     }
+
+
+@pytest.mark.parametrize(
+    "path",
+    [
+        "/dashboard/jobs",
+        "/dashboard/jobs/stats",
+        "/dashboard/jobs/job_secure",
+    ],
+)
+def test_job_telemetry_requires_operator_access(
+    client: TestClient,
+    path: str,
+) -> None:
+    db = client.app.state.test_db
+    now = datetime.now(timezone.utc)
+    db.jobs = [
+        {
+            "id": "job_secure",
+            "track": "knowledge",
+            "source_id": None,
+            "job_type": "index",
+            "status": "running",
+            "input_payload": {},
+            "error_message": None,
+            "attempts": 1,
+            "max_attempts": 3,
+            "locked_by": "worker-a",
+            "locked_at": now,
+            "next_retry_at": None,
+            "created_at": now,
+            "started_at": now,
+            "completed_at": None,
+            "updated_at": now,
+        },
+    ]
+    client.app.state.test_session = SessionContext(
+        user_id="user_123",
+        email="viewer@example.com",
+    )
+
+    response = client.get(path)
+
+    assert response.status_code == 403
+    assert response.json()["detail"] == (
+        "Pipeline telemetry is restricted to configured operator accounts."
+    )
 
 
 def test_checkout_endpoint_returns_checkout_url(

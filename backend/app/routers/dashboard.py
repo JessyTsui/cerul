@@ -18,6 +18,7 @@ from ..billing import (
     monthly_credit_limit_for_tier,
 )
 from ..billing import stripe_service
+from ..config import get_settings
 from ..db import get_db
 
 API_KEY_TOKEN_LENGTH = 32
@@ -146,6 +147,14 @@ class JobStatsResponse(BaseModel):
 
 def _utc_now() -> datetime:
     return datetime.now(timezone.utc)
+
+
+def _normalize_email(value: str | None) -> str | None:
+    if value is None:
+        return None
+
+    cleaned = value.strip().lower()
+    return cleaned or None
 
 
 def get_current_billing_period(reference: date | None = None) -> tuple[date, date]:
@@ -441,6 +450,31 @@ async def fetch_processing_job_stats(
     }
 
 
+async def require_dashboard_operator_access(
+    session: SessionContext,
+    db: Any,
+) -> None:
+    allowed_emails = {
+        email
+        for email in get_settings().dashboard.operator_emails
+        if email
+    }
+    session_email = _normalize_email(session.email)
+
+    if session_email is None:
+        profile = await fetch_user_profile(db, session.user_id)
+        profile_email = _normalize_email(
+            cast(str | None, profile.get("email")) if profile else None,
+        )
+        session_email = profile_email
+
+    if session_email is None or session_email not in allowed_emails:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Pipeline telemetry is restricted to configured operator accounts.",
+        )
+
+
 @router.post(
     "/api-keys",
     response_model=CreateApiKeyResponse,
@@ -564,7 +598,7 @@ async def get_dashboard_jobs(
     session: SessionContext = Depends(require_session),
     db: Any = Depends(get_db),
 ) -> JobListResponse:
-    del session
+    await require_dashboard_operator_access(session, db)
     jobs = await list_processing_jobs(
         db,
         job_status=status_filter,
@@ -585,7 +619,7 @@ async def get_dashboard_job_stats(
     session: SessionContext = Depends(require_session),
     db: Any = Depends(get_db),
 ) -> JobStatsResponse:
-    del session
+    await require_dashboard_operator_access(session, db)
     stats = await fetch_processing_job_stats(db)
     return JobStatsResponse(
         total=stats["total"],
@@ -607,7 +641,7 @@ async def get_dashboard_job_detail(
     session: SessionContext = Depends(require_session),
     db: Any = Depends(get_db),
 ) -> JobDetailResponse:
-    del session
+    await require_dashboard_operator_access(session, db)
     job = await fetch_processing_job(db, job_id)
     if job is None:
         raise HTTPException(
