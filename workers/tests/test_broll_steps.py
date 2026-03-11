@@ -348,6 +348,47 @@ def test_discover_asset_step_filters_unsupported_pixabay_search_options() -> Non
     assert context.data["discovered_assets_count"] == 0
 
 
+def test_discover_asset_step_normalizes_pixabay_search_option_types() -> None:
+    pixabay_client = StrictPixabaySourceClient()
+    step = DiscoverAssetStep(pixabay_client=pixabay_client)
+    context = PipelineContext(
+        conf={
+            "sources": ["pixabay"],
+            "pixabay_search_options": {
+                "page": "2",
+                "safesearch": "false",
+                "editors_choice": "true",
+                "min_width": "1920",
+                "min_height": "1080",
+                "video_type": "all",
+            },
+            "pixabay_order": " latest ",
+            "pixabay_lang": " en ",
+        },
+        data={"query": "forest river"},
+    )
+
+    asyncio.run(step.run(context))
+
+    assert pixabay_client.calls == [
+        {
+            "query": "forest river",
+            "per_page": 50,
+            "page": 2,
+            "order": "latest",
+            "safesearch": False,
+            "video_type": "all",
+            "category": None,
+            "editors_choice": True,
+            "min_width": 1920,
+            "min_height": 1080,
+            "lang": "en",
+        }
+    ]
+    assert context.data["raw_assets"] == []
+    assert context.data["discovered_assets_count"] == 0
+
+
 def test_fetch_asset_metadata_step_normalizes_pixabay_payload() -> None:
     repository = InMemoryBrollAssetRepository()
     step = FetchAssetMetadataStep(repository=repository)
