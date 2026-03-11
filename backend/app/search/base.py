@@ -9,8 +9,11 @@ from app.config import get_settings
 T = TypeVar("T")
 
 DEFAULT_MMR_LAMBDA = 0.75
-DEFAULT_BROLL_VECTOR_DIMENSION = 512
-DEFAULT_KNOWLEDGE_VECTOR_DIMENSION = 1536
+# Placeholder query vectors must stay aligned with the stored embedding schema
+# until T07 replaces them with real Gemini query embeddings.
+DEFAULT_VECTOR_DIMENSION = 768
+DEFAULT_BROLL_VECTOR_DIMENSION = DEFAULT_VECTOR_DIMENSION
+DEFAULT_KNOWLEDGE_VECTOR_DIMENSION = DEFAULT_VECTOR_DIMENSION
 
 
 def resolve_mmr_lambda(override: float | None = None) -> float:
