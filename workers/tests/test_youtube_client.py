@@ -181,6 +181,98 @@ def test_search_channel_videos_preserves_search_order() -> None:
     ]
 
 
+def test_search_channel_videos_paginates_beyond_first_50_results() -> None:
+    first_page_ids = [f"video-{index:02d}" for index in range(50)]
+    second_page_ids = [f"video-{index:02d}" for index in range(50, 55)]
+    metadata_items = [
+        {
+            "id": video_id,
+            "snippet": {
+                "title": f"Title {video_id}",
+                "channelTitle": "Cerul Labs",
+                "channelId": "channel-42",
+                "publishedAt": "2026-03-02T10:00:00Z",
+                "thumbnails": {
+                    "default": {
+                        "url": f"https://img.youtube.com/vi/{video_id}/default.jpg"
+                    }
+                },
+            },
+            "contentDetails": {"duration": "PT1M"},
+            "status": {"license": "youtube"},
+        }
+        for video_id in [*first_page_ids, *second_page_ids]
+    ]
+    client = RecordingAsyncClient(
+        [
+            {
+                "items": [{"id": {"videoId": video_id}} for video_id in first_page_ids],
+                "nextPageToken": "page-2",
+            },
+            {
+                "items": [{"id": {"videoId": video_id}} for video_id in second_page_ids],
+            },
+            {"items": metadata_items[:50]},
+            {"items": metadata_items[50:]},
+        ]
+    )
+
+    with patch("workers.common.sources.youtube.httpx.AsyncClient", return_value=client):
+        videos = asyncio.run(
+            YouTubeClient(api_key="test-key").search_channel_videos(
+                "channel-42",
+                max_results=55,
+            )
+        )
+
+    assert len(videos) == 55
+    assert [video["source_video_id"] for video in videos] == [
+        *first_page_ids,
+        *second_page_ids,
+    ]
+    assert client.calls == [
+        {
+            "url": "https://www.googleapis.com/youtube/v3/search",
+            "params": {
+                "channelId": "channel-42",
+                "maxResults": 50,
+                "order": "date",
+                "part": "snippet",
+                "type": "video",
+                "key": "test-key",
+            },
+        },
+        {
+            "url": "https://www.googleapis.com/youtube/v3/search",
+            "params": {
+                "channelId": "channel-42",
+                "maxResults": 5,
+                "order": "date",
+                "pageToken": "page-2",
+                "part": "snippet",
+                "type": "video",
+                "key": "test-key",
+            },
+        },
+        {
+            "url": "https://www.googleapis.com/youtube/v3/videos",
+            "params": {
+                "id": ",".join(first_page_ids),
+                "part": "snippet,contentDetails,status",
+                "key": "test-key",
+            },
+        },
+        {
+            "url": "https://www.googleapis.com/youtube/v3/videos",
+            "params": {
+                "id": ",".join(second_page_ids),
+                "part": "snippet,contentDetails,status",
+                "key": "test-key",
+            },
+        },
+    ]
+
+
 def test_youtube_client_requires_api_key() -> None:
     with patch.dict(os.environ, {"YOUTUBE_API_KEY": ""}):
         client = YouTubeClient(api_key="")

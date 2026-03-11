@@ -52,35 +52,52 @@ class YouTubeClient:
         if max_results <= 0:
             raise ValueError("max_results must be greater than 0.")
 
-        payload = await self._get_json(
-            "search",
-            {
-                "channelId": channel_id,
-                "maxResults": min(max_results, 50),
-                "order": "date",
-                "part": "snippet",
-                "type": "video",
-            },
-        )
-        items = payload.get("items", [])
-        ordered_video_ids = [
-            self._extract_video_id(item)
-            for item in items
-            if self._extract_video_id(item) is not None
-        ]
+        ordered_video_ids: list[str] = []
+        seen_video_ids: set[str] = set()
+        next_page_token: str | None = None
+
+        while len(ordered_video_ids) < max_results:
+            remaining = max_results - len(ordered_video_ids)
+            payload = await self._get_json(
+                "search",
+                {
+                    "channelId": channel_id,
+                    "maxResults": min(remaining, 50),
+                    "order": "date",
+                    "pageToken": next_page_token,
+                    "part": "snippet",
+                    "type": "video",
+                },
+            )
+            items = payload.get("items", [])
+            for item in items:
+                video_id = self._extract_video_id(item)
+                if video_id is None or video_id in seen_video_ids:
+                    continue
+                seen_video_ids.add(video_id)
+                ordered_video_ids.append(video_id)
+                if len(ordered_video_ids) >= max_results:
+                    break
+
+            next_page_token = self._coerce_string(payload.get("nextPageToken"))
+            if next_page_token is None:
+                break
+
         if not ordered_video_ids:
             return []
 
-        metadata_payload = await self._get_json(
-            "videos",
-            {
-                "id": ",".join(ordered_video_ids),
-                "part": "snippet,contentDetails,status",
-            },
-        )
         normalized_by_id = {
             metadata["source_video_id"]: metadata
-            for item in metadata_payload.get("items", [])
+            for video_id_batch in self._chunked(ordered_video_ids, 50)
+            for item in (
+                await self._get_json(
+                    "videos",
+                    {
+                        "id": ",".join(video_id_batch),
+                        "part": "snippet,contentDetails,status",
+                    },
+                )
+            ).get("items", [])
             for metadata in [self._normalize_video(item)]
         }
         return [
@@ -100,6 +117,9 @@ class YouTubeClient:
 
         request_params = dict(params)
         request_params["key"] = api_key
+        request_params = {
+            key: value for key, value in request_params.items() if value is not None
+        }
 
         async with httpx.AsyncClient(timeout=self._timeout) as client:
             response = await client.get(f"{self.base_url}/{endpoint}", params=request_params)
@@ -207,3 +227,6 @@ class YouTubeClient:
 
     def _build_watch_url(self, video_id: str) -> str:
         return f"https://www.youtube.com/watch?v={video_id}"
+
+    def _chunked(self, values: list[str], size: int) -> list[list[str]]:
+        return [values[index : index + size] for index in range(0, len(values), size)]
