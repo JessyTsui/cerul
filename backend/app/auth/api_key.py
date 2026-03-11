@@ -1,4 +1,5 @@
 import hashlib
+import math
 import re
 from calendar import monthrange
 from dataclasses import dataclass
@@ -10,6 +11,7 @@ import asyncpg
 from fastapi import Depends, Header, HTTPException, status
 
 from ..db import get_db
+from ..middleware.rate_limit import get_rate_limiter
 
 API_KEY_PREFIX = "cerul_sk_"
 API_KEY_PATTERN = re.compile(r"^cerul_sk_[A-Za-z0-9]{32}$")
@@ -24,9 +26,22 @@ class AuthContext:
     rate_limit_per_sec: int
 
 
-def _auth_error(status_code: int, message: str) -> HTTPException:
-    headers = {"WWW-Authenticate": "Bearer"} if status_code == status.HTTP_401_UNAUTHORIZED else None
-    return HTTPException(status_code=status_code, detail=message, headers=headers)
+def _auth_error(
+    status_code: int,
+    message: str,
+    *,
+    headers: dict[str, str] | None = None,
+) -> HTTPException:
+    response_headers = dict(headers or {})
+
+    if status_code == status.HTTP_401_UNAUTHORIZED:
+        response_headers.setdefault("WWW-Authenticate", "Bearer")
+
+    return HTTPException(
+        status_code=status_code,
+        detail=message,
+        headers=response_headers or None,
+    )
 
 
 def parse_api_key_from_authorization(authorization: str | None) -> str:
@@ -101,53 +116,34 @@ async def _fetch_auth_row(db: asyncpg.Connection, key_hash: str) -> asyncpg.Reco
     )
 
 
-async def _enforce_rate_limit(
-    db: asyncpg.Connection,
-    user_id: str,
-    rate_limit_per_sec: int,
-) -> None:
-    if rate_limit_per_sec <= 0:
-        return
-
-    request_count = await db.fetchval(
-        """
-        SELECT COUNT(*)
-        FROM usage_events
-        WHERE user_id = $1
-          AND occurred_at >= NOW() - INTERVAL '1 second'
-        """,
-        user_id,
+async def _enforce_rate_limit(auth_context: AuthContext) -> None:
+    lease = await get_rate_limiter().acquire(
+        auth_context.api_key_id,
+        auth_context.rate_limit_per_sec,
     )
 
-    if int(request_count or 0) >= rate_limit_per_sec:
-        raise _auth_error(status.HTTP_429_TOO_MANY_REQUESTS, "Rate limit exceeded.")
-
-
-async def _reserve_api_key_slot(
-    db: asyncpg.Connection,
-    api_key_id: str,
-    rate_limit_per_sec: int,
-) -> None:
-    if rate_limit_per_sec <= 0:
+    if lease.allowed:
         return
 
-    updated = await db.fetchval(
+    raise _auth_error(
+        status.HTTP_429_TOO_MANY_REQUESTS,
+        "Rate limit exceeded.",
+        headers={"Retry-After": str(max(math.ceil(lease.retry_after_seconds), 1))},
+    )
+
+
+async def _touch_api_key_last_used(
+    db: asyncpg.Connection,
+    api_key_id: str,
+) -> None:
+    await db.execute(
         """
         UPDATE api_keys
         SET last_used_at = NOW(), updated_at = NOW()
-        WHERE id = $1
-          AND (
-              last_used_at IS NULL
-              OR last_used_at <= NOW() - ($2 * INTERVAL '1 second')
-          )
-        RETURNING 1
+        WHERE id = $1::uuid
         """,
         UUID(api_key_id),
-        1 / rate_limit_per_sec,
     )
-
-    if updated is None:
-        raise _auth_error(status.HTTP_429_TOO_MANY_REQUESTS, "Rate limit exceeded.")
 
 
 async def require_api_key(
@@ -170,7 +166,7 @@ async def require_api_key(
     if auth_context.credits_remaining <= 0:
         raise _auth_error(status.HTTP_403_FORBIDDEN, "Monthly credit limit exhausted")
 
-    await _enforce_rate_limit(db, auth_context.user_id, auth_context.rate_limit_per_sec)
-    await _reserve_api_key_slot(db, auth_context.api_key_id, auth_context.rate_limit_per_sec)
+    await _enforce_rate_limit(auth_context)
+    await _touch_api_key_last_used(db, auth_context.api_key_id)
 
     return auth_context
