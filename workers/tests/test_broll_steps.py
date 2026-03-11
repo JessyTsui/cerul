@@ -1,9 +1,11 @@
 import asyncio
+import json
+from types import SimpleNamespace
 from unittest.mock import patch
 
 from backend.app.embedding import GeminiEmbeddingBackend
 from workers.broll import BrollIndexingPipeline
-from workers.broll.repository import InMemoryBrollAssetRepository
+from workers.broll.repository import BrollAssetRepository, InMemoryBrollAssetRepository
 from workers.broll.steps import (
     DiscoverAssetStep,
     FetchAssetMetadataStep,
@@ -13,6 +15,7 @@ from workers.broll.steps import download_preview_frame as download_preview_frame
 from workers.common.sources import PixabayClient
 import workers.common.sources.pixabay as pixabay_source_module
 from workers.common.pipeline import PipelineContext
+from scripts import seed_broll as seed_broll_module
 
 
 class FakeEmbeddingBackend:
@@ -161,6 +164,131 @@ class RecordingPixabayAsyncClient:
         }
         return FakePixabayApiResponse(
             {"hits": [{"id": 987}, "ignore-me", {"id": 654}]}
+        )
+
+
+class FakeTransaction:
+    async def __aenter__(self) -> "FakeTransaction":
+        return self
+
+    async def __aexit__(self, exc_type, exc, tb) -> bool:
+        return False
+
+
+class FakePoolAcquire:
+    def __init__(self, connection: "RecordingRepositoryConnection") -> None:
+        self._connection = connection
+
+    async def __aenter__(self) -> "RecordingRepositoryConnection":
+        return self._connection
+
+    async def __aexit__(self, exc_type, exc, tb) -> bool:
+        return False
+
+
+class FakePool:
+    def __init__(self, connection: "RecordingRepositoryConnection") -> None:
+        self._connection = connection
+        self.closed = False
+
+    def acquire(self) -> FakePoolAcquire:
+        return FakePoolAcquire(self._connection)
+
+    async def close(self) -> None:
+        self.closed = True
+
+
+class RecordingRepositoryConnection:
+    def __init__(
+        self,
+        *,
+        fetch_rows: list[dict[str, object]] | None = None,
+        fetchval_result: int = 0,
+    ) -> None:
+        self.fetch_rows = fetch_rows or []
+        self.fetchval_result = fetchval_result
+        self.fetch_calls: list[tuple[str, tuple[object, ...]]] = []
+        self.fetchrow_calls: list[tuple[str, tuple[object, ...]]] = []
+        self.fetchval_calls: list[tuple[str, tuple[object, ...]]] = []
+        self.execute_calls: list[tuple[str, tuple[object, ...]]] = []
+        self.executemany_calls: list[tuple[str, list[tuple[object, ...]]]] = []
+
+    async def fetch(self, query: str, *params: object) -> list[dict[str, object]]:
+        self.fetch_calls.append((query, params))
+        return list(self.fetch_rows)
+
+    async def fetchrow(
+        self,
+        query: str,
+        *params: object,
+    ) -> dict[str, object] | None:
+        self.fetchrow_calls.append((query, params))
+        return {"exists": 1} if self.fetch_rows else None
+
+    async def fetchval(self, query: str, *params: object) -> int:
+        self.fetchval_calls.append((query, params))
+        return self.fetchval_result
+
+    async def execute(self, query: str, *params: object) -> str:
+        self.execute_calls.append((query, params))
+        return "OK"
+
+    async def executemany(
+        self,
+        query: str,
+        records: list[tuple[object, ...]],
+    ) -> None:
+        self.executemany_calls.append((query, list(records)))
+
+    def transaction(self) -> FakeTransaction:
+        return FakeTransaction()
+
+
+class FakeAsyncpgModule:
+    def __init__(self, pool: FakePool) -> None:
+        self._pool = pool
+        self.create_pool_calls: list[dict[str, object]] = []
+
+    async def create_pool(self, **kwargs: object) -> FakePool:
+        self.create_pool_calls.append(dict(kwargs))
+        return self._pool
+
+
+class FakeSeedRepository:
+    def __init__(self, db_url: str) -> None:
+        self.db_url = db_url
+        self.connected = False
+        self.closed = False
+
+    async def connect(self) -> None:
+        self.connected = True
+
+    async def close(self) -> None:
+        self.closed = True
+
+
+class FakeSeedPipeline:
+    def __init__(self) -> None:
+        self.queries: list[tuple[str, dict[str, object]]] = []
+
+    async def run(
+        self,
+        query: str,
+        *,
+        conf: dict[str, object],
+        category: str | None = None,
+        job_id: str | None = None,
+    ) -> SimpleNamespace:
+        self.queries.append((query, conf))
+        return SimpleNamespace(
+            failed_step=None,
+            error=None,
+            data={
+                "discovered_assets_count": 12,
+                "new_assets_count": 7,
+                "indexed_assets_count": 7,
+                "last_discovery_page": 3,
+            },
         )
 
 
@@ -593,3 +721,194 @@ def test_broll_indexing_pipeline_runs_end_to_end_with_stubs() -> None:
     assert context.data["job_artifacts"]["duplicate_asset_count"] == 0
     assert context.data["job_artifacts"]["embedding_error_count"] == 0
     assert len(repository.stored_assets) == 1
+
+
+def test_broll_asset_repository_bulk_check_existing_returns_matching_asset_ids() -> None:
+    connection = RecordingRepositoryConnection(
+        fetch_rows=[
+            {"source": "pexels", "source_asset_id": "123"},
+            {"source": "pixabay", "source_asset_id": "456"},
+        ]
+    )
+    pool = FakePool(connection)
+    asyncpg_module = FakeAsyncpgModule(pool)
+    repository = BrollAssetRepository("postgres://example.test/cerul")
+
+    with patch("workers.broll.repository._import_asyncpg", return_value=asyncpg_module):
+        existing_ids = asyncio.run(
+            repository.bulk_check_existing(
+                [
+                    {
+                        "id": "pexels_123",
+                        "source": "pexels",
+                        "source_asset_id": "123",
+                    },
+                    {
+                        "id": "pixabay_456",
+                        "source": "pixabay",
+                        "source_asset_id": "456",
+                    },
+                    {
+                        "id": "pexels_999",
+                        "source": "pexels",
+                        "source_asset_id": "999",
+                    },
+                ]
+            )
+        )
+
+    assert existing_ids == {"pexels_123", "pixabay_456"}
+    assert len(connection.fetch_calls) == 1
+    _, params = connection.fetch_calls[0]
+    assert list(params[0]) == ["pexels", "pixabay", "pexels"]
+    assert list(params[1]) == ["123", "456", "999"]
+
+
+def test_broll_asset_repository_store_assets_batch_upserts_records() -> None:
+    connection = RecordingRepositoryConnection()
+    pool = FakePool(connection)
+    asyncpg_module = FakeAsyncpgModule(pool)
+    repository = BrollAssetRepository("postgres://example.test/cerul")
+    assets = [
+        {
+            "id": "pexels_123",
+            "source": "pexels",
+            "source_asset_id": "123",
+            "source_url": "https://www.pexels.com/video/123/",
+            "video_url": "https://cdn.pexels.com/videos/123.mp4",
+            "thumbnail_url": "https://images.pexels.com/videos/123.jpeg",
+            "duration": 14,
+            "title": "Mountain Dawn",
+            "description": "Golden hour drone shot",
+            "tags": ["mountain", "sunrise"],
+            "license": "Pexels License",
+            "creator": "Avery",
+            "metadata": {"query": "aerial mountain sunrise"},
+        },
+        {
+            "id": "pixabay_456",
+            "source": "pixabay",
+            "source_asset_id": "456",
+            "source_url": "https://pixabay.com/videos/id-456/",
+            "video_url": "https://cdn.pixabay.com/videos/456.mp4",
+            "thumbnail_url": "https://cdn.pixabay.com/video/456.jpg",
+            "duration_seconds": 21,
+            "title": "City Lights",
+            "description": "",
+            "tags": ["city", "night"],
+            "license": "Pixabay License",
+            "creator": "Riley",
+            "metadata": {"query": "tokyo neon streets night"},
+        },
+    ]
+
+    with patch("workers.broll.repository._import_asyncpg", return_value=asyncpg_module):
+        stored_count = asyncio.run(
+            repository.store_assets_batch(
+                assets,
+                [
+                    [0.1, 0.2, 0.3],
+                    [0.4, 0.5, 0.6],
+                ],
+            )
+        )
+
+    assert stored_count == 2
+    assert len(connection.executemany_calls) == 1
+    query, records = connection.executemany_calls[0]
+    assert "ON CONFLICT (source, source_asset_id) DO UPDATE" in query
+    assert len(records) == 2
+    assert records[0][0:4] == (
+        "pexels",
+        "123",
+        "https://www.pexels.com/video/123/",
+        "https://cdn.pexels.com/videos/123.mp4",
+    )
+    assert records[0][5] == 14
+    assert records[0][8] == ["mountain", "sunrise"]
+    assert json.loads(records[0][11]) == {"query": "aerial mountain sunrise"}
+    assert records[0][12] == "[0.1,0.2,0.3]"
+
+
+def test_seed_broll_resume_skips_completed_queries(tmp_path) -> None:
+    query_file = tmp_path / "queries.txt"
+    query_file.write_text(
+        "aerial mountain sunrise\nocean waves crashing rocks\n",
+        encoding="utf-8",
+    )
+    state_path = tmp_path / ".seed_broll_state.json"
+    state_path.write_text(
+        json.dumps(
+            {
+                "aerial mountain sunrise": {
+                    "status": "completed",
+                    "assets_found": 10,
+                    "assets_indexed": 8,
+                    "last_page": 2,
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+    fake_pipeline = FakeSeedPipeline()
+    args = SimpleNamespace(
+        query=None,
+        file=str(query_file),
+        source="all",
+        per_page=50,
+        max_pages=10,
+        resume=True,
+        dry_run=False,
+        db_url="postgres://example.test/cerul",
+    )
+
+    with patch.object(seed_broll_module, "BrollAssetRepository", FakeSeedRepository):
+        result = asyncio.run(
+            seed_broll_module.run_seed(
+                args,
+                state_path=state_path,
+                pipeline_factory=lambda repository: fake_pipeline,
+            )
+        )
+
+    updated_state = json.loads(state_path.read_text(encoding="utf-8"))
+    assert result == 0
+    assert fake_pipeline.queries == [
+        (
+            "ocean waves crashing rocks",
+            {
+                "sources": ["pexels", "pixabay"],
+                "per_page": 50,
+                "max_pages": 10,
+            },
+        )
+    ]
+    assert updated_state["aerial mountain sunrise"]["status"] == "completed"
+    assert updated_state["ocean waves crashing rocks"]["status"] == "completed"
+    assert updated_state["ocean waves crashing rocks"]["last_page"] == 3
+
+
+def test_seed_broll_dry_run_produces_no_side_effects(tmp_path) -> None:
+    query_file = tmp_path / "queries.txt"
+    query_file.write_text("tokyo neon streets night\n", encoding="utf-8")
+    state_path = tmp_path / ".seed_broll_state.json"
+    args = SimpleNamespace(
+        query=None,
+        file=str(query_file),
+        source="pexels",
+        per_page=25,
+        max_pages=4,
+        resume=False,
+        dry_run=True,
+        db_url=None,
+    )
+
+    with patch.object(
+        seed_broll_module,
+        "BrollAssetRepository",
+        side_effect=AssertionError("dry-run should not create a repository"),
+    ):
+        result = asyncio.run(seed_broll_module.run_seed(args, state_path=state_path))
+
+    assert result == 0
+    assert not state_path.exists()

@@ -5,7 +5,10 @@ from backend.app.embedding import EmbeddingBackend, GeminiEmbeddingBackend
 from workers.common.pipeline import PipelineContext, PipelineExecutor
 from workers.common.sources import PexelsClient, PixabayClient
 
-from .repository import BrollAssetRepository, InMemoryBrollAssetRepository
+from .repository import (
+    BrollAssetRepositoryProtocol,
+    resolve_default_broll_repository,
+)
 from .steps import (
     DiscoverAssetStep,
     DownloadPreviewFrameStep,
@@ -19,13 +22,14 @@ from .steps import (
 class BrollIndexingPipeline:
     def __init__(
         self,
-        repository: BrollAssetRepository | None = None,
+        repository: BrollAssetRepositoryProtocol | None = None,
         embedding_backend: EmbeddingBackend | None = None,
         pexels_client: PexelsClient | None = None,
         pixabay_client: PixabayClient | None = None,
         temp_dir_root: str | None = None,
+        db_url: str | None = None,
     ) -> None:
-        self._repository = repository or InMemoryBrollAssetRepository()
+        self._repository = repository or resolve_default_broll_repository(db_url)
         self._embedding_backend = embedding_backend or GeminiEmbeddingBackend()
         self._pexels_client = pexels_client or PexelsClient()
         self._pixabay_client = pixabay_client or PixabayClient()

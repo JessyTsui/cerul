@@ -1,11 +1,11 @@
-from workers.broll.repository import BrollAssetRepository
+from workers.broll.repository import BrollAssetRepositoryProtocol
 from workers.common.pipeline import PipelineContext, PipelineStep
 
 
 class MarkJobCompletedStep(PipelineStep):
     step_name = "MarkJobCompletedStep"
 
-    def __init__(self, repository: BrollAssetRepository | None = None) -> None:
+    def __init__(self, repository: BrollAssetRepositoryProtocol | None = None) -> None:
         self._repository = repository
 
     async def _process(self, context: PipelineContext) -> None:

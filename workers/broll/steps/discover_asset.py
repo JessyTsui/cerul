@@ -36,6 +36,7 @@ class DiscoverAssetStep(PipelineStep):
             raise ValueError("B-roll discovery requires query or category input.")
 
         per_page = int(context.conf.get("per_page", 50))
+        max_pages = max(int(context.conf.get("max_pages", 1)), 1)
         requested_sources = self._normalize_sources(
             context.conf.get("sources", ["pexels", "pixabay"])
         )
@@ -45,44 +46,72 @@ class DiscoverAssetStep(PipelineStep):
             "pixabay": self._pixabay_client or context.conf.get("pixabay_client"),
         }
 
-        coroutines: list[Any] = []
-        source_names: list[str] = []
-        for source_name in requested_sources:
-            client = clients.get(source_name)
-            if client is None:
-                continue
-            source_names.append(source_name)
-            coroutines.append(
-                client.search_videos(
-                    **self._build_search_kwargs(
-                        source_name=source_name,
-                        query=query,
-                        per_page=per_page,
-                        conf=context.conf,
-                    )
-                )
-            )
-
-        if not coroutines:
+        active_sources = [
+            source_name
+            for source_name in requested_sources
+            if clients.get(source_name) is not None
+        ]
+        if not active_sources:
             raise RuntimeError("No content source clients are configured for discovery.")
 
         discovered_assets: list[dict[str, Any]] = []
         warnings: dict[str, str] = {}
-        results = await asyncio.gather(*coroutines, return_exceptions=True)
+        pages_by_source: dict[str, int] = {}
+        attempted_sources: set[str] = set()
 
-        for source_name, result in zip(source_names, results, strict=True):
-            if isinstance(result, Exception):
-                warnings[source_name] = str(result)
-                continue
+        for page_number in range(1, max_pages + 1):
+            coroutines: list[Any] = []
+            source_names: list[str] = []
 
-            discovered_assets.extend(
-                {"source": source_name, "payload": payload} for payload in result
-            )
+            for source_name in active_sources:
+                client = clients.get(source_name)
+                if client is None:
+                    continue
 
-        if not discovered_assets and len(warnings) == len(source_names):
+                source_names.append(source_name)
+                attempted_sources.add(source_name)
+                coroutines.append(
+                    client.search_videos(
+                        **self._build_search_kwargs(
+                            source_name=source_name,
+                            query=query,
+                            per_page=per_page,
+                            page_number=page_number,
+                            conf=context.conf,
+                        )
+                    )
+                )
+
+            if not coroutines:
+                break
+
+            results = await asyncio.gather(*coroutines, return_exceptions=True)
+            next_active_sources: list[str] = []
+            for source_name, result in zip(source_names, results, strict=True):
+                if isinstance(result, Exception):
+                    warnings[f"{source_name}:page:{page_number}"] = str(result)
+                    continue
+
+                payloads = [
+                    payload for payload in result if isinstance(payload, Mapping)
+                ]
+                if payloads:
+                    pages_by_source[source_name] = page_number
+                    discovered_assets.extend(
+                        {"source": source_name, "payload": payload}
+                        for payload in payloads
+                    )
+
+                if len(payloads) >= per_page and page_number < max_pages:
+                    next_active_sources.append(source_name)
+
+            active_sources = next_active_sources
+            if not active_sources:
+                break
+
+        if not discovered_assets and attempted_sources and len(warnings) >= len(attempted_sources):
             details = "; ".join(
-                f"{source_name}: {message}"
-                for source_name, message in warnings.items()
+                f"{warning_key}: {message}" for warning_key, message in warnings.items()
             )
             raise RuntimeError(
                 f"Unable to discover assets from the configured providers. {details}"
@@ -90,6 +119,8 @@ class DiscoverAssetStep(PipelineStep):
 
         context.data["raw_assets"] = discovered_assets
         context.data["discovered_assets_count"] = len(discovered_assets)
+        context.data["discovered_pages_by_source"] = pages_by_source
+        context.data["last_discovery_page"] = max(pages_by_source.values(), default=0)
         if warnings:
             context.data["discovery_warnings"] = warnings
 
@@ -106,6 +137,7 @@ class DiscoverAssetStep(PipelineStep):
         source_name: str,
         query: str,
         per_page: int,
+        page_number: int,
         conf: Mapping[str, Any],
     ) -> dict[str, Any]:
         search_kwargs: dict[str, Any] = {
@@ -113,10 +145,15 @@ class DiscoverAssetStep(PipelineStep):
             "per_page": per_page,
         }
 
+        if source_name == "pexels":
+            if page_number > 1:
+                search_kwargs["page"] = page_number
+            return search_kwargs
+
         if source_name != "pixabay":
             return search_kwargs
 
-        pixabay_options: dict[str, Any] = {}
+        pixabay_options: dict[str, Any] = {"page": page_number}
         raw_pixabay_options = conf.get("pixabay_search_options", {})
         if isinstance(raw_pixabay_options, Mapping):
             pixabay_options.update(

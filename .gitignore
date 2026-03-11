@@ -20,3 +20,4 @@ artifacts/
 *.log
 ARCHITECTURE.md
 PIPELINE_PATTERN.md
+scripts/.seed_broll_state.json

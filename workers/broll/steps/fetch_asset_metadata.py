@@ -1,13 +1,13 @@
 from typing import Any
 
-from workers.broll.repository import BrollAssetRepository
+from workers.broll.repository import BrollAssetRepositoryProtocol
 from workers.common.pipeline import PipelineContext, PipelineStep
 
 
 class FetchAssetMetadataStep(PipelineStep):
     step_name = "FetchAssetMetadataStep"
 
-    def __init__(self, repository: BrollAssetRepository | None = None) -> None:
+    def __init__(self, repository: BrollAssetRepositoryProtocol | None = None) -> None:
         self._repository = repository
 
     async def _process(self, context: PipelineContext) -> None:
@@ -15,9 +15,8 @@ class FetchAssetMetadataStep(PipelineStep):
         if repository is None:
             raise RuntimeError("A B-roll asset repository is required.")
 
-        assets: list[dict[str, Any]] = []
+        normalized_assets: list[dict[str, Any]] = []
         metadata_errors: dict[str, str] = {}
-        skipped_existing_count = 0
         duplicate_asset_count = 0
         seen_asset_keys: set[tuple[str, str]] = set()
 
@@ -28,6 +27,8 @@ class FetchAssetMetadataStep(PipelineStep):
                 if not isinstance(payload, dict):
                     raise TypeError("Asset payload must be a dictionary.")
                 asset = self._normalize_asset(source, payload)
+                if not asset.get("video_url"):
+                    raise ValueError("Asset payload is missing a usable video_url.")
             except (KeyError, TypeError, ValueError) as exc:
                 metadata_errors[self._asset_error_key(raw_asset, index)] = str(exc)
                 continue
@@ -38,12 +39,13 @@ class FetchAssetMetadataStep(PipelineStep):
                 continue
 
             seen_asset_keys.add(asset_key)
+            normalized_assets.append(asset)
 
-            if await repository.asset_exists(asset["source"], asset["source_asset_id"]):
-                skipped_existing_count += 1
-                continue
-
-            assets.append(asset)
+        existing_asset_ids = await repository.bulk_check_existing(normalized_assets)
+        assets = [
+            asset for asset in normalized_assets if asset["id"] not in existing_asset_ids
+        ]
+        skipped_existing_count = len(normalized_assets) - len(assets)
 
         context.data["assets"] = assets
         context.data["new_assets_count"] = len(assets)
