@@ -55,9 +55,17 @@ def _rows_affected(command_status: Any) -> int:
         return 0
 
 
+def _wrap_stripe_error(exc: stripe.StripeError, *, action: str) -> StripeServiceError:
+    message = getattr(exc, "user_message", None) or str(exc) or f"Stripe {action} failed."
+    return StripeServiceError(message)
+
+
 def _to_plain_dict(value: Any) -> dict[str, Any]:
     if isinstance(value, dict):
         return dict(value)
+    recursive_dict = getattr(value, "to_dict_recursive", None)
+    if callable(recursive_dict):
+        return cast(dict[str, Any], recursive_dict())
     if type(value).__module__.startswith("stripe."):
         return cast(dict[str, Any], json.loads(str(value)))
     if isinstance(value, Mapping):
@@ -92,9 +100,13 @@ def create_checkout_session(
     else:
         session_payload["customer_email"] = email
 
-    session = client.checkout.Session.create(
-        **session_payload,
-    )
+    try:
+        session = client.checkout.Session.create(
+            **session_payload,
+        )
+    except stripe.StripeError as exc:
+        raise _wrap_stripe_error(exc, action="checkout session creation") from exc
+
     session_url = getattr(session, "url", None)
 
     if not session_url:
@@ -105,10 +117,14 @@ def create_checkout_session(
 
 def create_portal_session(stripe_customer_id: str) -> str:
     client = _stripe_client()
-    session = client.billing_portal.Session.create(
-        customer=stripe_customer_id,
-        return_url=f"{_web_base_url()}/dashboard/settings",
-    )
+    try:
+        session = client.billing_portal.Session.create(
+            customer=stripe_customer_id,
+            return_url=f"{_web_base_url()}/dashboard/settings",
+        )
+    except stripe.StripeError as exc:
+        raise _wrap_stripe_error(exc, action="billing portal session creation") from exc
+
     session_url = getattr(session, "url", None)
 
     if not session_url:

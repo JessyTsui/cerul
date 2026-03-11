@@ -5,10 +5,16 @@ import json
 import secrets
 from typing import Any, AsyncIterator
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException, status
 
 from app.auth import AuthContext, require_api_key
-from app.billing import calculate_credits_remaining, deduct_credits, fetch_usage_summary
+from app.billing import (
+    InsufficientCreditsError,
+    calculate_credit_cost,
+    calculate_credits_remaining,
+    deduct_credits,
+    fetch_usage_summary,
+)
 from app.db import get_db
 from app.search import (
     BrollSearchService,
@@ -46,6 +52,26 @@ def resolve_search_service(search_type: str, db: Any) -> BrollSearchService | Kn
     if search_type == "knowledge":
         return KnowledgeSearchService(db)
     raise ValueError(f"Unsupported search_type: {search_type}")
+
+
+async def ensure_request_credits_available(
+    db: Any,
+    auth: AuthContext,
+    payload: SearchRequest,
+) -> None:
+    request_credit_cost = calculate_credit_cost(
+        payload.search_type,
+        payload.include_answer,
+    )
+
+    usage_summary = await fetch_usage_summary(db, auth.user_id)
+    credits_remaining = calculate_credits_remaining(usage_summary)
+
+    if credits_remaining < request_credit_cost:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Insufficient credits for this request.",
+        )
 
 
 async def append_query_log(
@@ -92,26 +118,33 @@ async def search_v1(
     db: Any = Depends(get_db),
 ) -> SearchResponse:
     request_id = generate_request_id()
+    await ensure_request_credits_available(db, auth, payload)
     service = resolve_search_service(payload.search_type, db)
     results = await service.search(payload)
 
-    async with transaction_context(db) as transactional_db:
-        credits_used = await deduct_credits(
-            transactional_db,
-            auth.user_id,
-            auth.api_key_id,
-            request_id,
-            payload.search_type,
-            payload.include_answer,
-        )
-        await append_query_log(
-            transactional_db,
-            request_id=request_id,
-            auth=auth,
-            payload=payload,
-            results_count=len(results),
-        )
-        usage_summary = await fetch_usage_summary(transactional_db, auth.user_id)
+    try:
+        async with transaction_context(db) as transactional_db:
+            credits_used = await deduct_credits(
+                transactional_db,
+                auth.user_id,
+                auth.api_key_id,
+                request_id,
+                payload.search_type,
+                payload.include_answer,
+            )
+            await append_query_log(
+                transactional_db,
+                request_id=request_id,
+                auth=auth,
+                payload=payload,
+                results_count=len(results),
+            )
+            usage_summary = await fetch_usage_summary(transactional_db, auth.user_id)
+    except InsufficientCreditsError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=str(exc),
+        ) from exc
 
     return SearchResponse(
         results=results,

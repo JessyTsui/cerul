@@ -1,9 +1,14 @@
 from __future__ import annotations
 
 import calendar
+from contextlib import asynccontextmanager
 from datetime import date
 
 import asyncpg
+
+
+class InsufficientCreditsError(RuntimeError):
+    """Raised when a request would exceed the current monthly credit limit."""
 
 
 def calculate_credit_cost(search_type: str, include_answer: bool) -> int:
@@ -23,6 +28,17 @@ def current_billing_period(today: date | None = None) -> tuple[date, date]:
     return period_start, period_end
 
 
+@asynccontextmanager
+async def transaction_scope(db: asyncpg.Connection):
+    transaction = getattr(db, "transaction", None)
+    if transaction is None:
+        yield
+        return
+
+    async with transaction():
+        yield
+
+
 async def deduct_credits(
     db: asyncpg.Connection,
     user_id: str,
@@ -31,42 +47,10 @@ async def deduct_credits(
     search_type: str,
     include_answer: bool,
 ) -> int:
-    credits_used = calculate_credit_cost(search_type, include_answer)
-    period_start, period_end = current_billing_period()
+    async with transaction_scope(db):
+        credits_used = calculate_credit_cost(search_type, include_answer)
+        period_start, period_end = current_billing_period()
 
-    existing_usage = await db.fetchrow(
-        """
-        SELECT credits_used
-        FROM usage_events
-        WHERE request_id = $1
-        """,
-        request_id,
-    )
-    if existing_usage is not None:
-        return int(existing_usage["credits_used"])
-
-    inserted_usage = await db.fetchrow(
-        """
-        INSERT INTO usage_events (
-            request_id,
-            user_id,
-            api_key_id,
-            search_type,
-            include_answer,
-            credits_used
-        )
-        VALUES ($1, $2, $3::uuid, $4, $5, $6)
-        ON CONFLICT (request_id) DO NOTHING
-        RETURNING credits_used
-        """,
-        request_id,
-        user_id,
-        api_key_id,
-        search_type,
-        include_answer,
-        credits_used,
-    )
-    if inserted_usage is None:
         existing_usage = await db.fetchrow(
             """
             SELECT credits_used
@@ -75,38 +59,90 @@ async def deduct_credits(
             """,
             request_id,
         )
-        return 0 if existing_usage is None else int(existing_usage["credits_used"])
+        if existing_usage is not None:
+            return int(existing_usage["credits_used"])
 
-    await db.execute(
-        """
-        INSERT INTO usage_monthly (
+        inserted_usage = await db.fetchrow(
+            """
+            INSERT INTO usage_events (
+                request_id,
+                user_id,
+                api_key_id,
+                search_type,
+                include_answer,
+                credits_used
+            )
+            VALUES ($1, $2, $3::uuid, $4, $5, $6)
+            ON CONFLICT (request_id) DO NOTHING
+            RETURNING credits_used
+            """,
+            request_id,
+            user_id,
+            api_key_id,
+            search_type,
+            include_answer,
+            credits_used,
+        )
+        if inserted_usage is None:
+            existing_usage = await db.fetchrow(
+                """
+                SELECT credits_used
+                FROM usage_events
+                WHERE request_id = $1
+                """,
+                request_id,
+            )
+            return 0 if existing_usage is None else int(existing_usage["credits_used"])
+
+        monthly_usage = await db.fetchrow(
+            """
+            INSERT INTO usage_monthly (
+                user_id,
+                period_start,
+                period_end,
+                credits_limit,
+                credits_used,
+                request_count
+            )
+            SELECT
+                up.id,
+                $2,
+                $3,
+                up.monthly_credit_limit,
+                $4,
+                1
+            FROM user_profiles AS up
+            WHERE up.id = $1
+              AND up.monthly_credit_limit >= $4
+            ON CONFLICT (user_id, period_start)
+            DO UPDATE SET
+                period_end = EXCLUDED.period_end,
+                credits_limit = EXCLUDED.credits_limit,
+                credits_used = usage_monthly.credits_used + EXCLUDED.credits_used,
+                request_count = usage_monthly.request_count + EXCLUDED.request_count,
+                updated_at = NOW()
+            WHERE usage_monthly.credits_used + EXCLUDED.credits_used
+                <= EXCLUDED.credits_limit
+            RETURNING credits_used
+            """,
             user_id,
             period_start,
             period_end,
-            credits_limit,
             credits_used,
-            request_count
         )
-        SELECT
-            up.id,
-            $2,
-            $3,
-            up.monthly_credit_limit,
-            $4,
-            1
-        FROM user_profiles AS up
-        WHERE up.id = $1
-        ON CONFLICT (user_id, period_start)
-        DO UPDATE SET
-            period_end = EXCLUDED.period_end,
-            credits_limit = EXCLUDED.credits_limit,
-            credits_used = usage_monthly.credits_used + EXCLUDED.credits_used,
-            request_count = usage_monthly.request_count + EXCLUDED.request_count,
-            updated_at = NOW()
-        """,
-        user_id,
-        period_start,
-        period_end,
-        credits_used,
-    )
-    return int(inserted_usage["credits_used"])
+
+        if monthly_usage is None:
+            profile = await db.fetchrow(
+                """
+                SELECT monthly_credit_limit
+                FROM user_profiles
+                WHERE id = $1
+                """,
+                user_id,
+            )
+            if profile is None:
+                raise LookupError(f"Unknown user profile for {user_id}")
+
+            raise InsufficientCreditsError("Monthly credit limit exhausted.")
+
+        return int(inserted_usage["credits_used"])

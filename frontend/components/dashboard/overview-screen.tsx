@@ -9,6 +9,7 @@ import {
   getAverageDailyCredits,
   getRecentUsageChartData,
   getTierLabel,
+  resolveDashboardBillingAction,
 } from "@/lib/dashboard";
 import { CreditUsageBar } from "./credit-usage-bar";
 import { DashboardLayout } from "./dashboard-layout";
@@ -26,22 +27,21 @@ export function DashboardOverviewScreen() {
   const [billingAction, setBillingAction] = useState<"checkout" | "portal" | null>(
     null,
   );
+  const availableBillingAction = data
+    ? resolveDashboardBillingAction(data.tier, data.hasStripeCustomer)
+    : null;
 
   async function handleBillingAction() {
-    if (!data) {
+    if (!data || !availableBillingAction) {
       return;
     }
 
-    const tier = data.tier.toLowerCase();
-    const nextAction =
-      tier === "pro" || tier === "enterprise" ? "portal" : "checkout";
-
-    setBillingAction(nextAction);
+    setBillingAction(availableBillingAction);
     setBillingError(null);
 
     try {
       const redirect =
-        nextAction === "portal"
+        availableBillingAction === "portal"
           ? await billing.createPortal()
           : await billing.createCheckout();
 
@@ -64,7 +64,7 @@ export function DashboardOverviewScreen() {
       </Link>
       <button
         className="button-primary"
-        disabled={billingAction !== null || !data}
+        disabled={billingAction !== null || !data || availableBillingAction === null}
         onClick={() => void handleBillingAction()}
         type="button"
       >
@@ -72,9 +72,13 @@ export function DashboardOverviewScreen() {
           ? "Redirecting..."
           : billingAction === "portal"
             ? "Opening portal..."
-            : data && data.tier.toLowerCase() !== "free"
-              ? "Manage Plan"
-              : "Upgrade Plan"}
+            : !data
+              ? "Loading plan..."
+              : availableBillingAction === "portal"
+                ? "Manage Plan"
+                : availableBillingAction === "checkout"
+                  ? "Upgrade Plan"
+                  : "Managed offline"}
       </button>
     </>
   );
@@ -114,6 +118,13 @@ export function DashboardOverviewScreen() {
               description={billingError}
               title="Billing action failed"
               tone="error"
+            />
+          ) : null}
+
+          {data && availableBillingAction === null && data.tier.toLowerCase() !== "free" ? (
+            <DashboardNotice
+              description="This plan is managed outside the self-serve Stripe portal."
+              title="Billing is coordinated manually"
             />
           ) : null}
 
