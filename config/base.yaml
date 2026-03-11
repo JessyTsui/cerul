@@ -14,3 +14,6 @@ knowledge:
   scene_threshold: 0.35
   rerank_top_n: 20
   rerank_prompt_template: default
+
+dashboard:
+  operator_emails: []

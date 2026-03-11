@@ -1,12 +1,13 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
-from typing import cast
+from typing import Any, cast
 
 import pytest
 from fastapi.testclient import TestClient
 
 from app.auth import SessionContext, require_session
+from app.config import reset_settings_cache
 from app.db import get_db
 from app.main import app
 from app.routers import dashboard
@@ -16,8 +17,47 @@ class DashboardDb:
     def __init__(self) -> None:
         self.profiles: dict[str, dict[str, object]] = {}
         self.api_keys: list[dict[str, object]] = []
+        self.jobs: list[dict[str, object]] = []
+        self.job_steps: list[dict[str, object]] = []
         self.usage_summaries: dict[tuple[str, object, object], dict[str, object]] = {}
         self.daily_usage: list[dict[str, object]] = []
+
+    def _list_jobs(
+        self,
+        *,
+        status_filter: object = None,
+        track_filter: object = None,
+    ) -> list[dict[str, object]]:
+        items = self.jobs
+
+        if isinstance(status_filter, str):
+            items = [job for job in items if job["status"] == status_filter]
+
+        if isinstance(track_filter, str):
+            items = [job for job in items if job["track"] == track_filter]
+
+        return sorted(
+            items,
+            key=lambda item: cast(datetime, item["created_at"]),
+            reverse=True,
+        )
+
+    def _coerce_datetime(self, value: object) -> datetime:
+        if isinstance(value, datetime):
+            return value
+        raise AssertionError(f"Expected datetime, received {value!r}")
+
+    def _job_stats(self) -> dict[str, int]:
+        return {
+            "total": len(self.jobs),
+            "pending": sum(1 for job in self.jobs if job["status"] == "pending"),
+            "running": sum(1 for job in self.jobs if job["status"] == "running"),
+            "retrying": sum(1 for job in self.jobs if job["status"] == "retrying"),
+            "completed": sum(1 for job in self.jobs if job["status"] == "completed"),
+            "failed": sum(1 for job in self.jobs if job["status"] == "failed"),
+            "broll": sum(1 for job in self.jobs if job["track"] == "broll"),
+            "knowledge": sum(1 for job in self.jobs if job["track"] == "knowledge"),
+        }
 
     async def fetchrow(self, query: str, *params: object) -> dict[str, object] | None:
         normalized = " ".join(query.split())
@@ -51,12 +91,30 @@ class DashboardDb:
         if "FROM usage_monthly" in normalized:
             return self.usage_summaries.get((str(params[0]), params[1], params[2]))
 
+        if "COUNT(*) AS total" in normalized and "FROM processing_jobs" in normalized:
+            return self._job_stats()
+
+        if "FROM processing_jobs" in normalized and "WHERE id = $1" in normalized:
+            job_id = str(params[0])
+            for job in self.jobs:
+                if job["id"] == job_id:
+                    return job
+            return None
+
         raise AssertionError(f"Unhandled fetchrow query: {normalized}")
 
     async def fetchval(self, query: str, *params: object) -> int:
         normalized = " ".join(query.split())
         if "SELECT COUNT(*)" not in normalized:
             raise AssertionError(f"Unhandled fetchval query: {normalized}")
+
+        if "FROM processing_jobs" in normalized:
+            return len(
+                self._list_jobs(
+                    status_filter=params[0] if len(params) > 0 else None,
+                    track_filter=params[1] if len(params) > 1 else None,
+                ),
+            )
 
         user_id = str(params[0])
         return sum(
@@ -67,6 +125,30 @@ class DashboardDb:
 
     async def fetch(self, query: str, *params: object) -> list[dict[str, object]]:
         normalized = " ".join(query.split())
+
+        if "FROM processing_jobs" in normalized:
+            items = self._list_jobs(
+                status_filter=params[0] if len(params) > 0 else None,
+                track_filter=params[1] if len(params) > 1 else None,
+            )
+            limit = int(params[2])
+            offset = int(params[3])
+            return items[offset : offset + limit]
+
+        if "FROM processing_job_steps" in normalized:
+            job_id = str(params[0])
+            items = [step for step in self.job_steps if step["job_id"] == job_id]
+            return sorted(
+                items,
+                key=lambda item: (
+                    self._coerce_datetime(
+                        item.get("started_at")
+                        or item.get("completed_at")
+                        or item["updated_at"],
+                    ),
+                    cast(str, item["step_name"]),
+                ),
+            )
 
         if "FROM api_keys" in normalized:
             user_id = str(params[0])
@@ -88,27 +170,35 @@ class DashboardDb:
         raise AssertionError(f"Unhandled fetch query: {normalized}")
 
 
-def session_override() -> SessionContext:
-    return SessionContext(user_id="user_123", email="owner@example.com")
-
-
 @pytest.fixture
-def client() -> TestClient:
+def client(monkeypatch: pytest.MonkeyPatch) -> TestClient:
     db = DashboardDb()
+    monkeypatch.setenv("DASHBOARD_OPERATOR_EMAILS", "owner@example.com")
+    reset_settings_cache()
 
     async def get_db_override() -> DashboardDb:
         return db
+
+    def session_override() -> SessionContext:
+        return cast(SessionContext, app.state.test_session)
 
     app.dependency_overrides[get_db] = get_db_override
     app.dependency_overrides[require_session] = session_override
 
     with TestClient(app) as test_client:
         test_client.app.state.test_db = db
+        test_client.app.state.test_session = SessionContext(
+            user_id="user_123",
+            email="owner@example.com",
+        )
         yield test_client
 
     app.dependency_overrides.clear()
+    reset_settings_cache()
     if hasattr(app.state, "test_db"):
         delattr(app.state, "test_db")
+    if hasattr(app.state, "test_session"):
+        delattr(app.state, "test_session")
 
 
 def test_api_key_creation_respects_free_tier_limit(client: TestClient) -> None:
@@ -184,6 +274,307 @@ def test_api_key_deletion_requires_ownership(client: TestClient) -> None:
 
     assert response.status_code == 404
     assert db.api_keys[0]["is_active"] is True
+
+
+def test_job_list_supports_filters_and_pagination(client: TestClient) -> None:
+    db = client.app.state.test_db
+    now = datetime.now(timezone.utc)
+    db.jobs = [
+        {
+            "id": "job_1",
+            "track": "knowledge",
+            "source_id": "source_1",
+            "job_type": "transcribe",
+            "status": "failed",
+            "input_payload": {"url": "https://example.com/a"},
+            "error_message": "ASR provider timeout",
+            "attempts": 3,
+            "max_attempts": 3,
+            "locked_by": None,
+            "locked_at": None,
+            "next_retry_at": None,
+            "created_at": now,
+            "started_at": now,
+            "completed_at": now,
+            "updated_at": now,
+        },
+        {
+            "id": "job_2",
+            "track": "knowledge",
+            "source_id": "source_2",
+            "job_type": "embed",
+            "status": "running",
+            "input_payload": {"url": "https://example.com/b"},
+            "error_message": None,
+            "attempts": 1,
+            "max_attempts": 3,
+            "locked_by": "worker-a",
+            "locked_at": now,
+            "next_retry_at": None,
+            "created_at": now.replace(minute=max(now.minute - 1, 0)),
+            "started_at": now,
+            "completed_at": None,
+            "updated_at": now,
+        },
+        {
+            "id": "job_3",
+            "track": "broll",
+            "source_id": None,
+            "job_type": "ingest",
+            "status": "failed",
+            "input_payload": {"url": "https://example.com/c"},
+            "error_message": "Video download failed",
+            "attempts": 2,
+            "max_attempts": 3,
+            "locked_by": None,
+            "locked_at": None,
+            "next_retry_at": None,
+            "created_at": now.replace(minute=max(now.minute - 2, 0)),
+            "started_at": now,
+            "completed_at": now,
+            "updated_at": now,
+        },
+    ]
+
+    response = client.get(
+        "/dashboard/jobs",
+        params={"status": "failed", "track": "knowledge", "limit": 1, "offset": 0},
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["total_count"] == 1
+    assert [job["id"] for job in payload["jobs"]] == ["job_1"]
+    assert payload["jobs"][0]["attempts"] == 3
+    assert payload["jobs"][0]["error_message"] == "ASR provider timeout"
+
+
+def test_job_detail_returns_steps(client: TestClient) -> None:
+    db = client.app.state.test_db
+    now = datetime.now(timezone.utc)
+    db.jobs = [
+        {
+            "id": "job_detail",
+            "track": "knowledge",
+            "source_id": "source_detail",
+            "job_type": "index",
+            "status": "completed",
+            "input_payload": {"source_url": "https://example.com/detail"},
+            "error_message": None,
+            "attempts": 1,
+            "max_attempts": 3,
+            "locked_by": None,
+            "locked_at": None,
+            "next_retry_at": None,
+            "created_at": now,
+            "started_at": now,
+            "completed_at": now,
+            "updated_at": now,
+        },
+    ]
+    db.job_steps = [
+        {
+            "id": "step_2",
+            "job_id": "job_detail",
+            "step_name": "embed_segments",
+            "status": "completed",
+            "artifacts": {"segments_indexed": 8},
+            "error_message": None,
+            "started_at": now,
+            "completed_at": now,
+            "updated_at": now,
+        },
+        {
+            "id": "step_1",
+            "job_id": "job_detail",
+            "step_name": "extract_transcript",
+            "status": "completed",
+            "artifacts": {"transcript_language": "en"},
+            "error_message": None,
+            "started_at": now.replace(minute=max(now.minute - 1, 0)),
+            "completed_at": now.replace(minute=max(now.minute - 1, 0)),
+            "updated_at": now.replace(minute=max(now.minute - 1, 0)),
+        },
+    ]
+
+    response = client.get("/dashboard/jobs/job_detail")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["id"] == "job_detail"
+    assert [step["step_name"] for step in payload["steps"]] == [
+        "extract_transcript",
+        "embed_segments",
+    ]
+    assert payload["steps"][0]["artifacts"] == {"transcript_language": "en"}
+
+
+def test_job_detail_returns_404_for_unknown_job(client: TestClient) -> None:
+    response = client.get("/dashboard/jobs/missing_job")
+
+    assert response.status_code == 404
+    assert response.json()["detail"] == "Processing job not found."
+
+
+def test_job_stats_returns_status_and_track_counts(client: TestClient) -> None:
+    db = client.app.state.test_db
+    now = datetime.now(timezone.utc)
+    db.jobs = [
+        {
+            "id": "job_pending",
+            "track": "knowledge",
+            "source_id": None,
+            "job_type": "index",
+            "status": "pending",
+            "input_payload": {},
+            "error_message": None,
+            "attempts": 0,
+            "max_attempts": 3,
+            "locked_by": None,
+            "locked_at": None,
+            "next_retry_at": None,
+            "created_at": now,
+            "started_at": None,
+            "completed_at": None,
+            "updated_at": now,
+        },
+        {
+            "id": "job_running",
+            "track": "knowledge",
+            "source_id": None,
+            "job_type": "index",
+            "status": "running",
+            "input_payload": {},
+            "error_message": None,
+            "attempts": 1,
+            "max_attempts": 3,
+            "locked_by": "worker-a",
+            "locked_at": now,
+            "next_retry_at": None,
+            "created_at": now,
+            "started_at": now,
+            "completed_at": None,
+            "updated_at": now,
+        },
+        {
+            "id": "job_retrying",
+            "track": "broll",
+            "source_id": None,
+            "job_type": "index",
+            "status": "retrying",
+            "input_payload": {},
+            "error_message": "Rate limited",
+            "attempts": 2,
+            "max_attempts": 3,
+            "locked_by": None,
+            "locked_at": None,
+            "next_retry_at": now,
+            "created_at": now,
+            "started_at": now,
+            "completed_at": None,
+            "updated_at": now,
+        },
+        {
+            "id": "job_completed",
+            "track": "broll",
+            "source_id": None,
+            "job_type": "index",
+            "status": "completed",
+            "input_payload": {},
+            "error_message": None,
+            "attempts": 1,
+            "max_attempts": 3,
+            "locked_by": None,
+            "locked_at": None,
+            "next_retry_at": None,
+            "created_at": now,
+            "started_at": now,
+            "completed_at": now,
+            "updated_at": now,
+        },
+        {
+            "id": "job_failed",
+            "track": "knowledge",
+            "source_id": None,
+            "job_type": "index",
+            "status": "failed",
+            "input_payload": {},
+            "error_message": "Permanent failure",
+            "attempts": 3,
+            "max_attempts": 3,
+            "locked_by": None,
+            "locked_at": None,
+            "next_retry_at": None,
+            "created_at": now,
+            "started_at": now,
+            "completed_at": now,
+            "updated_at": now,
+        },
+    ]
+
+    response = client.get("/dashboard/jobs/stats")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload == {
+        "total": 5,
+        "pending": 1,
+        "running": 1,
+        "retrying": 1,
+        "completed": 1,
+        "failed": 1,
+        "tracks": {
+            "broll": 2,
+            "knowledge": 3,
+        },
+    }
+
+
+@pytest.mark.parametrize(
+    "path",
+    [
+        "/dashboard/jobs",
+        "/dashboard/jobs/stats",
+        "/dashboard/jobs/job_secure",
+    ],
+)
+def test_job_telemetry_requires_operator_access(
+    client: TestClient,
+    path: str,
+) -> None:
+    db = client.app.state.test_db
+    now = datetime.now(timezone.utc)
+    db.jobs = [
+        {
+            "id": "job_secure",
+            "track": "knowledge",
+            "source_id": None,
+            "job_type": "index",
+            "status": "running",
+            "input_payload": {},
+            "error_message": None,
+            "attempts": 1,
+            "max_attempts": 3,
+            "locked_by": "worker-a",
+            "locked_at": now,
+            "next_retry_at": None,
+            "created_at": now,
+            "started_at": now,
+            "completed_at": None,
+            "updated_at": now,
+        },
+    ]
+    client.app.state.test_session = SessionContext(
+        user_id="user_123",
+        email="viewer@example.com",
+    )
+
+    response = client.get(path)
+
+    assert response.status_code == 403
+    assert response.json()["detail"] == (
+        "Pipeline telemetry is restricted to configured operator accounts."
+    )
 
 
 def test_checkout_endpoint_returns_checkout_url(

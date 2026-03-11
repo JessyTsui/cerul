@@ -4,13 +4,21 @@ import os
 from pathlib import Path
 from typing import Any, Mapping
 
-from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    ValidationError,
+    field_validator,
+    model_validator,
+)
 import yaml
 
 
 _CONFIG_ENV_PREFIX = "CERUL__"
 _LEGACY_ENV_OVERRIDES: dict[str, tuple[str, ...]] = {
     "DATABASE_URL": ("database", "url"),
+    "DASHBOARD_OPERATOR_EMAILS": ("dashboard", "operator_emails"),
     "MMR_LAMBDA": ("search", "mmr_lambda"),
     "NEXT_PUBLIC_API_BASE_URL": ("public", "api_base_url"),
     "NEXT_PUBLIC_SITE_URL": ("public", "web_base_url"),
@@ -70,6 +78,43 @@ class StripeSettings(BaseModel):
     pro_price_id: str | None = None
 
 
+class DashboardSettings(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    operator_emails: list[str] = Field(default_factory=list)
+
+    @field_validator("operator_emails", mode="before")
+    @classmethod
+    def normalize_operator_emails(cls, value: Any) -> list[str]:
+        if value is None:
+            return []
+
+        if isinstance(value, str):
+            values = value.split(",")
+        elif isinstance(value, list):
+            values = value
+        else:
+            raise TypeError(
+                "dashboard.operator_emails must be a list or comma-separated string",
+            )
+
+        normalized: list[str] = []
+        seen: set[str] = set()
+
+        for item in values:
+            if item is None:
+                continue
+
+            cleaned = str(item).strip().lower()
+            if not cleaned or cleaned in seen:
+                continue
+
+            seen.add(cleaned)
+            normalized.append(cleaned)
+
+        return normalized
+
+
 class Settings(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -78,6 +123,7 @@ class Settings(BaseModel):
     public: PublicSettings
     search: SearchSettings
     knowledge: KnowledgeSettings
+    dashboard: DashboardSettings = Field(default_factory=DashboardSettings)
     database: DatabaseSettings = Field(default_factory=DatabaseSettings)
     stripe: StripeSettings = Field(default_factory=StripeSettings)
 
@@ -224,6 +270,11 @@ _SKIP = _SkipValue()
 
 def _parse_legacy_override(name: str, raw_value: str) -> Any:
     cleaned = raw_value.strip()
+    if name == "DASHBOARD_OPERATOR_EMAILS":
+        if not cleaned:
+            return []
+        return [item.strip() for item in cleaned.split(",") if item.strip()]
+
     if name == "MMR_LAMBDA":
         try:
             return float(cleaned)

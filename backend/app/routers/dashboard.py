@@ -6,9 +6,9 @@ import calendar
 import hashlib
 import secrets
 from datetime import date, datetime, timedelta, timezone
-from typing import Any, Mapping, cast
+from typing import Any, Literal, Mapping, cast
 
-from fastapi import APIRouter, Depends, HTTPException, Response, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from pydantic import BaseModel, ConfigDict, Field
 
 from ..auth import SessionContext, require_session
@@ -18,12 +18,17 @@ from ..billing import (
     monthly_credit_limit_for_tier,
 )
 from ..billing import stripe_service
+from ..config import get_settings
 from ..db import get_db
 
 API_KEY_TOKEN_LENGTH = 32
 API_KEY_PREFIX_LENGTH = 16
 
 router = APIRouter(prefix="/dashboard", tags=["dashboard"])
+
+JobStatus = Literal["pending", "running", "retrying", "completed", "failed"]
+JobTrack = Literal["broll", "knowledge"]
+JobStepStatus = Literal["completed", "failed", "skipped"]
 
 
 class CreateApiKeyRequest(BaseModel):
@@ -78,8 +83,81 @@ class PortalSessionResponse(BaseModel):
     portal_url: str
 
 
+class JobSummary(BaseModel):
+    id: str
+    track: JobTrack
+    job_type: str
+    status: JobStatus
+    attempts: int
+    max_attempts: int
+    error_message: str | None = None
+    created_at: datetime
+    started_at: datetime | None = None
+    completed_at: datetime | None = None
+    updated_at: datetime
+
+
+class JobListResponse(BaseModel):
+    jobs: list[JobSummary]
+    total_count: int
+
+
+class JobStepDetail(BaseModel):
+    id: str
+    step_name: str
+    status: JobStepStatus
+    artifacts: Any = Field(default_factory=dict)
+    error_message: str | None = None
+    started_at: datetime | None = None
+    completed_at: datetime | None = None
+    updated_at: datetime
+
+
+class JobDetailResponse(BaseModel):
+    id: str
+    track: JobTrack
+    source_id: str | None = None
+    job_type: str
+    status: JobStatus
+    input_payload: Any = Field(default_factory=dict)
+    error_message: str | None = None
+    attempts: int
+    max_attempts: int
+    locked_by: str | None = None
+    locked_at: datetime | None = None
+    next_retry_at: datetime | None = None
+    created_at: datetime
+    started_at: datetime | None = None
+    completed_at: datetime | None = None
+    updated_at: datetime
+    steps: list[JobStepDetail]
+
+
+class JobTrackCounts(BaseModel):
+    broll: int
+    knowledge: int
+
+
+class JobStatsResponse(BaseModel):
+    total: int
+    pending: int
+    running: int
+    retrying: int
+    completed: int
+    failed: int
+    tracks: JobTrackCounts
+
+
 def _utc_now() -> datetime:
     return datetime.now(timezone.utc)
+
+
+def _normalize_email(value: str | None) -> str | None:
+    if value is None:
+        return None
+
+    cleaned = value.strip().lower()
+    return cleaned or None
 
 
 def get_current_billing_period(reference: date | None = None) -> tuple[date, date]:
@@ -241,6 +319,174 @@ async def fetch_daily_usage_breakdown(
     return [cast(dict[str, Any], _record_to_dict(row)) for row in rows]
 
 
+async def count_processing_jobs(
+    db: Any,
+    *,
+    job_status: JobStatus | None = None,
+    track: JobTrack | None = None,
+) -> int:
+    count = await db.fetchval(
+        """
+        SELECT COUNT(*)
+        FROM processing_jobs
+        WHERE ($1::text IS NULL OR status = $1)
+          AND ($2::text IS NULL OR track = $2)
+        """,
+        job_status,
+        track,
+    )
+    return int(count or 0)
+
+
+async def list_processing_jobs(
+    db: Any,
+    *,
+    job_status: JobStatus | None = None,
+    track: JobTrack | None = None,
+    limit: int,
+    offset: int,
+) -> list[dict[str, Any]]:
+    rows = await db.fetch(
+        """
+        SELECT
+            id,
+            track,
+            job_type,
+            status,
+            attempts,
+            max_attempts,
+            error_message,
+            created_at,
+            started_at,
+            completed_at,
+            updated_at
+        FROM processing_jobs
+        WHERE ($1::text IS NULL OR status = $1)
+          AND ($2::text IS NULL OR track = $2)
+        ORDER BY created_at DESC
+        LIMIT $3
+        OFFSET $4
+        """,
+        job_status,
+        track,
+        limit,
+        offset,
+    )
+    return [cast(dict[str, Any], _record_to_dict(row)) for row in rows]
+
+
+async def fetch_processing_job(
+    db: Any,
+    job_id: str,
+) -> dict[str, Any] | None:
+    row = await db.fetchrow(
+        """
+        SELECT
+            id,
+            track,
+            source_id,
+            job_type,
+            status,
+            input_payload,
+            error_message,
+            attempts,
+            max_attempts,
+            locked_by,
+            locked_at,
+            next_retry_at,
+            created_at,
+            started_at,
+            completed_at,
+            updated_at
+        FROM processing_jobs
+        WHERE id = $1
+        """,
+        job_id,
+    )
+    return _record_to_dict(row)
+
+
+async def list_processing_job_steps(
+    db: Any,
+    job_id: str,
+) -> list[dict[str, Any]]:
+    rows = await db.fetch(
+        """
+        SELECT
+            id,
+            step_name,
+            status,
+            artifacts,
+            error_message,
+            started_at,
+            completed_at,
+            updated_at
+        FROM processing_job_steps
+        WHERE job_id = $1
+        ORDER BY
+            COALESCE(started_at, completed_at, updated_at) ASC,
+            step_name ASC
+        """,
+        job_id,
+    )
+    return [cast(dict[str, Any], _record_to_dict(row)) for row in rows]
+
+
+async def fetch_processing_job_stats(
+    db: Any,
+) -> dict[str, int]:
+    row = await db.fetchrow(
+        """
+        SELECT
+            COUNT(*) AS total,
+            COUNT(*) FILTER (WHERE status = 'pending') AS pending,
+            COUNT(*) FILTER (WHERE status = 'running') AS running,
+            COUNT(*) FILTER (WHERE status = 'retrying') AS retrying,
+            COUNT(*) FILTER (WHERE status = 'completed') AS completed,
+            COUNT(*) FILTER (WHERE status = 'failed') AS failed,
+            COUNT(*) FILTER (WHERE track = 'broll') AS broll,
+            COUNT(*) FILTER (WHERE track = 'knowledge') AS knowledge
+        FROM processing_jobs
+        """
+    )
+    payload = _record_to_dict(row) or {}
+    return {
+        "total": int(payload.get("total", 0) or 0),
+        "pending": int(payload.get("pending", 0) or 0),
+        "running": int(payload.get("running", 0) or 0),
+        "retrying": int(payload.get("retrying", 0) or 0),
+        "completed": int(payload.get("completed", 0) or 0),
+        "failed": int(payload.get("failed", 0) or 0),
+        "broll": int(payload.get("broll", 0) or 0),
+        "knowledge": int(payload.get("knowledge", 0) or 0),
+    }
+
+
+async def require_dashboard_operator_access(
+    session: SessionContext,
+    db: Any,
+) -> None:
+    allowed_emails = {
+        email
+        for email in get_settings().dashboard.operator_emails
+        if email
+    }
+    session_email = _normalize_email(session.email)
+
+    if session_email is None:
+        profile = await fetch_user_profile(db, session.user_id)
+        profile_email = _normalize_email(
+            cast(str | None, profile.get("email")) if profile else None,
+        )
+        session_email = profile_email
+
+    if session_email is None or session_email not in allowed_emails:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Pipeline telemetry is restricted to configured operator accounts.",
+        )
+
+
 @router.post(
     "/api-keys",
     response_model=CreateApiKeyResponse,
@@ -358,6 +604,70 @@ async def get_monthly_usage(
         has_stripe_customer=bool(profile.get("stripe_customer_id")),
         daily_breakdown=daily_breakdown,
     )
+
+
+@router.get("/jobs", response_model=JobListResponse)
+async def get_dashboard_jobs(
+    status_filter: JobStatus | None = Query(default=None, alias="status"),
+    track: JobTrack | None = Query(default=None),
+    limit: int = Query(default=50, ge=1, le=200),
+    offset: int = Query(default=0, ge=0),
+    session: SessionContext = Depends(require_session),
+    db: Any = Depends(get_db),
+) -> JobListResponse:
+    await require_dashboard_operator_access(session, db)
+    jobs = await list_processing_jobs(
+        db,
+        job_status=status_filter,
+        track=track,
+        limit=limit,
+        offset=offset,
+    )
+    total_count = await count_processing_jobs(
+        db,
+        job_status=status_filter,
+        track=track,
+    )
+    return JobListResponse(jobs=jobs, total_count=total_count)
+
+
+@router.get("/jobs/stats", response_model=JobStatsResponse)
+async def get_dashboard_job_stats(
+    session: SessionContext = Depends(require_session),
+    db: Any = Depends(get_db),
+) -> JobStatsResponse:
+    await require_dashboard_operator_access(session, db)
+    stats = await fetch_processing_job_stats(db)
+    return JobStatsResponse(
+        total=stats["total"],
+        pending=stats["pending"],
+        running=stats["running"],
+        retrying=stats["retrying"],
+        completed=stats["completed"],
+        failed=stats["failed"],
+        tracks=JobTrackCounts(
+            broll=stats["broll"],
+            knowledge=stats["knowledge"],
+        ),
+    )
+
+
+@router.get("/jobs/{job_id}", response_model=JobDetailResponse)
+async def get_dashboard_job_detail(
+    job_id: str,
+    session: SessionContext = Depends(require_session),
+    db: Any = Depends(get_db),
+) -> JobDetailResponse:
+    await require_dashboard_operator_access(session, db)
+    job = await fetch_processing_job(db, job_id)
+    if job is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Processing job not found.",
+        )
+
+    steps = await list_processing_job_steps(db, job_id)
+    return JobDetailResponse(**job, steps=steps)
 
 
 @router.post("/billing/checkout", response_model=CheckoutSessionResponse)
