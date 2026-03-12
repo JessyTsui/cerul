@@ -1,6 +1,6 @@
 import asyncio
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import AsyncMock, patch
 
 import pytest
 
@@ -11,14 +11,17 @@ from workers.knowledge.runtime import (
     HeuristicFrameAnalyzer,
     HeuristicSceneDetector,
     HttpVideoDownloader,
+    OpenAICompatibleTranscriber,
     StaticKnowledgeMetadataClient,
     StaticKnowledgeTranscriber,
+    YtDlpVideoDownloader,
 )
 from workers.knowledge.steps import (
     AnalyzeKnowledgeFramesStep,
     DetectKnowledgeScenesStep,
     DownloadKnowledgeVideoStep,
     EmbedKnowledgeSegmentsStep,
+    FetchKnowledgeCaptionsStep,
     FetchKnowledgeMetadataStep,
     MarkKnowledgeJobCompletedStep,
     SegmentKnowledgeTranscriptStep,
@@ -42,6 +45,20 @@ class FakeEmbeddingBackend:
 
     def embed_video(self, video_path: str) -> list[float]:
         raise NotImplementedError
+
+
+class FakeCaptionProvider:
+    def __init__(self, segments: list[dict[str, object]]) -> None:
+        self._segments = [dict(segment) for segment in segments]
+        self.calls: list[tuple[dict[str, object], Path]] = []
+
+    async def resolve_transcript_segments(
+        self,
+        video_metadata: dict[str, object],
+        output_dir: Path,
+    ) -> list[dict[str, object]]:
+        self.calls.append((dict(video_metadata), output_dir))
+        return [dict(segment) for segment in self._segments]
 
 
 class FakeHtmlResponse:
@@ -113,6 +130,57 @@ class FakeHtmlStreamingClient:
 
     def stream(self, method: str, url: str) -> FakeHtmlStreamContext:
         return FakeHtmlStreamContext()
+
+
+class FakeTranscriptionResponse:
+    def __init__(self, payload: dict[str, object]) -> None:
+        self._payload = payload
+
+    def raise_for_status(self) -> None:
+        return None
+
+    def json(self) -> dict[str, object]:
+        return self._payload
+
+
+class FakeTranscriptionClient:
+    def __init__(self, *args, **kwargs) -> None:
+        self.calls: list[dict[str, object]] = []
+
+    async def __aenter__(self) -> "FakeTranscriptionClient":
+        return self
+
+    async def __aexit__(self, exc_type, exc, tb) -> bool:
+        return False
+
+    async def post(
+        self,
+        url: str,
+        *,
+        headers: dict[str, str],
+        data: list[tuple[str, str]],
+        files: dict[str, tuple[str, object, str]],
+    ) -> FakeTranscriptionResponse:
+        self.calls.append(
+            {
+                "url": url,
+                "headers": headers,
+                "data": list(data),
+                "filename": files["file"][0],
+            }
+        )
+        return FakeTranscriptionResponse(
+            {
+                "text": "agents coordinate tasks",
+                "segments": [
+                    {
+                        "start": 0.0,
+                        "end": 4.5,
+                        "text": "agents coordinate tasks",
+                    }
+                ],
+            }
+        )
 
 
 def _write_video(path: Path) -> Path:
@@ -210,6 +278,62 @@ def test_download_knowledge_video_step_streams_bytes_to_disk(tmp_path: Path) -> 
     assert downloaded_path.read_bytes() == b"fake-video-bytes"
 
 
+def test_fetch_knowledge_captions_step_loads_srt_from_metadata_source(
+    tmp_path: Path,
+) -> None:
+    subtitle_path = tmp_path / "captions.srt"
+    subtitle_path.write_text(
+        "1\n00:00:00,000 --> 00:00:02,000\nfirst line\n\n"
+        "2\n00:00:02,500 --> 00:00:05,000\nsecond line\n",
+        encoding="utf-8",
+    )
+    step = FetchKnowledgeCaptionsStep()
+    context = PipelineContext(
+        data={
+            "video_metadata": {
+                "duration_seconds": 5,
+                "metadata": {"subtitle_path": str(subtitle_path)},
+            }
+        }
+    )
+
+    asyncio.run(step.run(context))
+
+    assert context.data["transcript_source"] == str(subtitle_path)
+    assert context.data["transcript_segments"] == [
+        {"start": 0.0, "end": 2.0, "text": "first line", "speaker": None},
+        {"start": 2.5, "end": 5.0, "text": "second line", "speaker": None},
+    ]
+
+
+def test_fetch_knowledge_captions_step_uses_provider_when_no_explicit_source(
+    tmp_path: Path,
+) -> None:
+    caption_provider = FakeCaptionProvider(
+        [
+            {"start": 0.0, "end": 3.0, "text": "caption block one"},
+            {"start": 3.0, "end": 6.0, "text": "caption block two"},
+        ]
+    )
+    step = FetchKnowledgeCaptionsStep(caption_provider=caption_provider)
+    context = PipelineContext(
+        data={
+            "video_metadata": {
+                "source_video_id": "openai-devday",
+                "source_url": "https://www.youtube.com/watch?v=openai-devday",
+                "duration_seconds": 6,
+            },
+            "temp_dir": str(tmp_path),
+        }
+    )
+
+    asyncio.run(step.run(context))
+
+    assert context.data["transcript_source"] == "captions:provider"
+    assert context.data["transcript_segments"][0]["text"] == "caption block one"
+    assert caption_provider.calls[0][1] == tmp_path
+
+
 def test_download_knowledge_video_step_rejects_non_video_content_type() -> None:
     step = DownloadKnowledgeVideoStep(video_downloader=HttpVideoDownloader())
     context = PipelineContext(
@@ -225,6 +349,38 @@ def test_download_knowledge_video_step_rejects_non_video_content_type() -> None:
     with patch("workers.knowledge.runtime.httpx.AsyncClient", FakeHtmlStreamingClient):
         with pytest.raises(ValueError, match="unsupported content-type"):
             asyncio.run(step.run(context))
+
+
+def test_ytdlp_video_downloader_uses_source_url_when_download_url_is_missing(
+    tmp_path: Path,
+) -> None:
+    downloader = YtDlpVideoDownloader(command="yt-dlp-test")
+
+    async def fake_run_command(command: list[str]) -> object:
+        (tmp_path / "youtube_openai-devday.mp4").write_bytes(b"video")
+
+        class CompletedProcess:
+            returncode = 0
+            stdout = ""
+            stderr = ""
+
+        return CompletedProcess()
+
+    downloader._run_command = fake_run_command  # type: ignore[method-assign]
+
+    downloaded_path = asyncio.run(
+        downloader.download_video(
+            {
+                "source": "youtube",
+                "source_video_id": "openai-devday",
+                "source_url": "https://www.youtube.com/watch?v=openai-devday",
+            },
+            tmp_path,
+        )
+    )
+
+    assert Path(str(downloaded_path)).exists()
+    assert Path(str(downloaded_path)).name == "youtube_openai-devday.mp4"
 
 
 def test_transcribe_knowledge_video_step_normalizes_segments() -> None:
@@ -249,6 +405,61 @@ def test_transcribe_knowledge_video_step_normalizes_segments() -> None:
     assert transcript_segments[0]["text"] == "first block"
     assert transcript_segments[1]["text"] == "second block"
     assert context.data["transcript_segment_count"] == 2
+
+
+def test_transcribe_knowledge_video_step_skips_asr_when_captions_exist() -> None:
+    transcriber = AsyncMock()
+    step = TranscribeKnowledgeVideoStep(transcriber=transcriber)
+    context = PipelineContext(
+        data={
+            "video_path": "/tmp/demo.mp4",
+            "video_metadata": {"duration_seconds": 10},
+            "transcript_segments": [
+                {"start": 0.0, "end": 5.0, "text": "captions already exist"}
+            ],
+        }
+    )
+
+    asyncio.run(step.run(context))
+
+    transcriber.transcribe.assert_not_called()
+    assert context.data["transcript_segment_count"] == 1
+    assert context.data["transcript_segments"][0]["text"] == "captions already exist"
+
+
+def test_openai_compatible_transcriber_parses_segmented_response(tmp_path: Path) -> None:
+    video_path = _write_video(tmp_path / "devday.mp4")
+    fake_client = FakeTranscriptionClient()
+    transcriber = OpenAICompatibleTranscriber(api_key="test-key")
+
+    with patch("workers.knowledge.runtime.httpx.AsyncClient", return_value=fake_client):
+        segments = asyncio.run(
+            transcriber.transcribe(
+                video_path,
+                video_metadata={"duration_seconds": 5},
+            )
+        )
+
+    assert segments == [
+        {
+            "start": 0.0,
+            "end": 4.5,
+            "text": "agents coordinate tasks",
+            "speaker": None,
+        }
+    ]
+    assert fake_client.calls == [
+        {
+            "url": "https://api.openai.com/v1/audio/transcriptions",
+            "headers": {"Authorization": "Bearer test-key"},
+            "data": [
+                ("model", "gpt-4o-transcribe"),
+                ("response_format", "verbose_json"),
+                ("timestamp_granularities[]", "segment"),
+            ],
+            "filename": "devday.mp4",
+        }
+    ]
 
 
 def test_detect_knowledge_scenes_step_splits_on_transcript_gaps() -> None:
@@ -519,6 +730,56 @@ def test_knowledge_indexing_pipeline_uses_gemini_backend_by_default() -> None:
     pipeline = KnowledgeIndexingPipeline()
 
     assert isinstance(pipeline._embedding_backend, GeminiEmbeddingBackend)
+    assert isinstance(pipeline._video_downloader, YtDlpVideoDownloader)
+    assert isinstance(pipeline._transcriber, OpenAICompatibleTranscriber)
+
+
+def test_knowledge_indexing_pipeline_prefers_subtitles_before_asr(
+    tmp_path: Path,
+) -> None:
+    source_video = _write_video(tmp_path / "devday.mp4")
+    subtitle_path = tmp_path / "devday.srt"
+    subtitle_path.write_text(
+        "1\n00:00:00,000 --> 00:00:06,000\nagents coordinate tasks with tools\n\n"
+        "2\n00:00:07,000 --> 00:00:12,000\nknowledge search should cite timestamps\n",
+        encoding="utf-8",
+    )
+    repository = InMemoryKnowledgeRepository()
+    pipeline = KnowledgeIndexingPipeline(
+        repository=repository,
+        embedding_backend=FakeEmbeddingBackend(),
+        metadata_client=StaticKnowledgeMetadataClient(
+            {
+                "id": "openai-devday",
+                "title": "OpenAI Dev Day",
+                "description": "Agents, reasoning models, and search workflows.",
+                "speaker": "Sam Altman",
+                "published_at": "2025-11-06T00:00:00Z",
+                "duration_seconds": 18,
+                "thumbnail_url": "https://img.youtube.com/vi/openai-devday/hqdefault.jpg",
+                "source_url": "https://www.youtube.com/watch?v=openai-devday",
+                "video_url": str(source_video),
+                "download_url": str(source_video),
+                "subtitle_path": str(subtitle_path),
+            }
+        ),
+    )
+
+    context = asyncio.run(
+        pipeline.run(
+            "openai-devday",
+            job_id="job-knowledge-captions",
+            conf={"scene_threshold": 0.35},
+        )
+    )
+
+    stored_video = next(iter(repository.videos_by_key.values()))
+    stored_segments = repository.segments_by_video_id[stored_video["id"]]
+
+    assert context.failed_step is None
+    assert context.data["transcript_source"] == str(subtitle_path)
+    assert context.data["indexed_segment_count"] == 1
+    assert stored_segments[0]["transcript_text"].startswith("agents coordinate tasks")
 
 
 def test_knowledge_indexing_pipeline_runs_end_to_end_with_stubs(

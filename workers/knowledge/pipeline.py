@@ -4,6 +4,7 @@ from collections.abc import Mapping
 from typing import Any
 
 from backend.app.embedding import EmbeddingBackend, GeminiEmbeddingBackend
+from workers.common.sources import YouTubeClient
 from workers.common.pipeline import PipelineContext, PipelineExecutor
 
 from .repository import (
@@ -14,16 +15,21 @@ from .runtime import (
     HeuristicFrameAnalyzer,
     HeuristicSceneDetector,
     HttpVideoDownloader,
+    KnowledgeCaptionProvider,
     KnowledgeFrameAnalyzer,
     KnowledgeMetadataClient,
     KnowledgeSceneDetector,
     KnowledgeTranscriber,
     KnowledgeVideoDownloader,
+    OpenAICompatibleTranscriber,
+    YtDlpCaptionProvider,
+    YtDlpVideoDownloader,
 )
 from .steps import (
     AnalyzeKnowledgeFramesStep,
     DownloadKnowledgeVideoStep,
     EmbedKnowledgeSegmentsStep,
+    FetchKnowledgeCaptionsStep,
     FetchKnowledgeMetadataStep,
     MarkKnowledgeJobCompletedStep,
     SegmentKnowledgeTranscriptStep,
@@ -39,6 +45,7 @@ class KnowledgeIndexingPipeline:
         repository: KnowledgeRepository | None = None,
         embedding_backend: EmbeddingBackend | None = None,
         metadata_client: KnowledgeMetadataClient | None = None,
+        caption_provider: KnowledgeCaptionProvider | None = None,
         video_downloader: KnowledgeVideoDownloader | None = None,
         transcriber: KnowledgeTranscriber | None = None,
         scene_detector: KnowledgeSceneDetector | None = None,
@@ -47,15 +54,19 @@ class KnowledgeIndexingPipeline:
     ) -> None:
         self._repository = repository or resolve_default_knowledge_repository()
         self._embedding_backend = embedding_backend or GeminiEmbeddingBackend()
-        self._metadata_client = metadata_client
-        self._video_downloader = video_downloader or HttpVideoDownloader()
-        self._transcriber = transcriber
+        self._metadata_client = metadata_client or YouTubeClient()
+        self._caption_provider = caption_provider or YtDlpCaptionProvider()
+        self._video_downloader = video_downloader or YtDlpVideoDownloader(
+            fallback_downloader=HttpVideoDownloader()
+        )
+        self._transcriber = transcriber or OpenAICompatibleTranscriber()
         self._scene_detector = scene_detector or HeuristicSceneDetector()
         self._frame_analyzer = frame_analyzer or HeuristicFrameAnalyzer()
         self._temp_dir_root = temp_dir_root
         self._executor = PipelineExecutor(
             [
                 FetchKnowledgeMetadataStep(metadata_client=self._metadata_client),
+                FetchKnowledgeCaptionsStep(caption_provider=self._caption_provider),
                 DownloadKnowledgeVideoStep(video_downloader=self._video_downloader),
                 TranscribeKnowledgeVideoStep(transcriber=self._transcriber),
                 DetectKnowledgeScenesStep(scene_detector=self._scene_detector),
@@ -81,6 +92,7 @@ class KnowledgeIndexingPipeline:
         runtime_conf.setdefault("repository", self._repository)
         runtime_conf.setdefault("embedding_backend", self._embedding_backend)
         runtime_conf.setdefault("metadata_client", self._metadata_client)
+        runtime_conf.setdefault("caption_provider", self._caption_provider)
         runtime_conf.setdefault("video_downloader", self._video_downloader)
         runtime_conf.setdefault("transcriber", self._transcriber)
         runtime_conf.setdefault("scene_detector", self._scene_detector)

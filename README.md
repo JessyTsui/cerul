@@ -135,6 +135,16 @@ backend/.venv/bin/python -m uvicorn app.main:app --app-dir backend --reload --ho
 backend/.venv/bin/pytest backend/tests
 ```
 
+**Workers**
+
+```bash
+python3 -m venv workers/.venv
+workers/.venv/bin/python -m pip install -r workers/requirements.txt
+workers/.venv/bin/pytest workers/tests
+workers/.venv/bin/python workers/worker.py --db-url "$DATABASE_URL"
+workers/.venv/bin/python workers/scheduler.py --once --database-url "$DATABASE_URL"
+```
+
 </details>
 
 ## Deployment
@@ -145,13 +155,15 @@ Deploy the frontend on Vercel:
 2. Keep the included `frontend/vercel.json`
 3. Optionally set `NEXT_PUBLIC_SITE_URL` for custom domain metadata
 
-## Roadmap
+## Project Status
 
-- [x] Public project scaffold and frontend foundation
-- [ ] End-to-end `broll` indexing and search flow
-- [ ] `knowledge` ingestion and retrieval pipeline
-- [ ] Agent-facing integrations and installable skills
-- [ ] Python & TypeScript SDKs
+- [x] Shared platform backbone: auth, API keys, usage tracking, rate limiting, dashboard, and docs
+- [x] End-to-end `broll` indexing and search flow on the shared retrieval stack
+- [x] `knowledge` retrieval, answer generation, and step-pipeline ingestion
+- [x] Agent-facing integrations via installable skills and direct HTTP access
+- [ ] Higher-scale production validation for ingestion coverage and retrieval quality
+- [ ] Stripe billing validation in test mode
+- [ ] Python & TypeScript SDKs, only if direct API + skill access proves insufficient
 
 ## Community
 

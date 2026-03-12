@@ -1,4 +1,5 @@
 from .asr import TranscribeKnowledgeVideoStep
+from .fetch_captions import FetchKnowledgeCaptionsStep
 from .download import DownloadKnowledgeVideoStep
 from .embed import EmbedKnowledgeSegmentsStep
 from .fetch_metadata import FetchKnowledgeMetadataStep
@@ -13,6 +14,7 @@ __all__ = [
     "DetectKnowledgeScenesStep",
     "DownloadKnowledgeVideoStep",
     "EmbedKnowledgeSegmentsStep",
+    "FetchKnowledgeCaptionsStep",
     "FetchKnowledgeMetadataStep",
     "MarkKnowledgeJobCompletedStep",
     "SegmentKnowledgeTranscriptStep",
