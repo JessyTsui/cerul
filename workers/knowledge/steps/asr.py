@@ -23,6 +23,7 @@ class TranscribeKnowledgeVideoStep(PipelineStep):
             raise RuntimeError("Knowledge transcription requires video_path and metadata.")
 
         raw_segments = context.data.get("transcript_segments")
+        used_transcriber = False
         if raw_segments is None:
             transcriber = self._transcriber or context.conf.get("transcriber")
             if transcriber is None:
@@ -31,6 +32,7 @@ class TranscribeKnowledgeVideoStep(PipelineStep):
                 video_path,
                 video_metadata=video_metadata,
             )
+            used_transcriber = True
 
         transcript_segments = normalize_transcript_segments(
             raw_segments,
@@ -40,6 +42,8 @@ class TranscribeKnowledgeVideoStep(PipelineStep):
             raise ValueError("Knowledge transcription produced no transcript segments.")
 
         context.data["transcript_segments"] = transcript_segments
+        if used_transcriber:
+            context.data.setdefault("transcript_source", "asr")
         context.data["transcript_segment_count"] = len(transcript_segments)
         context.data["transcript_word_count"] = sum(
             len(str(segment["text"]).split()) for segment in transcript_segments

@@ -1,4 +1,5 @@
 import asyncio
+import subprocess
 from pathlib import Path
 from unittest.mock import AsyncMock, patch
 
@@ -14,6 +15,7 @@ from workers.knowledge.runtime import (
     OpenAICompatibleTranscriber,
     StaticKnowledgeMetadataClient,
     StaticKnowledgeTranscriber,
+    YtDlpCaptionProvider,
     YtDlpVideoDownloader,
 )
 from workers.knowledge.steps import (
@@ -334,6 +336,33 @@ def test_fetch_knowledge_captions_step_uses_provider_when_no_explicit_source(
     assert caption_provider.calls[0][1] == tmp_path
 
 
+def test_fetch_knowledge_captions_step_ignores_broken_explicit_source_and_falls_back(
+    tmp_path: Path,
+) -> None:
+    missing_subtitle_path = tmp_path / "missing.srt"
+    caption_provider = FakeCaptionProvider(
+        [{"start": 0.0, "end": 4.0, "text": "provider fallback transcript"}]
+    )
+    step = FetchKnowledgeCaptionsStep(caption_provider=caption_provider)
+    context = PipelineContext(
+        data={
+            "video_metadata": {
+                "source_video_id": "openai-devday",
+                "source_url": "https://www.youtube.com/watch?v=openai-devday",
+                "duration_seconds": 4,
+                "subtitle_path": str(missing_subtitle_path),
+            },
+            "temp_dir": str(tmp_path),
+        }
+    )
+
+    asyncio.run(step.run(context))
+
+    assert context.data["transcript_source"] == "captions:provider"
+    assert context.data["transcript_segments"][0]["text"] == "provider fallback transcript"
+    assert "Failed to load transcript source" in context.data["caption_resolution_warning"]
+
+
 def test_download_knowledge_video_step_rejects_non_video_content_type() -> None:
     step = DownloadKnowledgeVideoStep(video_downloader=HttpVideoDownloader())
     context = PipelineContext(
@@ -349,6 +378,40 @@ def test_download_knowledge_video_step_rejects_non_video_content_type() -> None:
     with patch("workers.knowledge.runtime.httpx.AsyncClient", FakeHtmlStreamingClient):
         with pytest.raises(ValueError, match="unsupported content-type"):
             asyncio.run(step.run(context))
+
+
+def test_ytdlp_caption_provider_prefers_configured_language_order(
+    tmp_path: Path,
+) -> None:
+    provider = YtDlpCaptionProvider(command="yt-dlp-test")
+
+    async def fake_run_command(command: list[str]) -> subprocess.CompletedProcess[str]:
+        (tmp_path / "openai-devday.es.vtt").write_text(
+            "WEBVTT\n\n00:00:00.000 --> 00:00:02.000\nhola equipo\n",
+            encoding="utf-8",
+        )
+        (tmp_path / "openai-devday.en.vtt").write_text(
+            "WEBVTT\n\n00:00:00.000 --> 00:00:02.000\nhello team\n",
+            encoding="utf-8",
+        )
+        return subprocess.CompletedProcess(command, 0, "", "")
+
+    provider._run_command = fake_run_command  # type: ignore[method-assign]
+
+    segments = asyncio.run(
+        provider.resolve_transcript_segments(
+            {
+                "source_video_id": "openai-devday",
+                "source_url": "https://www.youtube.com/watch?v=openai-devday",
+                "duration_seconds": 2,
+                "preferred_caption_languages": ["en", "es"],
+            },
+            tmp_path,
+        )
+    )
+
+    assert segments is not None
+    assert segments[0]["text"] == "hello team"
 
 
 def test_ytdlp_video_downloader_uses_source_url_when_download_url_is_missing(
@@ -780,6 +843,61 @@ def test_knowledge_indexing_pipeline_prefers_subtitles_before_asr(
     assert context.data["transcript_source"] == str(subtitle_path)
     assert context.data["indexed_segment_count"] == 1
     assert stored_segments[0]["transcript_text"].startswith("agents coordinate tasks")
+
+
+def test_knowledge_indexing_pipeline_falls_back_to_asr_when_subtitle_source_is_stale(
+    tmp_path: Path,
+) -> None:
+    source_video = _write_video(tmp_path / "devday.mp4")
+    stale_subtitle_path = tmp_path / "missing.srt"
+    repository = InMemoryKnowledgeRepository()
+    pipeline = KnowledgeIndexingPipeline(
+        repository=repository,
+        embedding_backend=FakeEmbeddingBackend(),
+        metadata_client=StaticKnowledgeMetadataClient(
+            {
+                "id": "openai-devday",
+                "title": "OpenAI Dev Day",
+                "description": "Agents, reasoning models, and search workflows.",
+                "speaker": "Sam Altman",
+                "published_at": "2025-11-06T00:00:00Z",
+                "duration_seconds": 12,
+                "thumbnail_url": "https://img.youtube.com/vi/openai-devday/hqdefault.jpg",
+                "source_url": "https://www.youtube.com/watch?v=openai-devday",
+                "video_url": str(source_video),
+                "download_url": str(source_video),
+                "subtitle_path": str(stale_subtitle_path),
+            }
+        ),
+        caption_provider=FakeCaptionProvider([]),
+        transcriber=StaticKnowledgeTranscriber(
+            [
+                {
+                    "start": 0.0,
+                    "end": 6.0,
+                    "text": "agents coordinate tasks with retrieval and tools",
+                },
+                {
+                    "start": 7.0,
+                    "end": 11.0,
+                    "text": "knowledge search should cite timestamps",
+                },
+            ]
+        ),
+    )
+
+    context = asyncio.run(
+        pipeline.run(
+            "openai-devday",
+            job_id="job-knowledge-stale-subtitle",
+            conf={"scene_threshold": 0.35},
+        )
+    )
+
+    assert context.failed_step is None
+    assert context.data["transcript_source"] == "asr"
+    assert "Failed to load transcript source" in context.data["caption_resolution_warning"]
+    assert context.data["indexed_segment_count"] == 1
 
 
 def test_knowledge_indexing_pipeline_runs_end_to_end_with_stubs(

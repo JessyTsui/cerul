@@ -227,7 +227,11 @@ class YtDlpCaptionProvider:
         if not subtitle_files:
             return None
 
-        selected_file = _select_preferred_caption_file(subtitle_files)
+        selected_file = _select_preferred_caption_file(
+            subtitle_files,
+            preferred_languages=_resolve_preferred_caption_languages(video_metadata),
+            source_video_id=str(source_video_id),
+        )
         return parse_transcript_file(
             selected_file,
             default_end=float(video_metadata.get("duration_seconds") or 0.0),
@@ -754,6 +758,48 @@ def resolve_transcript_source(
     return None
 
 
+def _resolve_preferred_caption_languages(video_metadata: Mapping[str, Any]) -> tuple[str, ...]:
+    raw_candidates: list[Any] = [
+        video_metadata.get("preferred_caption_languages"),
+        video_metadata.get("preferred_subtitle_languages"),
+        video_metadata.get("caption_language"),
+        video_metadata.get("subtitle_language"),
+        video_metadata.get("transcript_language"),
+        video_metadata.get("audio_language"),
+        video_metadata.get("default_audio_language"),
+        video_metadata.get("language"),
+    ]
+
+    raw_metadata = video_metadata.get("metadata")
+    if isinstance(raw_metadata, Mapping):
+        raw_candidates.extend(
+            [
+                raw_metadata.get("preferred_caption_languages"),
+                raw_metadata.get("preferred_subtitle_languages"),
+                raw_metadata.get("caption_language"),
+                raw_metadata.get("subtitle_language"),
+                raw_metadata.get("transcript_language"),
+                raw_metadata.get("audio_language"),
+                raw_metadata.get("default_audio_language"),
+                raw_metadata.get("defaultLanguage"),
+                raw_metadata.get("defaultAudioLanguage"),
+                raw_metadata.get("language"),
+            ]
+        )
+
+    normalized: list[str] = []
+    for candidate in raw_candidates:
+        if isinstance(candidate, str):
+            normalized.extend(
+                item.strip() for item in candidate.split(",") if item.strip()
+            )
+            continue
+        if isinstance(candidate, Sequence) and not isinstance(candidate, (str, bytes)):
+            normalized.extend(str(item).strip() for item in candidate if str(item).strip())
+
+    return _normalize_caption_language_preferences(normalized)
+
+
 def _resolve_local_path(value: str) -> Path | None:
     parsed = urlparse(value)
     if parsed.scheme == "file":
@@ -853,17 +899,91 @@ def _find_caption_files(output_dir: Path, source_video_id: str) -> list[Path]:
     return [path for path in candidates if path.is_file()]
 
 
-def _select_preferred_caption_file(candidates: Sequence[Path]) -> Path:
+def _select_preferred_caption_file(
+    candidates: Sequence[Path],
+    *,
+    preferred_languages: Sequence[str] | None = None,
+    source_video_id: str | None = None,
+) -> Path:
+    normalized_preferences = _normalize_caption_language_preferences(preferred_languages)
     ranked_candidates = sorted(
         candidates,
         key=lambda path: (
             path.suffix.lower() != ".srt",
+            _caption_language_rank(
+                _extract_caption_language_code(path, source_video_id=source_video_id),
+                normalized_preferences,
+            ),
             ".live_chat." in path.name,
             ".orig." in path.name,
             path.name,
         ),
     )
     return ranked_candidates[0]
+
+
+def _normalize_caption_language_preferences(
+    preferred_languages: Sequence[str] | None,
+) -> tuple[str, ...]:
+    default_preferences = ("en", "en-us", "en-gb")
+    if not preferred_languages:
+        return default_preferences
+
+    normalized: list[str] = []
+    seen: set[str] = set()
+    for language in preferred_languages:
+        cleaned = str(language).strip().replace("_", "-").lower()
+        if not cleaned or cleaned in seen:
+            continue
+        seen.add(cleaned)
+        normalized.append(cleaned)
+
+    return tuple(normalized) or default_preferences
+
+
+def _caption_language_rank(
+    language_code: str | None,
+    preferred_languages: Sequence[str],
+) -> tuple[int, int, str]:
+    if language_code is None:
+        return (1, len(preferred_languages), "")
+
+    exact_map = {language: index for index, language in enumerate(preferred_languages)}
+    base_map = {
+        language.split("-", 1)[0]: index for index, language in enumerate(preferred_languages)
+    }
+    if language_code in exact_map:
+        return (0, exact_map[language_code], language_code)
+
+    base_language = language_code.split("-", 1)[0]
+    if base_language in exact_map:
+        return (0, exact_map[base_language], language_code)
+    if base_language in base_map:
+        return (0, base_map[base_language], language_code)
+
+    return (2, len(preferred_languages), language_code)
+
+
+def _extract_caption_language_code(
+    path: Path,
+    *,
+    source_video_id: str | None = None,
+) -> str | None:
+    stem = path.stem
+    if source_video_id:
+        prefix = f"{source_video_id}."
+        if stem.startswith(prefix):
+            stem = stem[len(prefix) :]
+        elif stem == source_video_id:
+            stem = ""
+
+    for token in stem.split("."):
+        normalized = token.strip().replace("_", "-").lower()
+        if not normalized or normalized in {"orig", "live-chat", "live_chat"}:
+            continue
+        if re.fullmatch(r"[a-z]{2,3}(?:-[a-z0-9]{2,8})*", normalized):
+            return normalized
+    return None
 
 
 def _find_downloaded_video_files(output_dir: Path, target_name: str) -> list[Path]:
