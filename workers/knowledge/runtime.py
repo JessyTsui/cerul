@@ -909,13 +909,13 @@ def _select_preferred_caption_file(
     ranked_candidates = sorted(
         candidates,
         key=lambda path: (
-            path.suffix.lower() != ".srt",
             _caption_language_rank(
                 _extract_caption_language_code(path, source_video_id=source_video_id),
                 normalized_preferences,
             ),
             ".live_chat." in path.name,
             ".orig." in path.name,
+            path.suffix.lower() != ".srt",
             path.name,
         ),
     )
@@ -946,7 +946,7 @@ def _caption_language_rank(
     preferred_languages: Sequence[str],
 ) -> tuple[int, int, str]:
     if language_code is None:
-        return (1, len(preferred_languages), "")
+        return (2, len(preferred_languages), "")
 
     exact_map = {language: index for index, language in enumerate(preferred_languages)}
     base_map = {
@@ -957,11 +957,11 @@ def _caption_language_rank(
 
     base_language = language_code.split("-", 1)[0]
     if base_language in exact_map:
-        return (0, exact_map[base_language], language_code)
+        return (1, exact_map[base_language], language_code)
     if base_language in base_map:
-        return (0, base_map[base_language], language_code)
+        return (1, base_map[base_language], language_code)
 
-    return (2, len(preferred_languages), language_code)
+    return (3, len(preferred_languages), language_code)
 
 
 def _extract_caption_language_code(

@@ -414,6 +414,74 @@ def test_ytdlp_caption_provider_prefers_configured_language_order(
     assert segments[0]["text"] == "hello team"
 
 
+def test_ytdlp_caption_provider_prefers_exact_locale_over_base_language(
+    tmp_path: Path,
+) -> None:
+    provider = YtDlpCaptionProvider(command="yt-dlp-test")
+
+    async def fake_run_command(command: list[str]) -> subprocess.CompletedProcess[str]:
+        (tmp_path / "openai-devday.en.vtt").write_text(
+            "WEBVTT\n\n00:00:00.000 --> 00:00:02.000\ngeneric english\n",
+            encoding="utf-8",
+        )
+        (tmp_path / "openai-devday.en-us.vtt").write_text(
+            "WEBVTT\n\n00:00:00.000 --> 00:00:02.000\namerican english\n",
+            encoding="utf-8",
+        )
+        return subprocess.CompletedProcess(command, 0, "", "")
+
+    provider._run_command = fake_run_command  # type: ignore[method-assign]
+
+    segments = asyncio.run(
+        provider.resolve_transcript_segments(
+            {
+                "source_video_id": "openai-devday",
+                "source_url": "https://www.youtube.com/watch?v=openai-devday",
+                "duration_seconds": 2,
+                "preferred_caption_languages": ["en-us"],
+            },
+            tmp_path,
+        )
+    )
+
+    assert segments is not None
+    assert segments[0]["text"] == "american english"
+
+
+def test_ytdlp_caption_provider_prioritizes_language_before_subtitle_format(
+    tmp_path: Path,
+) -> None:
+    provider = YtDlpCaptionProvider(command="yt-dlp-test")
+
+    async def fake_run_command(command: list[str]) -> subprocess.CompletedProcess[str]:
+        (tmp_path / "openai-devday.fr.srt").write_text(
+            "1\n00:00:00,000 --> 00:00:02,000\nbonjour equipe\n",
+            encoding="utf-8",
+        )
+        (tmp_path / "openai-devday.en.vtt").write_text(
+            "WEBVTT\n\n00:00:00.000 --> 00:00:02.000\nhello team\n",
+            encoding="utf-8",
+        )
+        return subprocess.CompletedProcess(command, 0, "", "")
+
+    provider._run_command = fake_run_command  # type: ignore[method-assign]
+
+    segments = asyncio.run(
+        provider.resolve_transcript_segments(
+            {
+                "source_video_id": "openai-devday",
+                "source_url": "https://www.youtube.com/watch?v=openai-devday",
+                "duration_seconds": 2,
+                "preferred_caption_languages": ["en"],
+            },
+            tmp_path,
+        )
+    )
+
+    assert segments is not None
+    assert segments[0]["text"] == "hello team"
+
+
 def test_ytdlp_video_downloader_uses_source_url_when_download_url_is_missing(
     tmp_path: Path,
 ) -> None:
