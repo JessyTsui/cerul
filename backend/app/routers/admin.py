@@ -1,0 +1,133 @@
+"""Private admin console API endpoints."""
+
+from __future__ import annotations
+
+from typing import Any
+from uuid import UUID
+
+from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
+
+from app.admin import (
+    AdminSummaryResponse,
+    AdminTargetsResponse,
+    AdminTargetsUpsertRequest,
+    delete_target,
+    fetch_admin_summary,
+    fetch_content_summary,
+    fetch_ingestion_summary,
+    fetch_requests_summary,
+    fetch_targets_summary,
+    fetch_users_summary,
+    require_admin_access,
+    upsert_targets,
+)
+from app.admin.models import (
+    AdminContentSummaryResponse,
+    AdminIngestionSummaryResponse,
+    AdminRangeKey,
+    AdminRequestsSummaryResponse,
+    AdminUsersSummaryResponse,
+)
+from app.auth import SessionContext, require_session
+from app.db import get_db
+
+router = APIRouter(prefix="/admin", tags=["admin"])
+
+
+def _resolve_range(range_key: AdminRangeKey | None) -> AdminRangeKey:
+    return range_key or "7d"
+
+
+@router.get("/summary", response_model=AdminSummaryResponse)
+async def get_admin_summary(
+    range_key: AdminRangeKey | None = Query(default="7d", alias="range"),
+    session: SessionContext = Depends(require_session),
+    db: Any = Depends(get_db),
+) -> AdminSummaryResponse:
+    await require_admin_access(session, db)
+    return await fetch_admin_summary(db, range_key=_resolve_range(range_key))
+
+
+@router.get("/users/summary", response_model=AdminUsersSummaryResponse)
+async def get_admin_users_summary(
+    range_key: AdminRangeKey | None = Query(default="7d", alias="range"),
+    session: SessionContext = Depends(require_session),
+    db: Any = Depends(get_db),
+) -> AdminUsersSummaryResponse:
+    await require_admin_access(session, db)
+    return await fetch_users_summary(db, range_key=_resolve_range(range_key))
+
+
+@router.get("/requests/summary", response_model=AdminRequestsSummaryResponse)
+async def get_admin_requests_summary(
+    range_key: AdminRangeKey | None = Query(default="7d", alias="range"),
+    session: SessionContext = Depends(require_session),
+    db: Any = Depends(get_db),
+) -> AdminRequestsSummaryResponse:
+    await require_admin_access(session, db)
+    return await fetch_requests_summary(db, range_key=_resolve_range(range_key))
+
+
+@router.get("/content/summary", response_model=AdminContentSummaryResponse)
+async def get_admin_content_summary(
+    range_key: AdminRangeKey | None = Query(default="7d", alias="range"),
+    session: SessionContext = Depends(require_session),
+    db: Any = Depends(get_db),
+) -> AdminContentSummaryResponse:
+    await require_admin_access(session, db)
+    return await fetch_content_summary(db, range_key=_resolve_range(range_key))
+
+
+@router.get("/ingestion/summary", response_model=AdminIngestionSummaryResponse)
+async def get_admin_ingestion_summary(
+    range_key: AdminRangeKey | None = Query(default="7d", alias="range"),
+    session: SessionContext = Depends(require_session),
+    db: Any = Depends(get_db),
+) -> AdminIngestionSummaryResponse:
+    await require_admin_access(session, db)
+    return await fetch_ingestion_summary(db, range_key=_resolve_range(range_key))
+
+
+@router.get("/targets", response_model=AdminTargetsResponse)
+async def get_admin_targets(
+    range_key: AdminRangeKey | None = Query(default="7d", alias="range"),
+    session: SessionContext = Depends(require_session),
+    db: Any = Depends(get_db),
+) -> AdminTargetsResponse:
+    await require_admin_access(session, db)
+    return await fetch_targets_summary(db, range_key=_resolve_range(range_key))
+
+
+@router.put("/targets", response_model=AdminTargetsResponse)
+async def put_admin_targets(
+    payload: AdminTargetsUpsertRequest,
+    range_key: AdminRangeKey | None = Query(default="7d", alias="range"),
+    session: SessionContext = Depends(require_session),
+    db: Any = Depends(get_db),
+) -> AdminTargetsResponse:
+    await require_admin_access(session, db)
+    try:
+        await upsert_targets(db, targets=payload.targets)
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(exc),
+        ) from exc
+    return await fetch_targets_summary(db, range_key=_resolve_range(range_key))
+
+
+@router.delete("/targets/{target_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def remove_admin_target(
+    target_id: UUID,
+    session: SessionContext = Depends(require_session),
+    db: Any = Depends(get_db),
+) -> Response:
+    await require_admin_access(session, db)
+    deleted = await delete_target(db, target_id=str(target_id))
+    if not deleted:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Admin target not found.",
+        )
+
+    return Response(status_code=status.HTTP_204_NO_CONTENT)

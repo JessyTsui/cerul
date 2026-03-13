@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { canonicalUrl } from "./site-url";
 import {
+  adminRoutes,
+  isAdminRouteActive,
   primaryNavigation,
   isDashboardRouteActive,
   isPrimaryNavigationActive,
@@ -50,5 +52,18 @@ describe("isDashboardRouteActive", () => {
   it("matches nested dashboard routes", () => {
     expect(isDashboardRouteActive("/dashboard/usage", "/dashboard/usage")).toBe(true);
     expect(isDashboardRouteActive("/dashboard/usage/detail", "/dashboard/usage")).toBe(true);
+  });
+});
+
+describe("adminRoutes", () => {
+  it("includes the admin ingestion console entry", () => {
+    expect(adminRoutes.some((item) => item.href === "/admin/ingestion")).toBe(true);
+  });
+});
+
+describe("isAdminRouteActive", () => {
+  it("matches nested admin routes", () => {
+    expect(isAdminRouteActive("/admin/requests", "/admin/requests")).toBe(true);
+    expect(isAdminRouteActive("/admin/requests/detail", "/admin/requests")).toBe(true);
   });
 });

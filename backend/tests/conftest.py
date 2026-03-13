@@ -121,6 +121,7 @@ async def _reset_database_state(database_url: str) -> None:
         await connection.execute(
             """
             TRUNCATE TABLE
+                admin_metric_targets,
                 processing_job_steps,
                 processing_jobs,
                 content_sources,
@@ -142,14 +143,16 @@ async def _reset_database_state(database_url: str) -> None:
             INSERT INTO user_profiles (
                 id,
                 email,
+                console_role,
                 tier,
                 monthly_credit_limit,
                 rate_limit_per_sec
             )
-            VALUES ($1, $2, $3, $4, $5)
+            VALUES ($1, $2, $3, $4, $5, $6)
             """,
             TEST_USER_ID,
             "owner@example.com",
+            "user",
             "free",
             1000,
             10,

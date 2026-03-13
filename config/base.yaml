@@ -16,4 +16,5 @@ knowledge:
   rerank_prompt_template: default
 
 dashboard:
+  admin_emails: []
   operator_emails: []

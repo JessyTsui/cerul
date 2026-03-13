@@ -17,6 +17,7 @@ import yaml
 
 _CONFIG_ENV_PREFIX = "CERUL__"
 _LEGACY_ENV_OVERRIDES: dict[str, tuple[str, ...]] = {
+    "ADMIN_CONSOLE_EMAILS": ("dashboard", "admin_emails"),
     "DATABASE_URL": ("database", "url"),
     "DASHBOARD_OPERATOR_EMAILS": ("dashboard", "operator_emails"),
     "MMR_LAMBDA": ("search", "mmr_lambda"),
@@ -81,9 +82,10 @@ class StripeSettings(BaseModel):
 class DashboardSettings(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
+    admin_emails: list[str] = Field(default_factory=list)
     operator_emails: list[str] = Field(default_factory=list)
 
-    @field_validator("operator_emails", mode="before")
+    @field_validator("admin_emails", "operator_emails", mode="before")
     @classmethod
     def normalize_operator_emails(cls, value: Any) -> list[str]:
         if value is None:
