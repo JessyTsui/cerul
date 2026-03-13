@@ -2,6 +2,10 @@ import type { Metadata } from "next";
 import { SearchDemo } from "@/components/search/search-demo";
 import { SiteFooter } from "@/components/site-footer";
 import { SiteHeader } from "@/components/site-header";
+import {
+  defaultOpenGraphImages,
+  defaultTwitterImages,
+} from "@/lib/social-metadata";
 import { canonicalUrl } from "@/lib/site-url";
 
 const description =
@@ -19,10 +23,13 @@ export const metadata: Metadata = {
     title: "Search Demo",
     description,
     url: searchDemoUrl,
+    images: defaultOpenGraphImages,
   },
   twitter: {
+    card: "summary_large_image",
     title: "Search Demo",
     description,
+    images: defaultTwitterImages,
   },
 };
 

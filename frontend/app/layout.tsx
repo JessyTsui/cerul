@@ -1,5 +1,9 @@
 import type { Metadata } from "next";
 import localFont from "next/font/local";
+import {
+  defaultOpenGraphImages,
+  defaultTwitterImages,
+} from "@/lib/social-metadata";
 import { getSiteOrigin } from "@/lib/site-url";
 import "./globals.css";
 
@@ -94,28 +98,14 @@ export const metadata: Metadata = {
     url: siteOrigin,
     siteName: "Cerul",
     type: "website",
-    images: [
-      {
-        url: "/og-image.png",
-        width: 1200,
-        height: 630,
-        alt: "Cerul — Video Search API for AI Agents",
-      },
-    ],
+    images: defaultOpenGraphImages,
   },
   twitter: {
     card: "summary_large_image",
     title: "Cerul",
     description:
       "Video understanding search API for AI agents. Search what is shown in videos, not just what is said.",
-    images: [
-      {
-        url: "/og-twitter.png",
-        width: 800,
-        height: 418,
-        alt: "Cerul — Video Search API for AI Agents",
-      },
-    ],
+    images: defaultTwitterImages,
   },
 };
 
