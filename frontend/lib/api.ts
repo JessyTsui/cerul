@@ -909,3 +909,28 @@ export const billing = {
     return normalizeBillingLink(payload);
   },
 };
+
+export { admin } from "./admin-api";
+export type {
+  AdminContentSummary,
+  AdminFailedJob,
+  AdminFailedStep,
+  AdminIngestionSummary,
+  AdminMetricTarget,
+  AdminMetricTargetInput,
+  AdminMetricValue,
+  AdminNotice,
+  AdminQueryBucket,
+  AdminRange,
+  AdminRequestsSummary,
+  AdminSourceFreshness,
+  AdminSourceGrowth,
+  AdminSourceHealth,
+  AdminSummary,
+  AdminSummaryPoint,
+  AdminTargetComparisonMode,
+  AdminTargetScopeType,
+  AdminTargetsResponse,
+  AdminUsersSummary,
+  AdminWindow,
+} from "./admin-api";

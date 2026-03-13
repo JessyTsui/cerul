@@ -3,6 +3,7 @@ from __future__ import annotations
 from contextlib import asynccontextmanager
 import json
 import secrets
+import time
 from typing import Any, AsyncIterator
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -81,6 +82,7 @@ async def append_query_log(
     auth: AuthContext,
     payload: SearchRequest,
     results_count: int,
+    latency_ms: int | None,
 ) -> None:
     filters_payload = payload.model_dump(mode="json").get("filters")
 
@@ -95,9 +97,10 @@ async def append_query_log(
             filters,
             max_results,
             include_answer,
-            result_count
+            result_count,
+            latency_ms
         )
-        VALUES ($1, $2, $3::uuid, $4, $5, $6::jsonb, $7, $8, $9)
+        VALUES ($1, $2, $3::uuid, $4, $5, $6::jsonb, $7, $8, $9, $10)
         """,
         request_id,
         auth.user_id,
@@ -108,6 +111,7 @@ async def append_query_log(
         payload.max_results,
         payload.include_answer,
         results_count,
+        latency_ms,
     )
 
 
@@ -117,6 +121,7 @@ async def search_v1(
     auth: AuthContext = Depends(require_api_key),
     db: Any = Depends(get_db),
 ) -> SearchResponse:
+    request_started_at = time.perf_counter()
     request_id = generate_request_id()
     await ensure_request_credits_available(db, auth, payload)
     service = resolve_search_service(payload.search_type, db)
@@ -138,6 +143,10 @@ async def search_v1(
                 auth=auth,
                 payload=payload,
                 results_count=len(results),
+                latency_ms=max(
+                    int((time.perf_counter() - request_started_at) * 1000),
+                    0,
+                ),
             )
             usage_summary = await fetch_usage_summary(transactional_db, auth.user_id)
     except InsufficientCreditsError as exc:

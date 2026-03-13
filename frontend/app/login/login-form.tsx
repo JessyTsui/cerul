@@ -1,9 +1,9 @@
 "use client";
 
 import type { Route } from "next";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { startTransition, useState } from "react";
+import { AuthModeSwitcher } from "@/components/auth/auth-mode-switcher";
 import { authClient } from "@/lib/auth";
 import { getAuthErrorMessage } from "@/lib/auth-shared";
 
@@ -50,12 +50,22 @@ export function LoginForm({ nextPath }: LoginFormProps) {
 
   return (
     <form
-      className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-5"
+      className="rounded-[28px] border border-[var(--border)] bg-[linear-gradient(180deg,rgba(15,23,42,0.92),rgba(15,23,42,0.78))] p-5 shadow-[0_30px_80px_rgba(2,6,23,0.35)]"
       onSubmit={(event) => void handleSubmit(event)}
     >
-      <p className="font-mono text-xs uppercase tracking-[0.1em] text-[var(--foreground-tertiary)]">
-        Sign in
-      </p>
+      <AuthModeSwitcher activeMode="login" nextPath={nextPath} />
+      <div className="mt-5">
+        <p className="font-mono text-xs uppercase tracking-[0.14em] text-[var(--foreground-tertiary)]">
+          Sign in
+        </p>
+        <h2 className="mt-2 text-2xl font-semibold text-white">
+          Return to the console
+        </h2>
+        <p className="mt-2 text-sm leading-6 text-[var(--foreground-secondary)]">
+          Use the same email/password flow as the dashboard. If you do not have an
+          account yet, switch to sign up above and create one immediately.
+        </p>
+      </div>
       <div className="mt-5 space-y-4">
         <label className="block">
           <span className="mb-2 block text-sm font-medium text-[var(--foreground-secondary)]">
@@ -99,15 +109,6 @@ export function LoginForm({ nextPath }: LoginFormProps) {
       >
         {isSubmitting ? "Signing in..." : "Continue to console"}
       </button>
-      <p className="mt-4 text-sm text-[var(--foreground-tertiary)]">
-        Need an account?{" "}
-        <Link
-          href="/signup"
-          className="font-medium text-[var(--brand-bright)] hover:underline"
-        >
-          Create one
-        </Link>
-      </p>
     </form>
   );
 }

@@ -232,6 +232,15 @@ export const dashboardRoutes = [
   { label: "Settings", href: "/dashboard/settings", meta: "05" },
 ] as const;
 
+export const adminRoutes = [
+  { label: "Overview", href: "/admin", meta: "A1" },
+  { label: "Users", href: "/admin/users", meta: "A2" },
+  { label: "Requests", href: "/admin/requests", meta: "A3" },
+  { label: "Content", href: "/admin/content", meta: "A4" },
+  { label: "Ingestion", href: "/admin/ingestion", meta: "A5" },
+  { label: "Targets", href: "/admin/settings", meta: "A6" },
+] as const;
+
 export function isPrimaryRoute(path: string): boolean {
   return primaryNavigation.some((item) => item.href === path);
 }
@@ -250,6 +259,14 @@ export function isPrimaryNavigationActive(
 export function isDashboardRouteActive(currentPath: string, href: string): boolean {
   if (href === "/dashboard") {
     return currentPath === "/dashboard";
+  }
+
+  return currentPath === href || currentPath.startsWith(`${href}/`);
+}
+
+export function isAdminRouteActive(currentPath: string, href: string): boolean {
+  if (href === "/admin") {
+    return currentPath === "/admin";
   }
 
   return currentPath === href || currentPath.startsWith(`${href}/`);

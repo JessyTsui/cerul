@@ -1,4 +1,7 @@
 export const DEFAULT_AUTH_REDIRECT_PATH = "/dashboard";
+export const AUTH_PAGE_PATHS = ["/login", "/signup"] as const;
+
+type AuthPagePath = (typeof AUTH_PAGE_PATHS)[number];
 
 export function normalizeAuthRedirectPath(
   nextPath: string | null | undefined,
@@ -18,6 +21,20 @@ export function normalizeAuthRedirectPath(
   }
 
   return trimmedPath;
+}
+
+export function buildAuthPageHref(
+  pagePath: AuthPagePath,
+  nextPath: string | null | undefined,
+): string {
+  const normalizedNextPath = normalizeAuthRedirectPath(nextPath);
+
+  if (normalizedNextPath === DEFAULT_AUTH_REDIRECT_PATH) {
+    return pagePath;
+  }
+
+  const query = new URLSearchParams({ next: normalizedNextPath });
+  return `${pagePath}?${query.toString()}`;
 }
 
 export function getAuthErrorMessage(

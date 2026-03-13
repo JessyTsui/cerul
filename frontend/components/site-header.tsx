@@ -97,11 +97,11 @@ export function SiteHeader({ currentPath }: SiteHeaderProps) {
             </svg>
             GitHub
           </a>
-          <Link href="/login" className="button-ghost focus-ring">
+          <Link href="/login" className="button-secondary focus-ring">
             Sign in
           </Link>
-          <Link href="/dashboard" className="button-primary focus-ring">
-            Console
+          <Link href="/signup" className="button-primary focus-ring">
+            Sign up
           </Link>
         </div>
       </div>

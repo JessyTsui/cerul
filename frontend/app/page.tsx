@@ -61,8 +61,8 @@ export default function HomePage() {
                   <Link href="/docs" className="button-primary">
                     Explore docs
                   </Link>
-                  <Link href="/dashboard" className="button-secondary">
-                    Open console
+                  <Link href="/signup" className="button-secondary">
+                    Create account
                   </Link>
                 </div>
                 <div className="grid gap-3 sm:grid-cols-3">

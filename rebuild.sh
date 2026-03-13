@@ -7,6 +7,7 @@ FRONTEND_DIR="${ROOT_DIR}/frontend"
 BACKEND_DIR="${ROOT_DIR}/backend"
 BACKEND_VENV="${BACKEND_DIR}/.venv"
 FAST_MODE="false"
+SKIP_MIGRATIONS="false"
 
 FRONTEND_PORT="${FRONTEND_PORT:-3000}"
 BACKEND_PORT="${BACKEND_PORT:-8000}"
@@ -17,6 +18,7 @@ Usage: ./rebuild.sh [--fast]
 
 Options:
   --fast, -f   Skip dependency reinstall and only clear generated caches before restarting
+  --skip-migrate  Skip database migrations before starting the app
   --help, -h   Show this help
 EOF
 }
@@ -25,6 +27,10 @@ while [[ $# -gt 0 ]]; do
   case "$1" in
     --fast|-f)
       FAST_MODE="true"
+      shift
+      ;;
+    --skip-migrate)
+      SKIP_MIGRATIONS="true"
       shift
       ;;
     --help|-h)
@@ -130,6 +136,26 @@ install_backend() {
   "${BACKEND_VENV}/bin/python" -m pip install -r "${BACKEND_DIR}/requirements.txt"
 }
 
+run_migrations() {
+  if [ "${SKIP_MIGRATIONS}" = "true" ]; then
+    echo "[rebuild] Skipping database migrations by request."
+    return 0
+  fi
+
+  if [ ! -x "${ROOT_DIR}/scripts/migrate-db.sh" ]; then
+    echo "[rebuild] Migration runner is missing or not executable." >&2
+    exit 1
+  fi
+
+  if [ -z "${DATABASE_URL:-}" ]; then
+    echo "[rebuild] DATABASE_URL is not set; skipping migrations."
+    return 0
+  fi
+
+  echo "[rebuild] Applying database migrations..."
+  "${ROOT_DIR}/scripts/migrate-db.sh"
+}
+
 echo "=========================================="
 if [ "${FAST_MODE}" = "true" ]; then
   echo "  Cerul - Fast Rebuild"
@@ -155,6 +181,8 @@ else
     install_backend
   fi
 fi
+
+run_migrations
 
 echo ""
 echo "[rebuild] Restarting Cerul development environment..."

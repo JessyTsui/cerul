@@ -75,6 +75,12 @@ def test_search_endpoint_records_usage_and_query_logs(database) -> None:
     assert re.fullmatch(r"req_[a-f0-9]{24}", payload["request_id"])
     assert payload["results"][0]["id"] == "pexels_28192743"
     assert database.fetchval("SELECT COUNT(*) FROM query_logs") == 1
+    latency_ms = database.fetchval(
+        "SELECT latency_ms FROM query_logs WHERE request_id = $1",
+        payload["request_id"],
+    )
+    assert latency_ms is not None
+    assert int(latency_ms) >= 0
 
 
 def test_search_endpoint_rejects_missing_auth_header() -> None:

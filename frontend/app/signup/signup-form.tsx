@@ -1,9 +1,9 @@
 "use client";
 
 import type { Route } from "next";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { startTransition, useState } from "react";
+import { AuthModeSwitcher } from "@/components/auth/auth-mode-switcher";
 import { authClient } from "@/lib/auth";
 import { getAuthErrorMessage } from "@/lib/auth-shared";
 
@@ -69,12 +69,22 @@ export function SignupForm({ nextPath }: SignupFormProps) {
 
   return (
     <form
-      className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-5"
+      className="rounded-[28px] border border-[var(--border)] bg-[linear-gradient(180deg,rgba(15,23,42,0.92),rgba(15,23,42,0.78))] p-5 shadow-[0_30px_80px_rgba(2,6,23,0.35)]"
       onSubmit={(event) => void handleSubmit(event)}
     >
-      <p className="font-mono text-xs uppercase tracking-[0.1em] text-[var(--foreground-tertiary)]">
-        Create account
-      </p>
+      <AuthModeSwitcher activeMode="signup" nextPath={nextPath} />
+      <div className="mt-5">
+        <p className="font-mono text-xs uppercase tracking-[0.14em] text-[var(--foreground-tertiary)]">
+          Create account
+        </p>
+        <h2 className="mt-2 text-2xl font-semibold text-white">
+          Create your workspace instantly
+        </h2>
+        <p className="mt-2 text-sm leading-6 text-[var(--foreground-secondary)]">
+          The current build creates the account and takes you straight into the
+          console. No email verification step is required right now.
+        </p>
+      </div>
       <div className="mt-5 grid gap-4 sm:grid-cols-2">
         <label className="block">
           <span className="mb-2 block text-sm font-medium text-[var(--foreground-secondary)]">
@@ -161,15 +171,6 @@ export function SignupForm({ nextPath }: SignupFormProps) {
       >
         {isSubmitting ? "Creating account..." : "Create workspace"}
       </button>
-      <p className="mt-4 text-sm text-[var(--foreground-tertiary)]">
-        Already have an account?{" "}
-        <Link
-          href="/login"
-          className="font-medium text-[var(--brand-bright)] hover:underline"
-        >
-          Sign in
-        </Link>
-      </p>
     </form>
   );
 }

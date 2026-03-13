@@ -105,8 +105,11 @@ scripts/      Bootstrap and utility scripts
 ## Development
 
 ```bash
-# Quick start — install deps and run both servers
+# Quick start — install deps, run database migrations, and start both servers
 ./rebuild.sh
+
+# Apply SQL migrations manually (useful for remote or one-off database updates)
+./scripts/migrate-db.sh
 
 # Or run frontend and backend separately
 pnpm --dir frontend dev
@@ -131,6 +134,8 @@ pnpm --dir frontend build
 ```bash
 python3 -m venv backend/.venv
 backend/.venv/bin/python -m pip install -r backend/requirements.txt
+# Optional: run migrations explicitly when you only need a schema update
+./scripts/migrate-db.sh
 backend/.venv/bin/python -m uvicorn app.main:app --app-dir backend --reload --host 127.0.0.1 --port 8000
 backend/.venv/bin/pytest backend/tests
 ```
@@ -154,6 +159,9 @@ Deploy the frontend on Vercel:
 1. Import the repository and set Root Directory to `frontend`
 2. Keep the included `frontend/vercel.json`
 3. Optionally set `NEXT_PUBLIC_SITE_URL` for custom domain metadata
+
+For backend or worker deployments, run `./scripts/migrate-db.sh` once against the target
+database as a release/predeploy step before rolling out code that depends on the new schema.
 
 ## Project Status
 

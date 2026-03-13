@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  buildAuthPageHref,
   DEFAULT_AUTH_REDIRECT_PATH,
   getAuthErrorMessage,
   normalizeAuthRedirectPath,
@@ -52,5 +53,15 @@ describe("getAuthErrorMessage", () => {
 
   it("returns the provided fallback for unknown values", () => {
     expect(getAuthErrorMessage(null, "Sign-in failed.")).toBe("Sign-in failed.");
+  });
+});
+
+describe("buildAuthPageHref", () => {
+  it("keeps auth page links clean for the default redirect", () => {
+    expect(buildAuthPageHref("/signup", undefined)).toBe("/signup");
+  });
+
+  it("preserves safe internal redirect targets", () => {
+    expect(buildAuthPageHref("/login", "/admin")).toBe("/login?next=%2Fadmin");
   });
 });
