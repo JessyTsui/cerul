@@ -4,6 +4,7 @@ import { AgentDemoConsole } from "@/components/agent-demo-console";
 import { SiteFooter } from "@/components/site-footer";
 import { SiteHeader } from "@/components/site-header";
 import { getSiteOrigin } from "@/lib/site-url";
+import { homeOpenGraphImages, homeTwitterImages } from "@/lib/social-metadata";
 import {
   benchmarkRows,
   capabilityHighlights,
@@ -13,13 +14,31 @@ import {
   searchTracks,
 } from "@/lib/site";
 
+const homeDescription =
+  "Video understanding search API for AI agents. Search what is shown in videos, not just what is said.";
+
+const siteOrigin = getSiteOrigin();
+
 export const metadata: Metadata = {
+  description: homeDescription,
   alternates: {
     canonical: "/",
   },
+  openGraph: {
+    title: "Cerul",
+    description: homeDescription,
+    url: siteOrigin,
+    siteName: "Cerul",
+    type: "website",
+    images: homeOpenGraphImages,
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Cerul",
+    description: homeDescription,
+    images: homeTwitterImages,
+  },
 };
-
-const siteOrigin = getSiteOrigin();
 
 const jsonLd = {
   "@context": "https://schema.org",
@@ -27,8 +46,7 @@ const jsonLd = {
   name: "Cerul",
   applicationCategory: "DeveloperApplication",
   operatingSystem: "Web",
-  description:
-    "Video understanding search API for AI agents. Search what is shown in videos, not just what is said.",
+  description: homeDescription,
   url: siteOrigin,
 };
 
