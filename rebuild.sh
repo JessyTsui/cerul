@@ -62,6 +62,26 @@ require_command() {
   fi
 }
 
+require_frontend_package_manager() {
+  if command -v corepack >/dev/null 2>&1; then
+    return 0
+  fi
+
+  require_command pnpm
+}
+
+run_frontend_pnpm() {
+  if command -v corepack >/dev/null 2>&1; then
+    (
+      cd "${FRONTEND_DIR}"
+      corepack pnpm "$@"
+    )
+    return
+  fi
+
+  pnpm --dir "${FRONTEND_DIR}" "$@"
+}
+
 kill_port() {
   local port="$1"
 
@@ -122,9 +142,9 @@ clean_backend() {
 }
 
 install_frontend() {
-  require_command pnpm
+  require_frontend_package_manager
   echo "[install] Installing frontend dependencies..."
-  pnpm --dir "${FRONTEND_DIR}" install --frozen-lockfile
+  run_frontend_pnpm install --frozen-lockfile
 }
 
 install_backend() {
