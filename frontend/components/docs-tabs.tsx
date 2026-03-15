@@ -1,11 +1,6 @@
 "use client";
 
-import {
-  useId,
-  useState,
-  type KeyboardEvent,
-  type ReactNode,
-} from "react";
+import { useId, useState, type KeyboardEvent, type ReactNode } from "react";
 
 type TabItem = {
   label: string;
@@ -23,14 +18,14 @@ export function DocsTabs({ items, defaultValue }: DocsTabsProps) {
     defaultValue && items.some((item) => item.value === defaultValue)
       ? defaultValue
       : items[0]?.value ?? "";
-  const [activeTab, setActiveTab] = useState<string>(initialTab);
+  const [activeTab, setActiveTab] = useState(initialTab);
   const tabsId = useId();
 
   if (items.length === 0) {
     return null;
   }
 
-  const handleKeyDown = (event: KeyboardEvent<HTMLButtonElement>, index: number) => {
+  function handleKeyDown(event: KeyboardEvent<HTMLButtonElement>, index: number) {
     if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) {
       return;
     }
@@ -38,26 +33,26 @@ export function DocsTabs({ items, defaultValue }: DocsTabsProps) {
     event.preventDefault();
 
     if (event.key === "Home") {
-      setActiveTab(items[0]?.value || "");
+      setActiveTab(items[0]?.value ?? "");
       return;
     }
 
     if (event.key === "End") {
-      setActiveTab(items.at(-1)?.value || items[0]?.value || "");
+      setActiveTab(items.at(-1)?.value ?? "");
       return;
     }
 
     const direction = event.key === "ArrowRight" ? 1 : -1;
     const nextIndex = (index + direction + items.length) % items.length;
-    setActiveTab(items[nextIndex]?.value || items[0]?.value || "");
-  };
+    setActiveTab(items[nextIndex]?.value ?? "");
+  }
 
   return (
-    <div className="overflow-hidden rounded-[20px] border border-[var(--border)] bg-[linear-gradient(180deg,rgba(255,255,255,0.05),rgba(255,255,255,0.02))] shadow-[var(--shadow)]">
+    <div className="overflow-hidden rounded-[20px] border border-[var(--border)] bg-[rgba(9,13,21,0.92)] shadow-[0_18px_44px_rgba(2,6,18,0.16)]">
       <div
         aria-label="Code examples"
-        className="flex gap-1 overflow-x-auto border-b border-[var(--border)] px-3 py-3 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
         role="tablist"
+        className="flex gap-2 overflow-x-auto border-b border-[var(--border)] bg-[rgba(255,255,255,0.02)] px-4 py-3 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
       >
         {items.map((item, index) => {
           const selected = activeTab === item.value;
@@ -67,33 +62,34 @@ export function DocsTabs({ items, defaultValue }: DocsTabsProps) {
           return (
             <button
               key={item.value}
-              onClick={() => setActiveTab(item.value)}
-              onKeyDown={(event) => handleKeyDown(event, index)}
-              aria-controls={panelId}
-              aria-selected={selected}
-              className={`focus-ring rounded-full px-4 py-2 text-sm font-medium transition ${
-                selected
-                  ? "bg-[var(--brand-subtle)] text-[var(--brand-bright)] shadow-[inset_0_0_0_1px_var(--border-brand)]"
-                  : "text-[var(--foreground-tertiary)] hover:bg-[var(--surface)] hover:text-[var(--foreground)]"
-              }`}
               id={tabId}
+              type="button"
               role="tab"
               tabIndex={selected ? 0 : -1}
-              type="button"
+              aria-selected={selected}
+              aria-controls={panelId}
+              onClick={() => setActiveTab(item.value)}
+              onKeyDown={(event) => handleKeyDown(event, index)}
+              className={`rounded-full border px-4 py-2 text-sm transition ${
+                selected
+                  ? "border-[var(--border-brand)] bg-[var(--brand-subtle)] text-white"
+                  : "border-transparent text-[var(--foreground-secondary)] hover:border-[var(--border)] hover:bg-[rgba(255,255,255,0.03)] hover:text-white"
+              }`}
             >
               {item.label}
             </button>
           );
         })}
       </div>
+
       <div className="p-4">
         {items.map((item) => (
           <div
-            aria-labelledby={`${tabsId}-${item.value}-tab`}
-            hidden={activeTab !== item.value}
             key={item.value}
             id={`${tabsId}-${item.value}-panel`}
             role="tabpanel"
+            aria-labelledby={`${tabsId}-${item.value}-tab`}
+            hidden={activeTab !== item.value}
           >
             {item.content}
           </div>

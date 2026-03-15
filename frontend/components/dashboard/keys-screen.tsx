@@ -79,23 +79,18 @@ export function DashboardKeysScreen() {
 
   return (
     <DashboardLayout
-      actions={
-        <>
-          <Link className="button-secondary" href="/docs/usage-api">
-            Usage guide
-          </Link>
-          <button
-            className="button-primary"
-            onClick={() => setIsDialogOpen(true)}
-            type="button"
-          >
-            Create key
-          </button>
-        </>
-      }
       currentPath="/dashboard/keys"
-      description="Create session-scoped API keys, review last-used timestamps, and revoke credentials without exposing hashes or widening auth scope."
       title="API Keys"
+      description="Manage your API credentials and permissions from one operator surface."
+      actions={
+        <button
+          type="button"
+          className="button-primary"
+          onClick={() => setIsDialogOpen(true)}
+        >
+          + Create New Key
+        </button>
+      }
     >
       <CreateKeyDialog
         isOpen={isDialogOpen}
@@ -107,8 +102,8 @@ export function DashboardKeysScreen() {
 
       {error && keys.length > 0 ? (
         <DashboardNotice
-          description={error}
           title="The key list could not be refreshed."
+          description={error}
           tone="error"
         />
       ) : null}
@@ -117,103 +112,116 @@ export function DashboardKeysScreen() {
         <DashboardSkeleton />
       ) : error && keys.length === 0 ? (
         <DashboardState
+          title="API keys could not be loaded"
+          description={error}
+          tone="error"
           action={
             <button className="button-primary" onClick={() => void loadKeys()} type="button">
               Retry request
             </button>
           }
-          description={error}
-          title="API keys could not be loaded"
-          tone="error"
-        />
-      ) : keys.length === 0 ? (
-        <DashboardState
-          action={
-            <button
-              className="button-primary"
-              onClick={() => setIsDialogOpen(true)}
-              type="button"
-            >
-              Create your first key
-            </button>
-          }
-          description="No API keys have been created for this account yet. Keys are shown once at creation time and then only their metadata remains visible."
-          title="No API keys yet"
         />
       ) : (
         <>
           <section className="grid gap-4 md:grid-cols-3">
             {[
-              {
-                label: "Total keys",
-                value: formatNumber(keys.length),
-                note: "Historical inventory, including revoked entries.",
-              },
-              {
-                label: "Active keys",
-                value: formatNumber(activeKeyCount),
-                note: "Keys still accepted by the backend dashboard API.",
-              },
-              {
-                label: "Revoked keys",
-                value: formatNumber(keys.length - activeKeyCount),
-                note: "Retained for operator visibility and audit context.",
-              },
+              { label: "Total keys", value: formatNumber(keys.length), note: "Full credential inventory" },
+              { label: "Active keys", value: formatNumber(activeKeyCount), note: "Currently accepted by the backend" },
+              { label: "Revoked keys", value: formatNumber(keys.length - activeKeyCount), note: "Retained for audit visibility" },
             ].map((item) => (
-              <article key={item.label} className="surface px-5 py-5">
-                <p className="font-mono text-xs uppercase tracking-[0.16em] text-[var(--foreground-tertiary)]">
+              <article key={item.label} className="surface-elevated rounded-[24px] px-5 py-5">
+                <p className="font-mono text-[11px] uppercase tracking-[0.16em] text-[var(--foreground-tertiary)]">
                   {item.label}
                 </p>
-                <p className="mt-3 text-3xl font-semibold text-white">{item.value}</p>
-                <p className="mt-2 text-sm leading-6 text-[var(--foreground-secondary)]">
-                  {item.note}
-                </p>
+                <p className="mt-3 text-4xl font-semibold text-white">{item.value}</p>
+                <p className="mt-2 text-sm text-[var(--foreground-secondary)]">{item.note}</p>
               </article>
             ))}
           </section>
 
-          <section className="surface-elevated overflow-hidden">
-            <div className="border-b border-[var(--border)] px-6 py-5">
-              <p className="font-mono text-xs uppercase tracking-[0.16em] text-[var(--foreground-tertiary)]">
-                Key inventory
-              </p>
-              <h2 className="mt-2 text-2xl font-semibold text-white">
-                Current dashboard credentials
-              </h2>
-            </div>
-            <div className="overflow-x-auto">
-              <table className="min-w-full text-left text-sm">
-                <thead className="bg-[var(--surface)]">
-                  <tr>
-                    <th className="px-4 py-3 font-medium text-[var(--foreground-secondary)]">
-                      Name
-                    </th>
-                    <th className="px-4 py-3 font-medium text-[var(--foreground-secondary)]">
-                      Created
-                    </th>
-                    <th className="px-4 py-3 font-medium text-[var(--foreground-secondary)]">
-                      Last used
-                    </th>
-                    <th className="px-4 py-3 font-medium text-[var(--foreground-secondary)]">
-                      Status
-                    </th>
-                    <th className="px-4 py-3 text-right font-medium text-[var(--foreground-secondary)]">
-                      Actions
-                    </th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {keys.map((apiKey) => (
-                    <ApiKeyRow
-                      apiKey={apiKey}
-                      isPending={pendingKeyId === apiKey.id}
-                      key={apiKey.id}
-                      onRevoke={handleRevoke}
-                    />
-                  ))}
-                </tbody>
-              </table>
-            </div>
+          {keys.length === 0 ? (
+            <DashboardState
+              title="No API keys yet"
+              description="Create your first key to start authenticating requests against the public API."
+              action={
+                <button
+                  className="button-primary"
+                  onClick={() => setIsDialogOpen(true)}
+                  type="button"
+                >
+                  Create your first key
+                </button>
+              }
+            />
+          ) : (
+            <section className="surface-elevated overflow-hidden rounded-[28px]">
+              <div className="flex items-center justify-between border-b border-[var(--border)] px-6 py-5">
+                <div>
+                  <h2 className="text-2xl font-semibold text-white">Key Inventory</h2>
+                  <p className="mt-1 text-sm text-[var(--foreground-secondary)]">
+                    Manage your API credentials and permissions
+                  </p>
+                </div>
+              </div>
+              <div className="overflow-x-auto">
+                <table className="min-w-full text-left text-sm">
+                  <thead className="bg-[rgba(255,255,255,0.03)] text-white">
+                    <tr>
+                      <th className="px-4 py-4 font-medium">Key Name</th>
+                      <th className="px-4 py-4 font-medium">Key Preview</th>
+                      <th className="px-4 py-4 font-medium">Created</th>
+                      <th className="px-4 py-4 font-medium">Last Used</th>
+                      <th className="px-4 py-4 font-medium">Permissions</th>
+                      <th className="px-4 py-4 font-medium">Status</th>
+                      <th className="px-4 py-4 text-right font-medium">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {keys.map((apiKey) => (
+                      <ApiKeyRow
+                        key={apiKey.id}
+                        apiKey={apiKey}
+                        isPending={pendingKeyId === apiKey.id}
+                        onRevoke={handleRevoke}
+                      />
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </section>
+          )}
+
+          <section className="grid gap-5 xl:grid-cols-[1.2fr_0.8fr]">
+            <article className="surface-elevated rounded-[28px] px-5 py-5">
+              <div className="flex items-start gap-4">
+                <div className="flex h-12 w-12 items-center justify-center rounded-[18px] border border-[var(--border-brand)] bg-[var(--brand-subtle)] text-[var(--brand-bright)]">
+                  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+                    <path d="m9 12 2 2 4-4" />
+                  </svg>
+                </div>
+                <div>
+                  <h2 className="text-2xl font-semibold text-white">Security Notice</h2>
+                  <p className="mt-3 text-base leading-8 text-[var(--foreground-secondary)]">
+                    For enhanced security, regularly rotate your API keys. Avoid sharing
+                    secrets in plain text and generate fresh credentials whenever an
+                    integration surface changes.
+                  </p>
+                </div>
+              </div>
+            </article>
+
+            <article className="surface-elevated rounded-[28px] px-5 py-5">
+              <h2 className="text-2xl font-semibold text-white">Quick Actions</h2>
+              <div className="mt-5 space-y-3">
+                <Link href="/docs/api-reference" className="button-secondary w-full">
+                  API Key Documentation
+                </Link>
+                <Link href="/docs/usage-api" className="button-secondary w-full">
+                  Permission Guide
+                </Link>
+              </div>
+            </article>
           </section>
         </>
       )}

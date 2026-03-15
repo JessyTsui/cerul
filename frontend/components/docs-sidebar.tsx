@@ -3,114 +3,83 @@
 import type { Route } from "next";
 import Link from "next/link";
 import { useId, useState } from "react";
-import { getDocsIndexCards } from "@/lib/docs";
+import { docsSidebarGroups } from "@/lib/docs";
 
 type DocsSidebarProps = {
   currentSlug?: string;
+  currentPath?: string;
 };
 
-export function DocsSidebar({ currentSlug }: DocsSidebarProps) {
-  const guides = getDocsIndexCards();
+export function DocsSidebar({ currentSlug, currentPath }: DocsSidebarProps) {
   const [mobileOpen, setMobileOpen] = useState(false);
   const panelId = useId();
-  const currentGuide = guides.find((guide) => guide.slug === currentSlug);
+  const activeKey = currentSlug ?? currentPath ?? "/docs";
 
   return (
     <>
-      {/* Mobile toggle */}
       <button
         aria-controls={panelId}
         aria-expanded={mobileOpen}
         type="button"
         onClick={() => setMobileOpen(!mobileOpen)}
-        className="focus-ring mb-4 flex w-full items-center justify-between gap-3 rounded-xl border border-[var(--border)] bg-[var(--surface)] px-4 py-3 text-left text-sm font-medium text-[var(--foreground-secondary)] lg:hidden"
+        className="mb-4 flex w-full items-center justify-between rounded-[16px] border border-[var(--border)] bg-[rgba(255,255,255,0.03)] px-4 py-3 text-left text-sm text-[var(--foreground-secondary)] lg:hidden"
       >
-        <span className="flex items-center gap-2">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-            <line x1="4" y1="6" x2="20" y2="6" />
-            <line x1="4" y1="12" x2="20" y2="12" />
-            <line x1="4" y1="18" x2="20" y2="18" />
-          </svg>
-          Documentation menu
-        </span>
-        <span className="text-xs text-[var(--foreground-tertiary)]">
-          {currentGuide?.title || "Overview"}
+        <span>Documentation menu</span>
+        <span className="font-mono text-[11px] uppercase tracking-[0.16em] text-[var(--brand-bright)]">
+          {mobileOpen ? "Close" : "Open"}
         </span>
       </button>
 
-      <aside className={`${mobileOpen ? "block" : "hidden"} lg:block`} id={panelId}>
-        <nav className="surface-elevated sticky top-24 max-h-[calc(100vh-8rem)] overflow-y-auto p-4">
-          <div className="mb-4 border-b border-[var(--border)] pb-4">
-            <p className="eyebrow text-[11px]">Documentation</p>
-            <p className="mt-2 text-sm text-[var(--foreground-secondary)]">
-              {guides.length} guides plus API overview
+      <aside id={panelId} className={`${mobileOpen ? "block" : "hidden"} lg:block`}>
+        <div className="sticky top-24 overflow-hidden rounded-[24px] border border-[var(--border)] bg-[rgba(9,13,21,0.92)] p-4 shadow-[0_22px_60px_rgba(2,6,18,0.22)]">
+          <div className="border-b border-[var(--border)] pb-4">
+            <p className="font-mono text-[11px] uppercase tracking-[0.18em] text-[var(--brand-bright)]">
+              Documentation
+            </p>
+            <p className="mt-3 text-lg font-semibold text-white">Cerul API</p>
+            <p className="mt-2 text-sm leading-6 text-[var(--foreground-secondary)]">
+              Quickstart, API guides, and platform notes for developers.
             </p>
           </div>
 
-          {/* Overview link */}
-          <Link
-            href="/docs"
-            className={`focus-ring mb-1 flex items-center justify-between rounded-lg px-3 py-2 text-sm font-medium transition ${
-              !currentSlug
-                ? "bg-[var(--brand-subtle)] text-[var(--brand-bright)]"
-                : "text-[var(--foreground-secondary)] hover:bg-[var(--surface)] hover:text-[var(--foreground)]"
-            }`}
-            onClick={() => setMobileOpen(false)}
-          >
-            <span>Overview</span>
-            <span className="font-mono text-xs text-[var(--foreground-tertiary)]">00</span>
-          </Link>
+          <div className="mt-5 space-y-5">
+            {docsSidebarGroups.map((group) => (
+              <section key={group.title}>
+                <h3 className="px-3 font-mono text-[11px] uppercase tracking-[0.18em] text-[var(--foreground-tertiary)]">
+                  {group.title}
+                </h3>
+                <div className="mt-3 space-y-1">
+                  {group.items.map((item) => {
+                    const isActive =
+                      (item.slug && item.slug === activeKey)
+                      || item.href === activeKey
+                      || item.href === currentPath;
 
-          {/* Guides section */}
-          <div className="mt-4">
-            <p className="mb-2 px-3 font-mono text-xs uppercase tracking-[0.1em] text-[var(--foreground-tertiary)]">
-              Guides
-            </p>
-            <div className="space-y-1">
-              {guides.map((guide, index) => {
-                const active = currentSlug === guide.slug;
-
-                return (
-                  <Link
-                    key={guide.slug}
-                    href={guide.href as Route}
-                    className={`focus-ring flex items-center justify-between rounded-lg px-3 py-2 text-sm transition ${
-                      active
-                        ? "bg-[var(--brand-subtle)] text-[var(--brand-bright)]"
-                        : "text-[var(--foreground-secondary)] hover:bg-[var(--surface)] hover:text-[var(--foreground)]"
-                    }`}
-                    onClick={() => setMobileOpen(false)}
-                  >
-                    <span className="truncate">{guide.title}</span>
-                    <span className="ml-2 font-mono text-xs text-[var(--foreground-tertiary)]">
-                      {String(index + 1).padStart(2, "0")}
-                    </span>
-                  </Link>
-                );
-              })}
-            </div>
+                    return (
+                      <Link
+                        key={item.href}
+                        href={item.href as Route}
+                        onClick={() => setMobileOpen(false)}
+                        className={`block rounded-[14px] border-l-2 px-3 py-3 transition ${
+                          isActive
+                            ? "border-l-[var(--brand)] bg-[rgba(34,211,238,0.08)] text-white"
+                            : "border-l-transparent text-[var(--foreground-secondary)] hover:bg-[rgba(255,255,255,0.03)] hover:text-white"
+                        }`}
+                      >
+                        <p className="text-sm font-medium">{item.title}</p>
+                        {item.description ? (
+                          <p className="mt-1 text-xs leading-5 text-[var(--foreground-tertiary)]">
+                            {item.description}
+                          </p>
+                        ) : null}
+                      </Link>
+                    );
+                  })}
+                </div>
+              </section>
+            ))}
           </div>
-
-          {/* API Reference */}
-          <div className="mt-4">
-            <p className="mb-2 px-3 font-mono text-xs uppercase tracking-[0.1em] text-[var(--foreground-tertiary)]">
-              Reference
-            </p>
-            <a
-              href="https://github.com/JessyTsui/cerul"
-              target="_blank"
-              rel="noreferrer"
-              className="focus-ring flex items-center justify-between rounded-lg px-3 py-2 text-sm text-[var(--foreground-secondary)] transition hover:bg-[var(--surface)] hover:text-[var(--foreground)]"
-            >
-              <span>GitHub Repository</span>
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
-                <polyline points="15 3 21 3 21 9" />
-                <line x1="10" y1="14" x2="21" y2="3" />
-              </svg>
-            </a>
-          </div>
-        </nav>
+        </div>
       </aside>
     </>
   );

@@ -19,7 +19,6 @@ describe("canonicalUrl", () => {
 describe("isPrimaryRoute", () => {
   it("returns true for known primary routes", () => {
     expect(isPrimaryRoute("/")).toBe(true);
-    expect(isPrimaryRoute("/search")).toBe(true);
     expect(isPrimaryRoute("/docs")).toBe(true);
     expect(isPrimaryRoute("/pricing")).toBe(true);
   });
@@ -31,7 +30,6 @@ describe("isPrimaryRoute", () => {
 
 describe("isPrimaryNavigationActive", () => {
   it("matches nested paths for non-root sections", () => {
-    expect(isPrimaryNavigationActive("/search", "/search")).toBe(true);
     expect(isPrimaryNavigationActive("/docs/search-api", "/docs")).toBe(true);
     expect(isPrimaryNavigationActive("/pricing", "/pricing")).toBe(true);
   });
@@ -43,8 +41,8 @@ describe("isPrimaryNavigationActive", () => {
 });
 
 describe("primaryNavigation", () => {
-  it("includes the public search demo entry", () => {
-    expect(primaryNavigation.some((item) => item.href === "/search")).toBe(true);
+  it("keeps docs in the public navigation", () => {
+    expect(primaryNavigation.some((item) => item.href === "/docs")).toBe(true);
   });
 });
 

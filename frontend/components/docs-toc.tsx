@@ -10,16 +10,16 @@ export type TocItem = {
 
 type DocsTocProps = {
   items: TocItem[];
+  title?: string;
+  subtitle?: string;
 };
 
-export function DocsToc({ items }: DocsTocProps) {
-  const [activeId, setActiveId] = useState<string>(() => {
-    if (typeof window !== "undefined") {
-      return window.location.hash.slice(1) || items[0]?.id || "";
-    }
-
-    return items[0]?.id || "";
-  });
+export function DocsToc({
+  items,
+  title = "On this page",
+  subtitle = "Table of contents",
+}: DocsTocProps) {
+  const [activeId, setActiveId] = useState<string>(() => items[0]?.id ?? "");
 
   useEffect(() => {
     if (items.length === 0) {
@@ -28,15 +28,15 @@ export function DocsToc({ items }: DocsTocProps) {
 
     const observer = new IntersectionObserver(
       (entries) => {
-        const visibleEntries = entries
+        const visibleEntry = entries
           .filter((entry) => entry.isIntersecting)
-          .sort((entryA, entryB) => entryA.boundingClientRect.top - entryB.boundingClientRect.top);
+          .sort((entryA, entryB) => entryA.boundingClientRect.top - entryB.boundingClientRect.top)[0];
 
-        if (visibleEntries[0]) {
-          setActiveId(visibleEntries[0].target.id);
+        if (visibleEntry) {
+          setActiveId(visibleEntry.target.id);
         }
       },
-      { rootMargin: "-96px 0px -70% 0px" }
+      { rootMargin: "-120px 0px -68% 0px" },
     );
 
     items.forEach((item) => {
@@ -46,19 +46,7 @@ export function DocsToc({ items }: DocsTocProps) {
       }
     });
 
-    const handleHashChange = () => {
-      const hash = window.location.hash.slice(1);
-      if (hash) {
-        setActiveId(hash);
-      }
-    };
-
-    window.addEventListener("hashchange", handleHashChange);
-
-    return () => {
-      observer.disconnect();
-      window.removeEventListener("hashchange", handleHashChange);
-    };
+    return () => observer.disconnect();
   }, [items]);
 
   if (items.length === 0) {
@@ -66,36 +54,29 @@ export function DocsToc({ items }: DocsTocProps) {
   }
 
   return (
-    <nav
-      aria-label="Page table of contents"
-      className="surface-elevated sticky top-24 max-h-[calc(100vh-8rem)] overflow-y-auto p-4"
-    >
-      <div className="mb-4 border-b border-[var(--border)] pb-4">
-        <p className="font-mono text-xs uppercase tracking-[0.1em] text-[var(--foreground-tertiary)]">
-          On this page
-        </p>
-        <p className="mt-2 text-sm text-[var(--foreground-secondary)]">
-          {items.length} sections
-        </p>
-      </div>
-      <ul className="space-y-1">
+    <div className="sticky top-24 rounded-[24px] border border-[var(--border)] bg-[rgba(9,13,21,0.92)] p-4 shadow-[0_22px_60px_rgba(2,6,18,0.18)]">
+      <p className="font-mono text-[11px] uppercase tracking-[0.18em] text-[var(--brand-bright)]">
+        {title}
+      </p>
+      <p className="mt-3 text-sm leading-6 text-[var(--foreground-secondary)]">{subtitle}</p>
+      <ul className="mt-4 space-y-1">
         {items.map((item) => (
           <li key={item.id}>
             <a
-              aria-current={activeId === item.id ? "location" : undefined}
               href={`#${item.id}`}
-              className={`focus-ring block rounded-lg px-3 py-1.5 text-sm transition-colors ${
+              aria-current={activeId === item.id ? "location" : undefined}
+              className={`block rounded-[14px] border-l-2 px-3 py-2 text-sm transition ${
                 activeId === item.id
-                  ? "bg-[var(--brand-subtle)] text-[var(--brand-bright)] shadow-[inset_0_0_0_1px_var(--border-brand)]"
-                  : "text-[var(--foreground-tertiary)] hover:bg-[var(--surface)] hover:text-[var(--foreground)]"
+                  ? "border-l-[var(--brand)] bg-[rgba(34,211,238,0.08)] text-white"
+                  : "border-l-transparent text-[var(--foreground-secondary)] hover:bg-[rgba(255,255,255,0.03)] hover:text-white"
               }`}
-              style={{ paddingLeft: `${(item.level - 1) * 12 + 12}px` }}
+              style={{ paddingLeft: `${item.level === 1 ? 12 : 20}px` }}
             >
               {item.text}
             </a>
           </li>
         ))}
       </ul>
-    </nav>
+    </div>
   );
 }

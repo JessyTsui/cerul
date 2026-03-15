@@ -6,7 +6,7 @@ import { pricingFaqs, pricingTiers } from "@/lib/site";
 
 export const metadata: Metadata = {
   title: "Pricing",
-  description: "Cerul pricing for agents, demos, and production search workflows.",
+  description: "Cerul pricing for evaluation, production API usage, and enterprise deployment.",
   alternates: {
     canonical: "/pricing",
   },
@@ -23,13 +23,12 @@ export default function PricingPage() {
             <div className="space-y-4">
               <span className="label label-brand">Pricing</span>
               <h1 className="text-4xl font-bold tracking-tight text-white sm:text-5xl">
-                Credits that map cleanly to product value.
+                One simple credit model from first request to production.
               </h1>
             </div>
             <p className="max-w-lg text-lg text-[var(--foreground-secondary)]">
-              Cerul prices the same public API surface used by direct clients, docs,
-              and installable skills. Start with evaluation credits, then scale into
-              predictable operator workflows.
+              Start with a public API key, pay with credits, and scale into higher
+              limits only when your usage becomes operational.
             </p>
           </div>
         </section>

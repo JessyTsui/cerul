@@ -32,6 +32,14 @@ require_command() {
   fi
 }
 
+require_frontend_package_manager() {
+  if command -v corepack >/dev/null 2>&1; then
+    return 0
+  fi
+
+  require_command pnpm
+}
+
 cleanup() {
   if [ -n "${FRONTEND_PID:-}" ] && kill -0 "${FRONTEND_PID}" >/dev/null 2>&1; then
     kill "${FRONTEND_PID}" >/dev/null 2>&1 || true
@@ -60,6 +68,11 @@ start_backend() {
 
 start_frontend() {
   (
+    if command -v corepack >/dev/null 2>&1; then
+      cd "${FRONTEND_DIR}"
+      exec corepack pnpm dev --hostname "${FRONTEND_HOST}" --port "${FRONTEND_PORT}"
+    fi
+
     cd "${ROOT_DIR}"
     exec pnpm --dir frontend dev --hostname "${FRONTEND_HOST}" --port "${FRONTEND_PORT}"
   ) &
@@ -83,7 +96,7 @@ watch_processes() {
 }
 
 load_env
-require_command pnpm
+require_frontend_package_manager
 require_command python3
 
 echo "=========================================="

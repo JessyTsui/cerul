@@ -2,9 +2,9 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { AIToolbar } from "@/components/ai-toolbar";
+import { CodeBlock } from "@/components/code-block";
 import { DocsSidebar } from "@/components/docs-sidebar";
 import { DocsToc, type TocItem } from "@/components/docs-toc";
-import { CodeBlock } from "@/components/code-block";
 import { SiteHeader } from "@/components/site-header";
 import {
   getDocBySlug,
@@ -27,9 +27,7 @@ export async function generateMetadata({
   const page = getDocBySlug(slug);
 
   if (!page) {
-    return {
-      title: "Docs",
-    };
+    return { title: "Docs" };
   }
 
   return {
@@ -50,7 +48,7 @@ export default async function DocDetailPage({ params }: DocPageProps) {
   }
 
   const tocItems: TocItem[] = [
-    { id: "intro", text: page.title, level: 1 },
+    { id: "overview", text: "Overview", level: 1 },
     ...page.sections.map((section, index) => ({
       id: `section-${index + 1}`,
       text: section.title,
@@ -59,143 +57,147 @@ export default async function DocDetailPage({ params }: DocPageProps) {
   ];
 
   return (
-    <div className="mx-auto flex min-h-screen max-w-[1400px] flex-col px-4 pb-8 pt-4 sm:px-6 lg:px-8">
-      <SiteHeader currentPath={`/docs/${slug}`} />
+    <div className="min-h-screen px-4 pb-8 pt-4 sm:px-6 lg:px-8">
+      <div className="mx-auto max-w-[1480px]">
+        <SiteHeader currentPath={`/docs/${slug}`} />
 
-      <div className="mt-8 grid gap-8 lg:grid-cols-[280px_1fr_200px]">
-        {/* Left sidebar */}
-        <DocsSidebar currentSlug={slug} />
+        <div className="mt-8 grid gap-6 lg:grid-cols-[260px_minmax(0,1fr)_260px]">
+          <DocsSidebar currentSlug={slug} />
 
-        {/* Main content */}
-        <main className="min-w-0" data-ai-copy-root="true">
-          {/* Header */}
-          <div id="intro" className="mb-10 scroll-mt-24">
-            <section className="surface-elevated relative overflow-hidden px-6 py-7 sm:px-8">
-              <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-[var(--brand)] to-transparent opacity-80" />
-              <div className="grid gap-8 xl:grid-cols-[minmax(0,1fr)_240px]">
-                <div>
-                  <p className="eyebrow">{page.kicker}</p>
-                  <h1 className="mt-3 text-4xl font-bold tracking-tight text-white sm:text-5xl">
-                    {page.title}
-                  </h1>
-                  <p className="mt-4 max-w-2xl text-lg leading-8 text-[var(--foreground-secondary)]">
-                    {page.summary}
+          <main
+            data-ai-copy-root="true"
+            className="min-w-0 rounded-[24px] border border-[var(--border)] bg-[rgba(9,13,21,0.92)] px-6 py-6 shadow-[0_22px_60px_rgba(2,6,18,0.16)] sm:px-8"
+          >
+            <section id="overview" className="border-b border-[var(--border)] pb-8">
+              <p className="font-mono text-[11px] uppercase tracking-[0.18em] text-[var(--brand-bright)]">
+                {page.kicker}
+              </p>
+              <div className="mt-4 flex flex-wrap items-center gap-2 text-sm text-[var(--foreground-secondary)]">
+                <Link href="/docs" className="transition hover:text-white">
+                  Documentation
+                </Link>
+                <span>/</span>
+                <span>{page.kicker}</span>
+                <span>/</span>
+                <span className="text-white">{page.title}</span>
+              </div>
+              <h1 className="mt-4 text-4xl font-semibold tracking-[-0.05em] text-white sm:text-5xl">
+                {page.title}
+              </h1>
+              <div className="mt-4 flex flex-wrap items-center gap-3 text-sm text-[var(--foreground-secondary)]">
+                <span>Last updated: October 26, 2024</span>
+                <span>•</span>
+                <span>{page.readingTime}</span>
+              </div>
+              <p className="mt-5 max-w-3xl text-base leading-8 text-[var(--foreground-secondary)]">
+                {page.summary}
+              </p>
+
+              <div className="mt-6 grid gap-4 lg:grid-cols-[1.1fr_0.9fr]">
+                <div className="rounded-[20px] border border-[var(--border)] bg-[rgba(255,255,255,0.02)] px-5 py-5">
+                  <p className="font-mono text-[11px] uppercase tracking-[0.16em] text-[var(--foreground-tertiary)]">
+                    What this page covers
                   </p>
-
-                  <div className="mt-5 flex flex-wrap items-center gap-3">
-                    <span className="rounded-full border border-[var(--border)] bg-[var(--surface)] px-3 py-1 font-mono text-xs text-[var(--foreground-tertiary)]">
-                      {page.readingTime}
-                    </span>
-                    <span className="rounded-full border border-[var(--border)] bg-[var(--surface)] px-3 py-1 font-mono text-xs text-[var(--foreground-tertiary)]">
-                      {page.sections.length} sections
-                    </span>
-                    <Link href="/docs" className="text-sm text-[var(--brand-bright)] hover:underline">
-                      ← Back to docs
-                    </Link>
-                  </div>
-
-                  <div className="mt-6">
-                    <AIToolbar
-                      copyRootSelector="[data-ai-copy-root='true']"
-                      pageUrl={`/docs/${slug}`}
-                      pageTitle={page.title}
-                    />
-                  </div>
+                  <p className="mt-3 text-sm leading-7 text-[var(--foreground-secondary)]">
+                    Each section below maps to one concrete part of the integration path so you can
+                    skim fast and drop into code only where necessary.
+                  </p>
                 </div>
-
-                <div className="grid gap-3 sm:grid-cols-3 xl:grid-cols-1">
-                  <div className="rounded-[18px] border border-[var(--border)] bg-[var(--surface)] px-4 py-4">
-                    <p className="font-mono text-[11px] uppercase tracking-[0.16em] text-[var(--brand-bright)]">
-                      Guide
-                    </p>
-                    <p className="mt-3 text-xl font-semibold text-white">{page.kicker}</p>
-                    <p className="mt-2 text-sm leading-6 text-[var(--foreground-secondary)]">
-                      Built to be operator-readable before you wire in automation.
-                    </p>
-                  </div>
-                  <div className="rounded-[18px] border border-[var(--border)] bg-[var(--surface)] px-4 py-4">
-                    <p className="font-mono text-[11px] uppercase tracking-[0.16em] text-[var(--brand-bright)]">
-                      Read time
-                    </p>
-                    <p className="mt-3 text-xl font-semibold text-white">{page.readingTime}</p>
-                    <p className="mt-2 text-sm leading-6 text-[var(--foreground-secondary)]">
-                      Quick enough for onboarding, specific enough for implementation.
-                    </p>
-                  </div>
-                  <div className="rounded-[18px] border border-[var(--border)] bg-[var(--surface)] px-4 py-4">
-                    <p className="font-mono text-[11px] uppercase tracking-[0.16em] text-[var(--brand-bright)]">
-                      Focus
-                    </p>
-                    <p className="mt-3 text-xl font-semibold text-white">Practical API use</p>
-                    <p className="mt-2 text-sm leading-6 text-[var(--foreground-secondary)]">
-                      Examples, request shape, and the minimum context needed to ship.
-                    </p>
+                <div className="rounded-[20px] border border-[var(--border-brand)] bg-[rgba(34,211,238,0.08)] px-5 py-5">
+                  <p className="font-mono text-[11px] uppercase tracking-[0.16em] text-[var(--brand-bright)]">
+                    Quick action
+                  </p>
+                  <div className="mt-3 flex flex-wrap gap-3">
+                    <Link href="/docs" className="button-secondary">
+                      Back to docs
+                    </Link>
+                    <Link href="/docs/api-reference" className="button-secondary">
+                      API Reference
+                    </Link>
+                    <Link href="/docs/quickstart" className="button-secondary">
+                      Quickstart
+                    </Link>
                   </div>
                 </div>
               </div>
+
+              <div className="mt-6">
+                <AIToolbar
+                  copyRootSelector="[data-ai-copy-root='true']"
+                  pageUrl={`/docs/${slug}`}
+                  pageTitle={page.title}
+                />
+              </div>
             </section>
-          </div>
 
-          {/* Sections */}
-          <div className="space-y-12">
-            {page.sections.map((section, index) => (
-              <section
-                key={section.title}
-                id={`section-${index + 1}`}
-                className="scroll-mt-24 rounded-[24px] border border-[var(--border)] bg-[linear-gradient(180deg,rgba(255,255,255,0.04),rgba(255,255,255,0.02))] p-6 sm:p-8"
-              >
-                <p className="font-mono text-xs uppercase tracking-[0.1em] text-[var(--brand-bright)] mb-2">
-                  {String(index + 1).padStart(2, "0")}
-                </p>
-                <h2 className="text-2xl font-bold text-white">{section.title}</h2>
-                <p className="mt-3 max-w-3xl text-[var(--foreground-secondary)]">{section.body}</p>
-
-                {section.bullets?.length ? (
-                  <ul className="mt-5 grid gap-3 sm:grid-cols-2">
-                    {section.bullets.map((bullet) => (
-                      <li
-                        key={bullet}
-                        className="flex items-start gap-2 rounded-2xl border border-[var(--border)] bg-[var(--surface)] px-4 py-3 text-sm text-[var(--foreground-secondary)]"
-                      >
-                        <span className="mt-1.5 h-1.5 w-1.5 flex-shrink-0 rounded-full bg-[var(--brand)]" />
-                        {bullet}
-                      </li>
-                    ))}
-                  </ul>
-                ) : null}
-
-                {section.code ? (
-                  <div className="mt-6">
-                    <CodeBlock
-                      code={section.code}
-                      filename={section.filename || "example.sh"}
-                      language={section.language || "bash"}
-                    />
+            <div className="space-y-10 pt-8">
+              {page.sections.map((section, index) => (
+                <section
+                  key={section.title}
+                  id={`section-${index + 1}`}
+                  className="scroll-mt-28 border-b border-[rgba(255,255,255,0.06)] pb-10 last:border-b-0 last:pb-0"
+                >
+                  <div className="max-w-3xl">
+                    <p className="font-mono text-[11px] uppercase tracking-[0.16em] text-[var(--foreground-tertiary)]">
+                      Section {String(index + 1).padStart(2, "0")}
+                    </p>
+                    <h2 className="mt-3 text-3xl font-semibold text-white">{section.title}</h2>
+                    <p className="mt-4 text-base leading-8 text-[var(--foreground-secondary)]">
+                      {section.body}
+                    </p>
                   </div>
-                ) : null}
-              </section>
-            ))}
-          </div>
 
-          {/* Next steps */}
-          <div className="surface-gradient mt-12 p-6">
-            <h3 className="text-lg font-semibold text-white">Continue Reading</h3>
-            <p className="mt-2 text-[var(--foreground-secondary)]">
-              Explore more guides or try the API in the dashboard.
-            </p>
-            <div className="mt-4 flex flex-wrap gap-3">
-              <Link href="/docs" className="button-secondary">
-                All Guides
-              </Link>
-              <Link href="/dashboard" className="button-primary">
-                Open Dashboard
-              </Link>
+                  <div className={`mt-6 grid gap-6 ${section.code ? "xl:grid-cols-[minmax(0,1fr)_480px]" : "xl:grid-cols-[minmax(0,1fr)_320px]"}`}>
+                    <div>
+                      {section.bullets?.length ? (
+                        <div className="grid gap-3">
+                          {section.bullets.map((bullet) => (
+                            <div
+                              key={bullet}
+                              className="rounded-[18px] border border-[var(--border)] bg-[rgba(255,255,255,0.02)] px-4 py-4"
+                            >
+                              <p className="text-sm leading-7 text-white">{bullet}</p>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="rounded-[20px] border border-[var(--border)] bg-[rgba(255,255,255,0.02)] px-5 py-5">
+                          <p className="font-mono text-[11px] uppercase tracking-[0.16em] text-[var(--foreground-tertiary)]">
+                            Implementation note
+                          </p>
+                          <p className="mt-3 text-sm leading-7 text-[var(--foreground-secondary)]">
+                            This section is narrative-only. Use the adjacent example or the API
+                            reference for exact payloads and response fields.
+                          </p>
+                        </div>
+                      )}
+                    </div>
+
+                    <div>
+                      {section.code ? (
+                        <CodeBlock
+                          code={section.code}
+                          filename={section.filename || "example.sh"}
+                          language={section.language || "bash"}
+                        />
+                      ) : (
+                        <div className="rounded-[20px] border border-[var(--border-brand)] bg-[rgba(34,211,238,0.08)] px-5 py-5">
+                          <p className="font-mono text-[11px] uppercase tracking-[0.16em] text-[var(--brand-bright)]">
+                            Practical takeaway
+                          </p>
+                          <p className="mt-3 text-sm leading-7 text-white">
+                            If you are implementing this page’s concepts in code, start with the
+                            quickstart request shape and then refine with the bullets on the left.
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </section>
+              ))}
             </div>
-          </div>
-        </main>
+          </main>
 
-        {/* Right TOC */}
-        <div className="hidden lg:block">
           <DocsToc items={tocItems} />
         </div>
       </div>

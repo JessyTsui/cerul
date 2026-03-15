@@ -24,29 +24,32 @@ export function DocsCard({
       <div className="flex items-start justify-between gap-4">
         <div className="space-y-3">
           {icon ? (
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-[var(--border-brand)] bg-[var(--brand-subtle)] text-[var(--brand-bright)]">
+            <div className="flex h-11 w-11 items-center justify-center rounded-[16px] border border-[var(--border-brand)] bg-[var(--brand-subtle)] text-[var(--brand-bright)]">
               {icon}
             </div>
           ) : null}
           <div>
-            {kicker ? <p className="eyebrow text-[11px]">{kicker}</p> : null}
-            <h3 className="mt-2 font-semibold text-white">{title}</h3>
+            {kicker ? (
+              <p className="font-mono text-[11px] uppercase tracking-[0.18em] text-[var(--foreground-tertiary)]">
+                {kicker}
+              </p>
+            ) : null}
+            <h3 className="mt-2 text-2xl font-semibold text-white">{title}</h3>
           </div>
         </div>
-        <span className="rounded-full border border-[var(--border)] bg-[var(--surface)] px-2 py-1 text-xs text-[var(--foreground-tertiary)] transition group-hover:border-[var(--border-brand)] group-hover:text-[var(--brand-bright)]">
-          →
+        <span className="rounded-full border border-[var(--border)] bg-[rgba(255,255,255,0.03)] px-3 py-1 text-xs text-[var(--foreground-secondary)] transition group-hover:border-[var(--border-brand)] group-hover:text-[var(--brand-bright)]">
+          Open
         </span>
       </div>
-      <p className="mt-4 text-sm leading-6 text-[var(--foreground-secondary)]">{description}</p>
-      <div className="mt-5 flex items-center justify-between gap-3 text-xs text-[var(--foreground-tertiary)]">
-        <span>{readingTime || "Guide"}</span>
-        {href ? <span className="text-[var(--brand-bright)]">Open guide</span> : null}
+      <p className="mt-4 text-sm leading-7 text-[var(--foreground-secondary)]">{description}</p>
+      <div className="mt-6 text-xs text-[var(--foreground-tertiary)]">
+        {readingTime || "Guide"}
       </div>
     </>
   );
 
   const className =
-    "group block rounded-[20px] border border-[var(--border)] bg-[linear-gradient(180deg,rgba(255,255,255,0.05),rgba(255,255,255,0.02))] p-5 transition duration-200 hover:-translate-y-0.5 hover:border-[var(--border-brand)] hover:bg-[var(--surface-hover)] hover:shadow-[0_18px_40px_rgba(2,6,23,0.35)]";
+    "group block rounded-[26px] border border-[var(--border-brand)] bg-[linear-gradient(180deg,rgba(17,24,39,0.66),rgba(10,16,28,0.92))] p-6 shadow-[0_20px_60px_rgba(2,6,18,0.26)] transition hover:-translate-y-1 hover:shadow-[0_28px_80px_rgba(2,6,18,0.36)]";
 
   if (href) {
     return (
@@ -64,9 +67,5 @@ type DocsCardsProps = {
 };
 
 export function DocsCards({ children }: DocsCardsProps) {
-  return (
-    <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-      {children}
-    </div>
-  );
+  return <div className="grid gap-5 md:grid-cols-2">{children}</div>;
 }

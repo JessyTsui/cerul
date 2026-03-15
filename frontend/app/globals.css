@@ -1,51 +1,44 @@
 @import "tailwindcss";
 
 :root {
-  /* Core colors - Dark theme */
-  --background: #0a0a0f;
-  --background-elevated: #111118;
-  --background-sunken: #050508;
+  --background: #080b12;
+  --background-elevated: #111723;
+  --background-sunken: #05070c;
 
   --foreground: #fafafa;
-  --foreground-secondary: #a1a1aa;
-  --foreground-tertiary: #71717a;
+  --foreground-secondary: #b4bed2;
+  --foreground-tertiary: #7f8aa2;
 
-  /* Brand colors - Electric blue to cyan gradient */
-  --brand: #3b82f6;
-  --brand-bright: #60a5fa;
-  --brand-glow: rgba(59, 130, 246, 0.4);
-  --brand-subtle: rgba(59, 130, 246, 0.1);
+  --brand: #22d3ee;
+  --brand-bright: #67e8f9;
+  --brand-deep: #0ea5e9;
+  --brand-glow: rgba(34, 211, 238, 0.28);
+  --brand-subtle: rgba(34, 211, 238, 0.12);
 
-  /* Accent - Warm orange for CTAs */
   --accent: #f97316;
   --accent-bright: #fb923c;
-  --accent-glow: rgba(249, 115, 22, 0.4);
+  --accent-glow: rgba(249, 115, 22, 0.22);
   --accent-subtle: rgba(249, 115, 22, 0.1);
 
-  /* Semantic colors */
   --success: #22c55e;
   --warning: #eab308;
   --error: #ef4444;
 
-  /* Surface colors */
-  --surface: rgba(255, 255, 255, 0.03);
-  --surface-hover: rgba(255, 255, 255, 0.06);
-  --surface-active: rgba(255, 255, 255, 0.1);
-  --surface-elevated: rgba(255, 255, 255, 0.05);
+  --surface: rgba(16, 24, 38, 0.72);
+  --surface-hover: rgba(23, 33, 50, 0.8);
+  --surface-active: rgba(35, 48, 71, 0.92);
+  --surface-elevated: rgba(18, 27, 44, 0.88);
 
-  /* Borders */
-  --border: rgba(255, 255, 255, 0.08);
-  --border-strong: rgba(255, 255, 255, 0.15);
-  --border-brand: rgba(59, 130, 246, 0.3);
+  --border: rgba(151, 166, 197, 0.18);
+  --border-strong: rgba(188, 201, 229, 0.28);
+  --border-brand: rgba(34, 211, 238, 0.34);
 
-  /* Shadows */
   --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
-  --shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
-  --shadow-lg: 0 8px 40px rgba(0, 0, 0, 0.5);
+  --shadow: 0 20px 50px rgba(1, 6, 18, 0.42);
+  --shadow-lg: 0 36px 100px rgba(1, 6, 18, 0.56);
   --shadow-glow: 0 0 40px var(--brand-glow);
   --shadow-accent-glow: 0 0 40px var(--accent-glow);
 
-  /* Radius */
   --radius-sm: 6px;
   --radius: 12px;
   --radius-lg: 16px;
@@ -73,7 +66,9 @@ html {
 body {
   margin: 0;
   min-height: 100vh;
-  background: var(--background);
+  background:
+    radial-gradient(circle at top, rgba(14, 165, 233, 0.12), transparent 32%),
+    linear-gradient(180deg, #08101c 0%, #070a11 55%, #06080d 100%);
   color: var(--foreground);
   font-family: var(--font-sans), system-ui, -apple-system, sans-serif;
   text-rendering: optimizeLegibility;
@@ -88,23 +83,23 @@ body::before {
   inset: 0;
   z-index: -2;
   background:
-    radial-gradient(ellipse 80% 50% at 50% -20%, rgba(59, 130, 246, 0.15), transparent),
-    radial-gradient(ellipse 60% 40% at 80% 50%, rgba(249, 115, 22, 0.08), transparent),
-    radial-gradient(ellipse 50% 30% at 20% 80%, rgba(59, 130, 246, 0.1), transparent);
+    radial-gradient(ellipse 60% 50% at 50% -15%, rgba(34, 211, 238, 0.14), transparent),
+    radial-gradient(ellipse 48% 38% at 82% 18%, rgba(14, 165, 233, 0.11), transparent),
+    radial-gradient(ellipse 42% 28% at 18% 82%, rgba(249, 115, 22, 0.07), transparent);
   pointer-events: none;
 }
 
-/* Subtle grid pattern */
 body::after {
   content: "";
   position: fixed;
   inset: 0;
   z-index: -1;
   background-image:
-    linear-gradient(rgba(255, 255, 255, 0.02) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(255, 255, 255, 0.02) 1px, transparent 1px);
-  background-size: 60px 60px;
-  mask-image: radial-gradient(circle at center, black 40%, transparent 80%);
+    linear-gradient(rgba(255, 255, 255, 0.025) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.025) 1px, transparent 1px);
+  background-size: 72px 72px;
+  mask-image: radial-gradient(circle at center, black 38%, transparent 82%);
+  opacity: 0.4;
   pointer-events: none;
 }
 
@@ -118,6 +113,20 @@ input,
 select,
 textarea {
   font: inherit;
+}
+
+input:-webkit-autofill,
+input:-webkit-autofill:hover,
+input:-webkit-autofill:focus,
+textarea:-webkit-autofill,
+textarea:-webkit-autofill:hover,
+textarea:-webkit-autofill:focus,
+select:-webkit-autofill,
+select:-webkit-autofill:hover,
+select:-webkit-autofill:focus {
+  -webkit-text-fill-color: #f5f7fb;
+  caret-color: #f5f7fb;
+  transition: background-color 99999s ease-in-out 0s;
 }
 
 button {
@@ -161,7 +170,8 @@ button:focus-visible,
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
-  backdrop-filter: blur(16px);
+  backdrop-filter: blur(18px);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
   transition: all 0.2s ease;
 }
 
@@ -176,12 +186,24 @@ button:focus-visible,
   border-radius: var(--radius-lg);
   backdrop-filter: blur(24px);
   box-shadow: var(--shadow);
+  position: relative;
+  overflow: hidden;
+}
+
+.surface-elevated::before {
+  content: "";
+  position: absolute;
+  inset: 0 0 auto 0;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(103, 232, 249, 0.48), transparent);
+  pointer-events: none;
 }
 
 .surface-gradient {
-  background: linear-gradient(135deg, rgba(59, 130, 246, 0.1), rgba(249, 115, 22, 0.05));
+  background: linear-gradient(135deg, rgba(34, 211, 238, 0.12), rgba(14, 165, 233, 0.06) 55%, rgba(249, 115, 22, 0.06));
   border: 1px solid var(--border-brand);
   border-radius: var(--radius-lg);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
 }
 
 /* Label/Badge */
@@ -237,7 +259,7 @@ button:focus-visible,
   font-weight: 700;
   line-height: 1.1;
   letter-spacing: -0.03em;
-  background: linear-gradient(135deg, var(--foreground) 0%, var(--brand-bright) 50%, var(--accent-bright) 100%);
+  background: linear-gradient(135deg, var(--foreground) 0%, var(--brand-bright) 44%, #c7f9ff 60%, var(--foreground) 100%);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
@@ -267,20 +289,20 @@ button:focus-visible,
   align-items: center;
   justify-content: center;
   gap: 0.5rem;
-  border-radius: var(--radius);
-  border: 1px solid transparent;
-  background: linear-gradient(135deg, var(--brand), #2563eb);
+  border-radius: 14px;
+  border: 1px solid rgba(103, 232, 249, 0.55);
+  background: linear-gradient(135deg, var(--brand), var(--brand-deep));
   padding: 0.6rem 1.25rem;
-  color: white;
+  color: #03121a;
   font-weight: 600;
   font-size: 0.95rem;
   transition: all 0.2s ease;
-  box-shadow: 0 4px 20px rgba(59, 130, 246, 0.3);
+  box-shadow: 0 16px 36px rgba(14, 165, 233, 0.22);
 }
 
 .button-primary:hover {
   transform: translateY(-1px);
-  box-shadow: 0 6px 30px rgba(59, 130, 246, 0.4);
+  box-shadow: 0 18px 42px rgba(14, 165, 233, 0.28);
   background: linear-gradient(135deg, var(--brand-bright), var(--brand));
 }
 
@@ -294,9 +316,9 @@ button:focus-visible,
   align-items: center;
   justify-content: center;
   gap: 0.5rem;
-  border-radius: var(--radius);
+  border-radius: 14px;
   border: 1px solid var(--border);
-  background: var(--surface);
+  background: rgba(13, 20, 33, 0.78);
   padding: 0.6rem 1.25rem;
   color: var(--foreground);
   font-weight: 500;
@@ -306,7 +328,8 @@ button:focus-visible,
 
 .button-secondary:hover {
   background: var(--surface-hover);
-  border-color: var(--border-strong);
+  border-color: rgba(103, 232, 249, 0.32);
+  color: var(--brand-bright);
 }
 
 .button-ghost {
@@ -326,7 +349,7 @@ button:focus-visible,
 
 .button-ghost:hover {
   color: var(--foreground);
-  background: var(--surface);
+  background: rgba(16, 24, 38, 0.72);
 }
 
 .button-accent {
@@ -335,7 +358,7 @@ button:focus-visible,
   align-items: center;
   justify-content: center;
   gap: 0.5rem;
-  border-radius: var(--radius);
+  border-radius: 14px;
   border: 1px solid transparent;
   background: linear-gradient(135deg, var(--accent), #ea580c);
   padding: 0.6rem 1.25rem;
@@ -343,7 +366,7 @@ button:focus-visible,
   font-weight: 600;
   font-size: 0.95rem;
   transition: all 0.2s ease;
-  box-shadow: 0 4px 20px rgba(249, 115, 22, 0.3);
+  box-shadow: 0 16px 36px rgba(249, 115, 22, 0.18);
 }
 
 .button-accent:hover {
@@ -381,7 +404,7 @@ button:focus-visible,
   bottom: -2px;
   height: 2px;
   border-radius: 2px;
-  background: linear-gradient(90deg, var(--brand), var(--accent));
+  background: linear-gradient(90deg, var(--brand), var(--brand-bright));
 }
 
 /* Chart bars */
@@ -406,7 +429,7 @@ button:focus-visible,
 .code-window {
   border-radius: var(--radius-lg);
   border: 1px solid var(--border);
-  background: var(--background-elevated);
+  background: linear-gradient(180deg, rgba(11, 20, 36, 0.96), rgba(8, 14, 26, 0.94));
   box-shadow: var(--shadow-lg);
   overflow: hidden;
 }
@@ -417,7 +440,7 @@ button:focus-visible,
   gap: 0.5rem;
   padding: 1rem 1.25rem;
   border-bottom: 1px solid var(--border);
-  background: var(--surface);
+  background: rgba(255, 255, 255, 0.03);
 }
 
 .code-window-dot {
@@ -463,6 +486,27 @@ button:focus-visible,
   background: var(--brand-subtle);
   color: var(--brand-bright);
   border: 1px solid var(--border-brand);
+}
+
+.console-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  border-bottom: 2px solid transparent;
+  padding: 0.9rem 0.2rem;
+  color: var(--foreground-secondary);
+  font-weight: 500;
+  transition: all 0.2s ease;
+}
+
+.console-tab:hover {
+  color: var(--foreground);
+}
+
+.console-tab-active {
+  border-bottom-color: var(--brand);
+  color: var(--brand-bright);
+  text-shadow: 0 0 18px rgba(34, 211, 238, 0.18);
 }
 
 /* Status badges */
@@ -528,6 +572,116 @@ button:focus-visible,
 .focus-ring:focus-visible {
   outline: none;
   box-shadow: 0 0 0 2px var(--background), 0 0 0 4px var(--brand);
+}
+
+.auth-input-shell {
+  position: relative;
+  display: flex;
+  min-height: 3.25rem;
+  align-items: center;
+  overflow: hidden;
+  border-radius: 18px;
+  border: 1px solid rgba(148, 163, 184, 0.14);
+  background:
+    linear-gradient(180deg, rgba(10, 14, 22, 0.96), rgba(8, 11, 18, 0.98)),
+    rgba(8, 11, 18, 0.96);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.04),
+    0 8px 30px rgba(0, 0, 0, 0.16);
+  transition: border-color 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
+}
+
+.auth-input-shell:hover {
+  border-color: rgba(148, 163, 184, 0.22);
+}
+
+.auth-input-shell:focus-within {
+  border-color: rgba(103, 232, 249, 0.34);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.04),
+    0 0 0 3px rgba(34, 211, 238, 0.08),
+    0 10px 34px rgba(0, 0, 0, 0.2);
+}
+
+.auth-input {
+  min-height: 3.25rem;
+  width: 100%;
+  border: 0;
+  background: transparent;
+  color: var(--foreground);
+  font-size: 0.95rem;
+  padding-left: 1rem;
+  padding-right: 1rem;
+  outline: none;
+  appearance: none;
+  box-shadow: none;
+  transition: color 0.2s ease;
+}
+
+.auth-input::placeholder {
+  color: rgba(127, 138, 162, 0.6);
+}
+
+.auth-input:hover {
+  background: transparent;
+}
+
+.auth-input:focus {
+  background: transparent;
+}
+
+.auth-input:-webkit-autofill,
+.auth-input:-webkit-autofill:hover,
+.auth-input:-webkit-autofill:focus,
+.auth-input:-webkit-autofill:active {
+  -webkit-box-shadow: 0 0 0 1000px rgba(8, 11, 18, 0.98) inset !important;
+  box-shadow: 0 0 0 1000px rgba(8, 11, 18, 0.98) inset !important;
+  -webkit-text-fill-color: var(--foreground) !important;
+  caret-color: var(--foreground) !important;
+  background-clip: padding-box !important;
+  border: 0 !important;
+  font-size: 0.95rem !important;
+  transition: background-color 99999s ease-in-out 0s;
+}
+
+.auth-input::-webkit-credentials-auto-fill-button,
+.auth-input::-webkit-contacts-auto-fill-button {
+  opacity: 0.3;
+  filter: invert(0.78);
+}
+
+.auth-input[type="password"]::-ms-reveal,
+.auth-input[type="password"]::-ms-clear {
+  display: none;
+}
+
+.auth-input-shell[data-leading-icon="true"] .auth-input {
+  padding-left: 2.75rem;
+}
+
+.auth-input-leading-icon {
+  pointer-events: none;
+  position: absolute;
+  left: 0.95rem;
+  top: 50%;
+  z-index: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: rgba(148, 163, 184, 0.72);
+  transform: translateY(-50%);
+}
+
+.auth-input-shell:focus-within .auth-input-leading-icon {
+  color: rgba(103, 232, 249, 0.86);
+}
+
+.auth-input-shell button {
+  z-index: 1;
+}
+
+.auth-input-shell .auth-input {
+  -webkit-text-fill-color: var(--foreground) !important;
 }
 
 /* Scrollbar */

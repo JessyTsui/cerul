@@ -100,10 +100,14 @@ function LoadingSkeleton() {
   );
 }
 
-export function SearchDemo() {
+type SearchDemoProps = {
+  initialResponse: DemoSearchResponse;
+};
+
+export function SearchDemo({ initialResponse }: SearchDemoProps) {
   const [activeMode, setActiveMode] = useState<DemoMode>("knowledge");
-  const [query, setQuery] = useState<string>(demoModes.knowledge.query);
-  const [response, setResponse] = useState<DemoSearchResponse | null>(null);
+  const [query, setQuery] = useState<string>(initialResponse.query);
+  const [response, setResponse] = useState<DemoSearchResponse | null>(initialResponse);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const activeRequestRef = useRef(0);
@@ -155,12 +159,10 @@ export function SearchDemo() {
   }, []);
 
   useEffect(() => {
-    void runSearch("knowledge", demoModes.knowledge.query);
-
     return () => {
       abortControllerRef.current?.abort();
     };
-  }, [runSearch]);
+  }, []);
 
   return (
     <div className="space-y-8 pb-8">

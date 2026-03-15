@@ -1,6 +1,7 @@
 import { betterAuth } from "better-auth";
 import { toNextJsHandler } from "better-auth/next-js";
 import { headers } from "next/headers";
+import { cache } from "react";
 import { getAuthDatabase, upsertUserProfile } from "./auth-db";
 
 const DEFAULT_DEV_AUTH_SECRET =
@@ -40,6 +41,14 @@ function expandTrustedOrigins(baseURL: string): string[] {
   return Array.from(localAliases);
 }
 
+function getAuthBaseUrl(): string {
+  return (
+    process.env.NEXT_PUBLIC_SITE_URL?.trim() ||
+    process.env.WEB_BASE_URL?.trim() ||
+    DEFAULT_AUTH_BASE_URL
+  );
+}
+
 function getAuthSecret(): string {
   const configuredSecret = process.env.BETTER_AUTH_SECRET?.trim();
 
@@ -52,14 +61,6 @@ function getAuthSecret(): string {
   }
 
   return DEFAULT_DEV_AUTH_SECRET;
-}
-
-function getAuthBaseUrl(): string {
-  return (
-    process.env.NEXT_PUBLIC_SITE_URL?.trim() ||
-    process.env.WEB_BASE_URL?.trim() ||
-    DEFAULT_AUTH_BASE_URL
-  );
 }
 
 function createAuth() {
@@ -116,7 +117,7 @@ export function getAuthRouteHandlers() {
   return toNextJsHandler(getAuth());
 }
 
-export async function getServerSession() {
+export const getServerSession = cache(async function getServerSession() {
   const requestHeaders = await headers();
 
   if (!requestHeaders.get("cookie")) {
@@ -126,4 +127,4 @@ export async function getServerSession() {
   return getAuth().api.getSession({
     headers: requestHeaders,
   });
-}
+});

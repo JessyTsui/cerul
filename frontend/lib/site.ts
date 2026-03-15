@@ -1,6 +1,5 @@
 export const primaryNavigation = [
   { label: "Home", href: "/" },
-  { label: "Search", href: "/search" },
   { label: "Docs", href: "/docs" },
   { label: "Pricing", href: "/pricing" },
   { label: "Dashboard", href: "/dashboard" },
@@ -143,13 +142,13 @@ export const pricingTiers = [
     price: "$0",
     cadence: "for early evaluation",
     description:
-      "Best for trying the public API surface and validating early demo integrations.",
+      "Best for trying the public API surface and validating the first real search flow.",
     ctaLabel: "Start free",
     ctaHref: "/signup",
     accent: "sky",
     features: [
       "1,000 monthly credits",
-      "B-roll and knowledge search access",
+      "Full public search API access",
       "Single API key",
       "Community support",
     ],
@@ -159,7 +158,7 @@ export const pricingTiers = [
     price: "$20",
     cadence: "per month",
     description:
-      "For teams building agent workflows that need predictable usage and more active keys.",
+      "For teams that need predictable usage, more keys, and cleaner day-to-day operations.",
     ctaLabel: "Request sandbox",
     ctaHref: "/login",
     accent: "orange",
@@ -192,12 +191,12 @@ export const pricingFaqs = [
   {
     question: "Why start with credits instead of raw request counts?",
     answer:
-      "Credits let Cerul price different workloads fairly across b-roll search, knowledge retrieval, and optional answer generation without exposing all internal execution details.",
+      "Credits let Cerul price heavier and lighter requests fairly without forcing users to think about internal execution details for each call.",
   },
   {
-    question: "Will agent skills use the same pricing model?",
+    question: "Does one pricing model cover the full public API?",
     answer:
-      "Yes. Skills are thin clients over the same HTTP API, so usage should map to the same credits and key model.",
+      "Yes. The public API uses one credit and API key model, so evaluation, staging, and production integrations can follow the same billing shape.",
   },
   {
     question: "When does enterprise make sense?",
@@ -226,7 +225,7 @@ export const authValueProps = [
 
 export const dashboardRoutes = [
   { label: "Overview", href: "/dashboard", meta: "01" },
-  { label: "API keys", href: "/dashboard/keys", meta: "02" },
+  { label: "API Keys", href: "/dashboard/keys", meta: "02" },
   { label: "Usage", href: "/dashboard/usage", meta: "03" },
   { label: "Pipelines", href: "/dashboard/pipelines", meta: "04" },
   { label: "Settings", href: "/dashboard/settings", meta: "05" },

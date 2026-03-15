@@ -258,139 +258,206 @@ function StatOverview({
 }: {
   stats: DashboardJobStats;
 }) {
+  const activeQueue = stats.pending + stats.running + stats.retrying;
+  const completionRate =
+    stats.total === 0 ? 0 : Math.round((stats.completed / stats.total) * 100);
   const cards = [
     {
-      label: "Total jobs",
-      value: stats.total,
-      note: "All pipeline jobs recorded in processing_jobs.",
-      dotClass: "bg-sky-400 shadow-[0_0_16px_rgba(96,165,250,0.45)]",
+      label: "Active queue",
+      value: formatNumber(activeQueue),
+      note: "Pending, running, and retrying jobs still consuming operator attention.",
+      tone: "text-[var(--brand-bright)]",
+      shell:
+        "border-[var(--border-brand)] bg-[rgba(34,211,238,0.08)] shadow-[0_18px_40px_rgba(14,165,233,0.12)]",
     },
     {
-      label: "Pending",
-      value: stats.pending,
-      note: "Queued and waiting for a worker claim.",
-      dotClass: "bg-amber-300 shadow-[0_0_16px_rgba(253,224,71,0.4)]",
+      label: "Completion rate",
+      value: `${completionRate}%`,
+      note: "Share of observed jobs that have landed in a completed state.",
+      tone: "text-white",
+      shell: "border-[var(--border)] bg-[var(--surface)]",
     },
     {
-      label: "Running",
-      value: stats.running,
-      note: `Retrying queue: ${formatNumber(stats.retrying)} job(s).`,
-      dotClass: "bg-yellow-300 shadow-[0_0_16px_rgba(253,224,71,0.4)]",
-    },
-    {
-      label: "Completed",
-      value: stats.completed,
-      note: "Finished without requiring operator intervention.",
-      dotClass: "bg-emerald-400 shadow-[0_0_16px_rgba(74,222,128,0.45)]",
-    },
-    {
-      label: "Failed",
-      value: stats.failed,
-      note: "Exhausted retries or hit a terminal error.",
-      dotClass: "bg-rose-400 shadow-[0_0_16px_rgba(248,113,113,0.45)]",
+      label: "Terminal failures",
+      value: formatNumber(stats.failed),
+      note: "Jobs that exhausted retries or hit a hard terminal stop.",
+      tone: "text-rose-100",
+      shell: "border-rose-500/25 bg-rose-500/10",
     },
   ] as const;
 
   return (
-    <>
-      <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
-        {cards.map((card) => (
-          <article key={card.label} className="surface px-5 py-5">
-            <div className="flex items-center justify-between gap-3">
-              <p className="font-mono text-xs uppercase tracking-[0.16em] text-[var(--foreground-tertiary)]">
+    <section className="grid gap-5 xl:grid-cols-[1.12fr_0.88fr]">
+      <article className="surface-elevated rounded-[32px] px-6 py-6">
+        <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
+          <div className="max-w-2xl">
+            <p className="eyebrow">Pipeline telemetry</p>
+            <h2 className="mt-4 text-4xl font-semibold tracking-[-0.05em] text-white sm:text-5xl">
+              Watch the queue, retries, and final outcomes in one surface.
+            </h2>
+            <p className="mt-4 text-base leading-8 text-[var(--foreground-secondary)]">
+              This panel is the operator-facing stream for worker health. Use it to spot retry
+              pressure early, compare track mix, and decide which jobs need a deeper forensic read.
+            </p>
+          </div>
+          <span className="label label-brand">Live ledger</span>
+        </div>
+
+        <div className="mt-8 grid gap-4 lg:grid-cols-3">
+          {cards.map((card) => (
+            <article
+              key={card.label}
+              className={`rounded-[22px] border px-5 py-5 ${card.shell}`}
+            >
+              <p className="font-mono text-[11px] uppercase tracking-[0.16em] text-[var(--foreground-tertiary)]">
                 {card.label}
               </p>
-              <span className={`h-3 w-3 rounded-full ${card.dotClass}`} />
-            </div>
-            <p className="mt-3 font-mono text-3xl font-semibold text-white">
-              {formatNumber(card.value)}
-            </p>
-            <p className="mt-2 text-sm leading-6 text-[var(--foreground-secondary)]">
-              {card.note}
-            </p>
-          </article>
-        ))}
-      </section>
+              <p className={`mt-3 text-4xl font-semibold tracking-[-0.04em] ${card.tone}`}>
+                {card.value}
+              </p>
+              <p className="mt-2 text-sm leading-6 text-[var(--foreground-secondary)]">
+                {card.note}
+              </p>
+            </article>
+          ))}
+        </div>
 
-      <section className="grid gap-5 xl:grid-cols-[1.05fr_0.95fr]">
-        <article className="surface-elevated px-6 py-6">
-          <p className="font-mono text-xs uppercase tracking-[0.16em] text-[var(--foreground-tertiary)]">
-            Track breakdown
-          </p>
-          <h2 className="mt-2 text-2xl font-semibold text-white">
-            Workload split across both retrieval tracks
-          </h2>
-          <div className="mt-5 grid gap-3 sm:grid-cols-2">
+        <div className="mt-8 grid gap-5 lg:grid-cols-[1.05fr_0.95fr]">
+          <div className="rounded-[24px] border border-[var(--border)] bg-[rgba(255,255,255,0.03)] px-5 py-5">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <p className="font-mono text-[11px] uppercase tracking-[0.16em] text-[var(--foreground-tertiary)]">
+                  Track mix
+                </p>
+                <h3 className="mt-2 text-2xl font-semibold text-white">
+                  B-roll versus knowledge load
+                </h3>
+              </div>
+              <span className="badge badge-success">Stable</span>
+            </div>
+            <div className="mt-5 space-y-4">
+              {[
+                {
+                  label: "B-roll",
+                  value: stats.tracks.broll,
+                  share: getTrackShare(stats.tracks.broll, stats.total),
+                  tone: "label-accent",
+                  fill: "from-[var(--accent)] to-[var(--accent-bright)]",
+                },
+                {
+                  label: "Knowledge",
+                  value: stats.tracks.knowledge,
+                  share: getTrackShare(stats.tracks.knowledge, stats.total),
+                  tone: "label-brand",
+                  fill: "from-[var(--brand)] to-[var(--brand-deep)]",
+                },
+              ].map((track) => (
+                <div key={track.label}>
+                  <div className="flex items-center justify-between gap-3">
+                    <span className={`label ${track.tone}`}>{track.label}</span>
+                    <span className="font-mono text-sm text-white">
+                      {formatNumber(track.value)} jobs
+                    </span>
+                  </div>
+                  <div className="mt-3 h-3 rounded-full bg-[rgba(255,255,255,0.05)]">
+                    <div
+                      className={`h-full rounded-full bg-gradient-to-r ${track.fill}`}
+                      style={{ width: track.share }}
+                    />
+                  </div>
+                  <p className="mt-2 text-sm leading-6 text-[var(--foreground-secondary)]">
+                    {track.share} of all observed pipeline jobs in the current telemetry set.
+                  </p>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div className="grid gap-4">
             {[
               {
-                label: "B-roll",
-                value: stats.tracks.broll,
-                share: getTrackShare(stats.tracks.broll, stats.total),
-                tone: "label-accent",
+                label: "Pending",
+                value: stats.pending,
+                tone: "badge-warning",
+                note: "Queued and waiting for a worker claim.",
               },
               {
-                label: "Knowledge",
-                value: stats.tracks.knowledge,
-                share: getTrackShare(stats.tracks.knowledge, stats.total),
-                tone: "label-brand",
+                label: "Running",
+                value: stats.running,
+                tone: "badge-success",
+                note: `Retrying queue currently holds ${formatNumber(stats.retrying)} job(s).`,
               },
-            ].map((track) => (
+              {
+                label: "Completed",
+                value: stats.completed,
+                tone: "badge-success",
+                note: "Finished cleanly without requiring operator intervention.",
+              },
+            ].map((item) => (
               <div
-                key={track.label}
-                className="rounded-[18px] border border-[var(--border)] bg-[var(--surface)] px-4 py-4"
+                key={item.label}
+                className="rounded-[22px] border border-[var(--border)] bg-[var(--surface)] px-5 py-5"
               >
-                <span className={`label ${track.tone}`}>{track.label}</span>
-                <p className="mt-4 font-mono text-2xl font-semibold text-white">
-                  {formatNumber(track.value)}
+                <div className="flex items-center justify-between gap-3">
+                  <p className="font-mono text-[11px] uppercase tracking-[0.16em] text-[var(--foreground-tertiary)]">
+                    {item.label}
+                  </p>
+                  <span className={`badge ${item.tone}`}>{item.label}</span>
+                </div>
+                <p className="mt-3 text-3xl font-semibold tracking-[-0.04em] text-white">
+                  {formatNumber(item.value)}
                 </p>
                 <p className="mt-2 text-sm leading-6 text-[var(--foreground-secondary)]">
-                  {track.share} of all jobs observed in the current telemetry set.
+                  {item.note}
                 </p>
               </div>
             ))}
           </div>
+        </div>
+      </article>
+
+      <div className="space-y-5">
+        <article className="surface-gradient rounded-[32px] px-6 py-6">
+          <p className="font-mono text-[11px] uppercase tracking-[0.16em] text-[var(--brand-bright)]">
+            Operator note
+          </p>
+          <h3 className="mt-3 text-3xl font-semibold tracking-[-0.04em] text-white">
+            Retry pressure stays visible before jobs fully fail.
+          </h3>
+          <p className="mt-3 text-sm leading-7 text-[var(--foreground-secondary)]">
+            Expanded rows below are the fastest path to step-level artifacts, payload summary, and
+            final error text. Use the filters to narrow to the exact queue state you need.
+          </p>
         </article>
 
-        <article className="surface-elevated px-6 py-6">
-          <p className="font-mono text-xs uppercase tracking-[0.16em] text-[var(--foreground-tertiary)]">
-            Retry posture
+        <article className="surface rounded-[28px] px-5 py-5">
+          <p className="font-mono text-[11px] uppercase tracking-[0.16em] text-[var(--foreground-tertiary)]">
+            Total jobs
           </p>
-          <h2 className="mt-2 text-2xl font-semibold text-white">
-            Active failure pressure
-          </h2>
-          <div className="mt-5 space-y-3">
-            <div className="rounded-[18px] border border-[var(--border)] bg-[var(--surface)] px-4 py-4">
-              <div className="flex items-center justify-between gap-3">
-                <span className="font-mono text-[11px] uppercase tracking-[0.16em] text-[var(--foreground-tertiary)]">
-                  Retrying
-                </span>
-                <span className="badge badge-warning">Backoff</span>
-              </div>
-              <p className="mt-3 font-mono text-2xl font-semibold text-white">
-                {formatNumber(stats.retrying)}
-              </p>
-              <p className="mt-2 text-sm leading-6 text-[var(--foreground-secondary)]">
-                Jobs currently waiting for the next retry window.
-              </p>
-            </div>
-            <div className="rounded-[18px] border border-[var(--border)] bg-[var(--surface)] px-4 py-4">
-              <div className="flex items-center justify-between gap-3">
-                <span className="font-mono text-[11px] uppercase tracking-[0.16em] text-[var(--foreground-tertiary)]">
-                  Terminal failures
-                </span>
-                <span className="badge badge-error">Needs review</span>
-              </div>
-              <p className="mt-3 font-mono text-2xl font-semibold text-white">
-                {formatNumber(stats.failed)}
-              </p>
-              <p className="mt-2 text-sm leading-6 text-[var(--foreground-secondary)]">
-                Failed jobs should correlate with expanded row error traces below.
-              </p>
-            </div>
-          </div>
+          <p className="mt-3 text-4xl font-semibold tracking-[-0.04em] text-white">
+            {formatNumber(stats.total)}
+          </p>
+          <p className="mt-2 text-sm leading-6 text-[var(--foreground-secondary)]">
+            All jobs written into the processing ledger, across both tracks and all current states.
+          </p>
         </article>
-      </section>
-    </>
+
+        <article className="surface rounded-[28px] px-5 py-5">
+          <p className="font-mono text-[11px] uppercase tracking-[0.16em] text-[var(--foreground-tertiary)]">
+            Needs review
+          </p>
+          <div className="mt-4 flex items-center justify-between gap-3">
+            <span className="badge badge-error">Terminal failures</span>
+            <span className="font-mono text-2xl font-semibold text-white">
+              {formatNumber(stats.failed)}
+            </span>
+          </div>
+          <p className="mt-3 text-sm leading-6 text-[var(--foreground-secondary)]">
+            Correlate these against expanded job traces and the worker-side logs before requeueing.
+          </p>
+        </article>
+      </div>
+    </section>
   );
 }
 
@@ -600,6 +667,11 @@ export function DashboardPipelinesScreen() {
     !listData &&
     Boolean(statsError || listError) &&
     !isInitialLoading;
+  const hasActiveFilters =
+    statusFilter !== "all" ||
+    trackFilter !== "all" ||
+    pageSize !== 25 ||
+    sort !== "created_desc";
 
   useEffect(() => {
     if (expandedJobId && !sortedJobs.some((job) => job.id === expandedJobId)) {
@@ -731,102 +803,126 @@ export function DashboardPipelinesScreen() {
                 title="No pipeline jobs yet"
               />
             ) : (
-              <section className="surface-elevated overflow-hidden">
-                <div className="border-b border-[var(--border)] px-6 py-5">
-                  <div className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
+              <section className="surface-elevated overflow-hidden rounded-[32px]">
+                <div className="border-b border-[var(--border)] px-6 py-6">
+                  <div className="flex flex-col gap-5 xl:flex-row xl:items-end xl:justify-between">
                     <div>
-                      <p className="font-mono text-xs uppercase tracking-[0.16em] text-[var(--foreground-tertiary)]">
-                        Job ledger
-                      </p>
-                      <h2 className="mt-2 text-2xl font-semibold text-white">
+                      <p className="eyebrow">Job ledger</p>
+                      <h2 className="mt-3 text-3xl font-semibold tracking-[-0.04em] text-white">
                         Recent processing jobs
                       </h2>
-                      <p className="mt-2 text-sm leading-6 text-[var(--foreground-secondary)]">
-                        Showing {formatNumber(sortedJobs.length)} job(s) from a total of{" "}
-                        {formatNumber(listData.totalCount)} matching the current filters.
+                      <p className="mt-3 max-w-3xl text-sm leading-7 text-[var(--foreground-secondary)]">
+                        Showing {formatNumber(sortedJobs.length)} visible job(s) from{" "}
+                        {formatNumber(listData.totalCount)} total entries that match the current
+                        queue view.
                       </p>
                     </div>
 
-                    <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-                      <label className="rounded-[18px] border border-[var(--border)] bg-[var(--surface)] px-4 py-3">
-                        <span className="font-mono text-[11px] uppercase tracking-[0.16em] text-[var(--foreground-tertiary)]">
-                          Status
-                        </span>
-                        <select
-                          className="mt-2 w-full rounded-[14px] border border-[var(--border)] bg-[var(--surface-elevated)] px-3 py-2 text-sm text-white outline-none transition focus:border-[var(--border-brand)]"
-                          onChange={(event) => {
-                            setStatusFilter(event.target.value as StatusFilter);
-                            setOffset(0);
-                          }}
-                          value={statusFilter}
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="label label-brand">
+                        {statusFilter === "all"
+                          ? "All statuses"
+                          : getStatusLabel(statusFilter)}
+                      </span>
+                      <span className={`label ${trackFilter === "broll" ? "label-accent" : ""}`}>
+                        {trackFilter === "all" ? "Both tracks" : getTrackLabel(trackFilter)}
+                      </span>
+                      <span className="label">
+                        {formatNumber(listData.totalCount)} total
+                      </span>
+                      {hasActiveFilters ? (
+                        <button
+                          className="button-secondary"
+                          onClick={resetFilters}
+                          type="button"
                         >
-                          {STATUS_OPTIONS.map((option) => (
-                            <option key={option.value} value={option.value}>
-                              {option.label}
-                            </option>
-                          ))}
-                        </select>
-                      </label>
-
-                      <label className="rounded-[18px] border border-[var(--border)] bg-[var(--surface)] px-4 py-3">
-                        <span className="font-mono text-[11px] uppercase tracking-[0.16em] text-[var(--foreground-tertiary)]">
-                          Track
-                        </span>
-                        <select
-                          className="mt-2 w-full rounded-[14px] border border-[var(--border)] bg-[var(--surface-elevated)] px-3 py-2 text-sm text-white outline-none transition focus:border-[var(--border-brand)]"
-                          onChange={(event) => {
-                            setTrackFilter(event.target.value as TrackFilter);
-                            setOffset(0);
-                          }}
-                          value={trackFilter}
-                        >
-                          {TRACK_OPTIONS.map((option) => (
-                            <option key={option.value} value={option.value}>
-                              {option.label}
-                            </option>
-                          ))}
-                        </select>
-                      </label>
-
-                      <label className="rounded-[18px] border border-[var(--border)] bg-[var(--surface)] px-4 py-3">
-                        <span className="font-mono text-[11px] uppercase tracking-[0.16em] text-[var(--foreground-tertiary)]">
-                          Sort by
-                        </span>
-                        <select
-                          className="mt-2 w-full rounded-[14px] border border-[var(--border)] bg-[var(--surface-elevated)] px-3 py-2 text-sm text-white outline-none transition focus:border-[var(--border-brand)]"
-                          onChange={(event) => {
-                            setSort(event.target.value as JobSort);
-                          }}
-                          value={sort}
-                        >
-                          {SORT_OPTIONS.map((option) => (
-                            <option key={option.value} value={option.value}>
-                              {option.label}
-                            </option>
-                          ))}
-                        </select>
-                      </label>
-
-                      <label className="rounded-[18px] border border-[var(--border)] bg-[var(--surface)] px-4 py-3">
-                        <span className="font-mono text-[11px] uppercase tracking-[0.16em] text-[var(--foreground-tertiary)]">
-                          Page size
-                        </span>
-                        <select
-                          className="mt-2 w-full rounded-[14px] border border-[var(--border)] bg-[var(--surface-elevated)] px-3 py-2 text-sm text-white outline-none transition focus:border-[var(--border-brand)]"
-                          onChange={(event) => {
-                            setPageSize(Number(event.target.value) as (typeof PAGE_SIZE_OPTIONS)[number]);
-                            setOffset(0);
-                          }}
-                          value={pageSize}
-                        >
-                          {PAGE_SIZE_OPTIONS.map((option) => (
-                            <option key={option} value={option}>
-                              {option}
-                            </option>
-                          ))}
-                        </select>
-                      </label>
+                          Reset filters
+                        </button>
+                      ) : null}
                     </div>
+                  </div>
+
+                  <div className="mt-6 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                    <label className="rounded-[20px] border border-[var(--border)] bg-[var(--surface)] px-4 py-3">
+                      <span className="font-mono text-[11px] uppercase tracking-[0.16em] text-[var(--foreground-tertiary)]">
+                        Status
+                      </span>
+                      <select
+                        className="mt-2 w-full rounded-[14px] border border-[var(--border)] bg-[var(--surface-elevated)] px-3 py-2 text-sm text-white outline-none transition focus:border-[var(--border-brand)]"
+                        onChange={(event) => {
+                          setStatusFilter(event.target.value as StatusFilter);
+                          setOffset(0);
+                        }}
+                        value={statusFilter}
+                      >
+                        {STATUS_OPTIONS.map((option) => (
+                          <option key={option.value} value={option.value}>
+                            {option.label}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+
+                    <label className="rounded-[20px] border border-[var(--border)] bg-[var(--surface)] px-4 py-3">
+                      <span className="font-mono text-[11px] uppercase tracking-[0.16em] text-[var(--foreground-tertiary)]">
+                        Track
+                      </span>
+                      <select
+                        className="mt-2 w-full rounded-[14px] border border-[var(--border)] bg-[var(--surface-elevated)] px-3 py-2 text-sm text-white outline-none transition focus:border-[var(--border-brand)]"
+                        onChange={(event) => {
+                          setTrackFilter(event.target.value as TrackFilter);
+                          setOffset(0);
+                        }}
+                        value={trackFilter}
+                      >
+                        {TRACK_OPTIONS.map((option) => (
+                          <option key={option.value} value={option.value}>
+                            {option.label}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+
+                    <label className="rounded-[20px] border border-[var(--border)] bg-[var(--surface)] px-4 py-3">
+                      <span className="font-mono text-[11px] uppercase tracking-[0.16em] text-[var(--foreground-tertiary)]">
+                        Sort by
+                      </span>
+                      <select
+                        className="mt-2 w-full rounded-[14px] border border-[var(--border)] bg-[var(--surface-elevated)] px-3 py-2 text-sm text-white outline-none transition focus:border-[var(--border-brand)]"
+                        onChange={(event) => {
+                          setSort(event.target.value as JobSort);
+                        }}
+                        value={sort}
+                      >
+                        {SORT_OPTIONS.map((option) => (
+                          <option key={option.value} value={option.value}>
+                            {option.label}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+
+                    <label className="rounded-[20px] border border-[var(--border)] bg-[var(--surface)] px-4 py-3">
+                      <span className="font-mono text-[11px] uppercase tracking-[0.16em] text-[var(--foreground-tertiary)]">
+                        Page size
+                      </span>
+                      <select
+                        className="mt-2 w-full rounded-[14px] border border-[var(--border)] bg-[var(--surface-elevated)] px-3 py-2 text-sm text-white outline-none transition focus:border-[var(--border-brand)]"
+                        onChange={(event) => {
+                          setPageSize(
+                            Number(event.target.value) as (typeof PAGE_SIZE_OPTIONS)[number],
+                          );
+                          setOffset(0);
+                        }}
+                        value={pageSize}
+                      >
+                        {PAGE_SIZE_OPTIONS.map((option) => (
+                          <option key={option} value={option}>
+                            {option}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
                   </div>
                 </div>
 
@@ -844,157 +940,159 @@ export function DashboardPipelinesScreen() {
                   </div>
                 ) : (
                   <>
-                    <div className="overflow-x-auto">
-                      <table className="min-w-full text-left text-sm">
-                        <thead className="bg-[var(--surface)]">
-                          <tr>
-                            <th className="px-4 py-3 font-medium text-[var(--foreground-secondary)]">
-                              Status
-                            </th>
-                            <th className="px-4 py-3 font-medium text-[var(--foreground-secondary)]">
-                              Track
-                            </th>
-                            <th className="px-4 py-3 font-medium text-[var(--foreground-secondary)]">
-                              Job type
-                            </th>
-                            <th className="px-4 py-3 font-medium text-[var(--foreground-secondary)]">
-                              Attempts
-                            </th>
-                            <th className="px-4 py-3 font-medium text-[var(--foreground-secondary)]">
-                              Created
-                            </th>
-                            <th className="px-4 py-3 font-medium text-[var(--foreground-secondary)]">
-                              Duration
-                            </th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {sortedJobs.map((job) => {
-                            const isExpanded = expandedJobId === job.id;
-                            const detail = jobDetails[job.id];
-                            const detailError = jobDetailErrors[job.id];
-                            const isLoadingDetail = Boolean(loadingJobIds[job.id]);
+                    <div className="px-4 py-4 sm:px-6 sm:py-6">
+                      <div className="space-y-4">
+                        {sortedJobs.map((job) => {
+                          const isExpanded = expandedJobId === job.id;
+                          const detail = jobDetails[job.id];
+                          const detailError = jobDetailErrors[job.id];
+                          const isLoadingDetail = Boolean(loadingJobIds[job.id]);
+                          const jobMetrics = [
+                            {
+                              label: "Attempts",
+                              value: `${job.attempts} / ${job.maxAttempts}`,
+                            },
+                            {
+                              label: "Created",
+                              value: formatDashboardDateTime(job.createdAt),
+                            },
+                            {
+                              label: "Updated",
+                              value: formatDashboardDateTime(job.updatedAt),
+                            },
+                            {
+                              label: "Duration",
+                              value: formatDuration(job),
+                            },
+                          ] as const;
 
-                            return (
-                              <Fragment key={job.id}>
-                                <tr
-                                  aria-expanded={isExpanded}
-                                  className="cursor-pointer border-t border-[var(--border)] transition hover:bg-white/[0.03]"
-                                  onClick={() => void handleToggleJob(job.id)}
-                                  onKeyDown={(event) => {
-                                    if (event.key === "Enter" || event.key === " ") {
-                                      event.preventDefault();
-                                      void handleToggleJob(job.id);
-                                    }
-                                  }}
-                                  role="button"
-                                  tabIndex={0}
-                                >
-                                  <td className="px-4 py-4 align-top">
-                                    <div className="flex items-center gap-3">
-                                      <span className="font-mono text-xs text-[var(--foreground-tertiary)]">
-                                        {isExpanded ? "[-]" : "[+]"}
-                                      </span>
+                          return (
+                            <Fragment key={job.id}>
+                              <button
+                                aria-expanded={isExpanded}
+                                className={`w-full rounded-[28px] border text-left transition ${
+                                  isExpanded
+                                    ? "border-[var(--border-brand)] bg-[rgba(34,211,238,0.08)] shadow-[0_18px_44px_rgba(14,165,233,0.14)]"
+                                    : "border-[var(--border)] bg-[rgba(255,255,255,0.02)] hover:border-[var(--border-strong)] hover:bg-white/[0.04]"
+                                }`}
+                                onClick={() => void handleToggleJob(job.id)}
+                                type="button"
+                              >
+                                <div className="flex flex-col gap-5 px-5 py-5 xl:flex-row xl:items-start xl:justify-between">
+                                  <div className="min-w-0 flex-1">
+                                    <div className="flex flex-wrap items-center gap-2">
+                                      <span className={`h-2.5 w-2.5 rounded-full ${getStatusDotClass(job.status)}`} />
                                       <span className={`badge ${getStatusBadgeClass(job.status)}`}>
                                         {getStatusLabel(job.status)}
                                       </span>
-                                    </div>
-                                    {job.errorMessage ? (
-                                      <p className="mt-2 max-w-[240px] text-xs leading-5 text-rose-200">
-                                        {job.errorMessage}
-                                      </p>
-                                    ) : null}
-                                  </td>
-                                  <td className="px-4 py-4 align-top">
-                                    <span
-                                      className={`label ${
-                                        job.track === "broll" ? "label-accent" : "label-brand"
-                                      }`}
-                                    >
-                                      {getTrackLabel(job.track)}
-                                    </span>
-                                  </td>
-                                  <td className="px-4 py-4 align-top">
-                                    <p className="font-mono text-sm text-white">{job.jobType}</p>
-                                    <p className="mt-2 font-mono text-xs uppercase tracking-[0.16em] text-[var(--foreground-tertiary)]">
-                                      {job.id}
-                                    </p>
-                                  </td>
-                                  <td className="px-4 py-4 align-top">
-                                    <p className="font-mono text-sm text-white">
-                                      {job.attempts} / {job.maxAttempts}
-                                    </p>
-                                    <p className="mt-2 text-xs text-[var(--foreground-tertiary)]">
-                                      Updated {formatDashboardDateTime(job.updatedAt)}
-                                    </p>
-                                  </td>
-                                  <td className="px-4 py-4 align-top">
-                                    <p className="font-mono text-sm text-white">
-                                      {formatDashboardDateTime(job.createdAt)}
-                                    </p>
-                                    <p className="mt-2 text-xs text-[var(--foreground-tertiary)]">
-                                      Started {formatDateTime(job.startedAt, "not yet")}
-                                    </p>
-                                  </td>
-                                  <td className="px-4 py-4 align-top">
-                                    <div className="flex items-center gap-3">
-                                      <span className={`h-2.5 w-2.5 rounded-full ${getStatusDotClass(job.status)}`} />
-                                      <span className="font-mono text-sm text-white">
-                                        {formatDuration(job)}
+                                      <span
+                                        className={`label ${
+                                          job.track === "broll" ? "label-accent" : "label-brand"
+                                        }`}
+                                      >
+                                        {getTrackLabel(job.track)}
+                                      </span>
+                                      {job.errorMessage ? (
+                                        <span className="badge badge-error">Attention</span>
+                                      ) : null}
+                                      <span className="font-mono text-[11px] uppercase tracking-[0.16em] text-[var(--foreground-tertiary)]">
+                                        {isExpanded ? "Collapse trace" : "Inspect trace"}
                                       </span>
                                     </div>
-                                  </td>
-                                </tr>
 
-                                {isExpanded ? (
-                                  <tr className="border-t border-[var(--border)] bg-white/[0.02]">
-                                    <td className="px-4 py-5" colSpan={6}>
-                                      {isLoadingDetail && !detail ? (
-                                        <div className="rounded-[22px] border border-[var(--border)] bg-[var(--surface)] px-5 py-5">
-                                          <div className="animate-pulse space-y-3">
-                                            <div className="h-4 w-32 rounded-full bg-white/10" />
-                                            <div className="h-8 w-56 rounded-full bg-white/10" />
-                                            <div className="h-3 w-full rounded-full bg-white/10" />
-                                            <div className="h-3 w-5/6 rounded-full bg-white/10" />
-                                          </div>
-                                        </div>
-                                      ) : detailError && !detail ? (
-                                        <div className="rounded-[22px] border border-[var(--border)] bg-[var(--surface)] px-5 py-5">
-                                          <DashboardNotice
-                                            description={detailError}
-                                            title="Job detail could not be loaded"
-                                            tone="error"
-                                          />
-                                          <div className="mt-4">
-                                            <button
-                                              className="button-primary"
-                                              onClick={(event) => {
-                                                event.stopPropagation();
-                                                void loadJobDetail(job.id);
-                                              }}
-                                              type="button"
-                                            >
-                                              Retry detail
-                                            </button>
-                                          </div>
-                                        </div>
-                                      ) : detail ? (
-                                        <ExpandedJobDetail detail={detail} />
-                                      ) : null}
-                                    </td>
-                                  </tr>
-                                ) : null}
-                              </Fragment>
-                            );
-                          })}
-                        </tbody>
-                      </table>
+                                    <div className="mt-4 flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                                      <div className="min-w-0">
+                                        <h3 className="text-2xl font-semibold text-white">
+                                          {job.jobType}
+                                        </h3>
+                                        <p className="mt-2 break-all font-mono text-xs uppercase tracking-[0.16em] text-[var(--foreground-tertiary)]">
+                                          {job.id}
+                                        </p>
+                                        <p
+                                          className={`mt-3 max-w-2xl text-sm leading-6 ${
+                                            job.errorMessage
+                                              ? "text-rose-100"
+                                              : "text-[var(--foreground-secondary)]"
+                                          }`}
+                                        >
+                                          {job.errorMessage ??
+                                            "No terminal error recorded. Expand this row for payload context, step-by-step artifacts, and retry timing."}
+                                        </p>
+                                      </div>
+
+                                      <span className="inline-flex min-h-[2.25rem] items-center rounded-full border border-[var(--border)] px-4 text-sm text-white">
+                                        {isExpanded ? "Hide details" : "Open details"}
+                                      </span>
+                                    </div>
+                                  </div>
+
+                                  <div className="grid gap-3 sm:grid-cols-2 xl:min-w-[460px] xl:grid-cols-4">
+                                    {jobMetrics.map((metric) => (
+                                      <div
+                                        key={metric.label}
+                                        className="rounded-[18px] border border-[var(--border)] bg-[rgba(8,11,18,0.42)] px-4 py-4"
+                                      >
+                                        <p className="font-mono text-[11px] uppercase tracking-[0.16em] text-[var(--foreground-tertiary)]">
+                                          {metric.label}
+                                        </p>
+                                        <p className="mt-2 text-sm font-semibold leading-6 text-white">
+                                          {metric.value}
+                                        </p>
+                                      </div>
+                                    ))}
+                                  </div>
+                                </div>
+                              </button>
+
+                              {isExpanded ? (
+                                <div className="rounded-[28px] border border-[var(--border)] bg-[rgba(255,255,255,0.02)] p-3 sm:p-4">
+                                  {isLoadingDetail && !detail ? (
+                                    <div className="rounded-[22px] border border-[var(--border)] bg-[var(--surface)] px-5 py-5">
+                                      <div className="animate-pulse space-y-3">
+                                        <div className="h-4 w-32 rounded-full bg-white/10" />
+                                        <div className="h-8 w-56 rounded-full bg-white/10" />
+                                        <div className="h-3 w-full rounded-full bg-white/10" />
+                                        <div className="h-3 w-5/6 rounded-full bg-white/10" />
+                                      </div>
+                                    </div>
+                                  ) : detailError && !detail ? (
+                                    <div className="rounded-[22px] border border-[var(--border)] bg-[var(--surface)] px-5 py-5">
+                                      <DashboardNotice
+                                        description={detailError}
+                                        title="Job detail could not be loaded"
+                                        tone="error"
+                                      />
+                                      <div className="mt-4">
+                                        <button
+                                          className="button-primary"
+                                          onClick={() => void loadJobDetail(job.id)}
+                                          type="button"
+                                        >
+                                          Retry detail
+                                        </button>
+                                      </div>
+                                    </div>
+                                  ) : detail ? (
+                                    <ExpandedJobDetail detail={detail} />
+                                  ) : null}
+                                </div>
+                              ) : null}
+                            </Fragment>
+                          );
+                        })}
+                      </div>
                     </div>
 
-                    <div className="flex flex-col gap-3 border-t border-[var(--border)] px-6 py-5 sm:flex-row sm:items-center sm:justify-between">
-                      <p className="font-mono text-xs uppercase tracking-[0.16em] text-[var(--foreground-tertiary)]">
-                        Page {formatNumber(currentPage)} of {formatNumber(totalPages)}
-                      </p>
+                    <div className="flex flex-col gap-4 border-t border-[var(--border)] px-6 py-5 sm:flex-row sm:items-center sm:justify-between">
+                      <div>
+                        <p className="font-mono text-xs uppercase tracking-[0.16em] text-[var(--foreground-tertiary)]">
+                          Page {formatNumber(currentPage)} of {formatNumber(totalPages)}
+                        </p>
+                        <p className="mt-2 text-sm leading-6 text-[var(--foreground-secondary)]">
+                          Each page preserves the current filters and sort order while you step
+                          through the queue.
+                        </p>
+                      </div>
                       <div className="flex flex-wrap gap-3">
                         <button
                           className="button-secondary disabled:cursor-not-allowed disabled:opacity-60"

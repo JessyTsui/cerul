@@ -8,67 +8,49 @@ type CodeBlockProps = {
   filename?: string;
 };
 
-export function CodeBlock({ code, language = "bash", filename }: CodeBlockProps) {
+export function CodeBlock({
+  code,
+  language = "bash",
+  filename,
+}: CodeBlockProps) {
   const [copied, setCopied] = useState(false);
-  const languageLabel = language.toUpperCase();
 
-  const copyCode = async () => {
+  async function copyCode() {
     try {
       await navigator.clipboard.writeText(code);
       setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
+      window.setTimeout(() => setCopied(false), 1800);
     } catch {
-      // Silently fail
+      // Ignore clipboard failures.
     }
-  };
+  }
 
   return (
-    <div className="code-window overflow-hidden">
-      <div className="code-window-header flex items-center justify-between">
-        <div className="flex min-w-0 items-center gap-2">
-          <span className="code-window-dot code-window-dot-red" />
-          <span className="code-window-dot code-window-dot-yellow" />
-          <span className="code-window-dot code-window-dot-green" />
-          <div className="ml-2 flex min-w-0 items-center gap-2">
+    <div className="overflow-hidden rounded-[20px] border border-[var(--border)] bg-[#0b111b] shadow-[0_18px_44px_rgba(2,6,18,0.18)]">
+      <div className="flex items-center justify-between border-b border-[var(--border)] bg-[rgba(255,255,255,0.02)] px-4 py-3">
+        <div className="flex min-w-0 items-center gap-3">
+          <div className="flex items-center gap-1.5">
+            <span className="h-2 w-2 rounded-full bg-rose-400/80" />
+            <span className="h-2 w-2 rounded-full bg-amber-300/80" />
+            <span className="h-2 w-2 rounded-full bg-emerald-400/80" />
+          </div>
+          <div className="min-w-0">
             {filename ? (
-              <span className="truncate font-mono text-xs text-[var(--foreground-tertiary)]">
+              <p className="truncate font-mono text-[11px] uppercase tracking-[0.16em] text-[var(--foreground-tertiary)]">
                 {filename}
-              </span>
+              </p>
             ) : null}
-            <span className="rounded-full border border-[var(--border)] bg-[var(--surface)] px-2 py-0.5 font-mono text-[10px] uppercase tracking-[0.18em] text-[var(--foreground-tertiary)]">
-              {languageLabel}
-            </span>
           </div>
         </div>
         <button
-          onClick={copyCode}
-          aria-label={copied ? "Code copied" : "Copy code sample"}
-          className="focus-ring flex items-center gap-1.5 rounded-md px-2 py-1 text-xs text-[var(--foreground-tertiary)] transition hover:bg-[var(--surface)] hover:text-[var(--foreground)]"
           type="button"
+          onClick={copyCode}
+          className="rounded-full border border-[var(--border)] bg-[rgba(255,255,255,0.03)] px-3 py-1 text-xs text-[var(--foreground-secondary)] transition hover:border-[var(--border-strong)] hover:text-white"
         >
-          {copied ? (
-            <>
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <polyline points="20 6 9 17 4 12" />
-              </svg>
-              Copied
-            </>
-          ) : (
-            <>
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
-                <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
-              </svg>
-              Copy
-            </>
-          )}
+          {copied ? "Copied" : `Copy ${language.toUpperCase()}`}
         </button>
       </div>
-      <pre
-        className={`language-${language}`}
-        data-language={language}
-        tabIndex={0}
-      >
+      <pre className="overflow-x-auto px-4 py-5 font-mono text-sm leading-7 text-[#d7f7ff]">
         <code>{code}</code>
       </pre>
     </div>

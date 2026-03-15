@@ -18,6 +18,54 @@ export type DocPage = {
   sections: DocSection[];
 };
 
+export type DocsNavItem = {
+  title: string;
+  href: string;
+  slug?: string;
+  description?: string;
+};
+
+export type DocsNavGroup = {
+  title: string;
+  items: DocsNavItem[];
+};
+
+export type DocsFeatureCard = {
+  title: string;
+  description: string;
+  snippet: string;
+  href: string;
+};
+
+export type ApiReferenceParameter = {
+  name: string;
+  type: string;
+  required: string;
+  description: string;
+};
+
+export type ApiReferenceCodeExample = {
+  label: string;
+  language: string;
+  filename: string;
+  code: string;
+};
+
+export type ApiReferenceEndpoint = {
+  id: string;
+  group: string;
+  method: "GET" | "POST" | "DELETE";
+  path: string;
+  title: string;
+  description: string;
+  authLabel: string;
+  authDescription: string;
+  parameters: ApiReferenceParameter[];
+  requestExamples: ApiReferenceCodeExample[];
+  responseSchema: string;
+  responseExample: string;
+};
+
 // Base URL for API
 export const API_BASE_URL = "https://api.cerul.ai";
 
@@ -214,7 +262,7 @@ export const docsPages: DocPage[] = [
   {
     slug: "search-api",
     title: "Search API Reference",
-    summary: "Complete reference for the /v1/search endpoint. Learn about request parameters, filters, and response fields for both b-roll and knowledge searches.",
+    summary: "Complete reference for the /v1/search endpoint. Learn about request parameters, filters, and response fields for the public search API.",
     kicker: "API Reference",
     readingTime: "8 min read",
     sections: [
@@ -439,4 +487,311 @@ export function getDocsIndexCards() {
 
 export function getDocsPageCanonical(slug: string): string {
   return canonicalUrl(`/docs/${slug}`);
+}
+
+export const docsSidebarGroups: DocsNavGroup[] = [
+  {
+    title: "Getting Started",
+    items: [
+      {
+        title: "Overview",
+        href: "/docs",
+        description: "Landing page and quick navigation",
+      },
+      {
+        title: "Quickstart",
+        href: "/docs/quickstart",
+        slug: "quickstart",
+        description: "Create a key and make the first request",
+      },
+    ],
+  },
+  {
+    title: "API Guides",
+    items: [
+      {
+        title: "Search API",
+        href: "/docs/search-api",
+        slug: "search-api",
+        description: "Primary retrieval endpoint",
+      },
+      {
+        title: "Usage API",
+        href: "/docs/usage-api",
+        slug: "usage-api",
+        description: "Credits and rate posture",
+      },
+      {
+        title: "API Reference",
+        href: "/docs/api-reference",
+        slug: "api-reference",
+        description: "Structured endpoint reference",
+      },
+    ],
+  },
+  {
+    title: "Platform",
+    items: [
+      {
+        title: "Architecture",
+        href: "/docs/architecture",
+        slug: "architecture",
+        description: "Request flow and retrieval backbone",
+      },
+    ],
+  },
+];
+
+export const docsPopularTopics = [
+  {
+    title: "Rate limits and quotas",
+    href: "/docs/usage-api",
+    description: "Understand credit posture before wiring high-volume traffic.",
+  },
+  {
+    title: "Search payload design",
+    href: "/docs/search-api",
+    description: "Shape one request body cleanly and know which fields change result behavior.",
+  },
+  {
+    title: "Response schemas",
+    href: "/docs/api-reference",
+    description: "See the exact request and response envelopes for the public API.",
+  },
+  {
+    title: "First request flow",
+    href: "/docs/quickstart",
+    description: "Generate a key, send a request, and inspect usage in one pass.",
+  },
+] as const;
+
+export const docsFeatureCards: DocsFeatureCard[] = [
+  {
+    title: "Authentication",
+    description: "Secure your requests with API keys created from the dashboard.",
+    snippet: "Authorization: Bearer <TOKEN>",
+    href: "/docs/quickstart",
+  },
+  {
+    title: "Search endpoint",
+    description: "Retrieve matched video results from one public route.",
+    snippet: "POST /v1/search",
+    href: "/docs/search-api",
+  },
+  {
+    title: "Usage summary",
+    description: "Monitor tier, billing period, remaining credits, and active API keys.",
+    snippet: "GET /v1/usage",
+    href: "/docs/usage-api",
+  },
+  {
+    title: "Service metadata",
+    description: "Sanity-check the public service identity and environment wiring.",
+    snippet: "GET /v1/meta",
+    href: "/docs/api-reference",
+  },
+] as const;
+
+export const apiReferenceEndpoints: ApiReferenceEndpoint[] = [
+  {
+    id: "search-v1",
+    group: "Search",
+    method: "POST",
+    path: "/v1/search",
+    title: "Search videos",
+    description:
+      "Unified retrieval endpoint for both b-roll assets and timestamped knowledge segments.",
+    authLabel: "Bearer API key",
+    authDescription:
+      "Requires a Cerul API key from the dashboard in the Authorization header.",
+    parameters: [
+      {
+        name: "query",
+        type: "string",
+        required: "Yes",
+        description: "Natural-language search request.",
+      },
+      {
+        name: "search_type",
+        type: "\"broll\" | \"knowledge\"",
+        required: "Yes",
+        description: "Select asset retrieval or timestamped knowledge retrieval.",
+      },
+      {
+        name: "max_results",
+        type: "integer",
+        required: "No",
+        description: "Result count from 1 to 50. Defaults to 10.",
+      },
+      {
+        name: "include_answer",
+        type: "boolean",
+        required: "No",
+        description: "Only valid for knowledge searches. Adds a synthesized answer.",
+      },
+      {
+        name: "filters",
+        type: "object",
+        required: "No",
+        description:
+          "Track-specific filters such as duration/source for b-roll or speaker/published_after for knowledge.",
+      },
+    ],
+    requestExamples: [
+      {
+        label: "cURL",
+        language: "bash",
+        filename: "search.sh",
+        code: `curl "${API_BASE_URL}/v1/search" \\
+  -H "Authorization: Bearer YOUR_CERUL_API_KEY" \\
+  -H "Content-Type: application/json" \\
+  -d '{
+    "query": "Sam Altman views on AI video generation tools",
+    "search_type": "knowledge",
+    "max_results": 3,
+    "include_answer": true
+  }'`,
+      },
+      {
+        label: "Python",
+        language: "python",
+        filename: "search.py",
+        code: `import requests
+
+headers = {
+    "Authorization": "Bearer YOUR_CERUL_API_KEY",
+    "Content-Type": "application/json",
+}
+
+payload = {
+    "query": "Sam Altman views on AI video generation tools",
+    "search_type": "knowledge",
+    "max_results": 3,
+    "include_answer": True,
+}
+
+response = requests.post("${API_BASE_URL}/v1/search", headers=headers, json=payload)
+print(response.json())`,
+      },
+    ],
+    responseSchema: `{
+  "results": [
+    {
+      "id": "string",
+      "score": "number",
+      "title": "string",
+      "description": "string",
+      "video_url": "string",
+      "thumbnail_url": "string",
+      "duration": "integer",
+      "source": "string",
+      "license": "string",
+      "timestamp_start": "number | omitted for broll",
+      "timestamp_end": "number | omitted for broll",
+      "answer": "string | null"
+    }
+  ],
+  "credits_used": "integer",
+  "credits_remaining": "integer",
+  "request_id": "req_<24 hex>"
+}`,
+    responseExample: `{
+  "results": [
+    {
+      "id": "yt_talk_segment_12",
+      "score": 0.93,
+      "title": "AI video tools discussion",
+      "description": "Segment covering current views on AI video generation tooling.",
+      "video_url": "https://cdn.cerul.ai/previews/yt_talk_segment_12.mp4",
+      "thumbnail_url": "https://cdn.cerul.ai/previews/yt_talk_segment_12.jpg",
+      "duration": 42,
+      "source": "youtube",
+      "license": "source-license",
+      "timestamp_start": 812.4,
+      "timestamp_end": 854.6,
+      "answer": "The speaker frames current AI video generation tools as improving quickly, but still constrained by controllability and production reliability."
+    }
+  ],
+  "credits_used": 3,
+  "credits_remaining": 997,
+  "request_id": "req_9f8c1d5b2a9f7d1a8c4e6b02"
+}`,
+  },
+  {
+    id: "usage-v1",
+    group: "Usage",
+    method: "GET",
+    path: "/v1/usage",
+    title: "Check usage",
+    description: "Return current plan posture, billing window, credit usage, and active key count.",
+    authLabel: "Bearer API key",
+    authDescription:
+      "Requires a Cerul API key. Use it to monitor usage before automating heavier traffic.",
+    parameters: [],
+    requestExamples: [
+      {
+        label: "cURL",
+        language: "bash",
+        filename: "usage.sh",
+        code: `curl "${API_BASE_URL}/v1/usage" \\
+  -H "Authorization: Bearer YOUR_CERUL_API_KEY"`,
+      },
+    ],
+    responseSchema: `{
+  "tier": "string",
+  "period_start": "YYYY-MM-DD",
+  "period_end": "YYYY-MM-DD",
+  "credits_limit": "integer",
+  "credits_used": "integer",
+  "credits_remaining": "integer",
+  "rate_limit_per_sec": "integer",
+  "api_keys_active": "integer"
+}`,
+    responseExample: `{
+  "tier": "free",
+  "period_start": "2026-03-01",
+  "period_end": "2026-03-31",
+  "credits_limit": 1000,
+  "credits_used": 128,
+  "credits_remaining": 872,
+  "rate_limit_per_sec": 1,
+  "api_keys_active": 1
+}`,
+  },
+  {
+    id: "meta-v1",
+    group: "Meta",
+    method: "GET",
+    path: "/v1/meta",
+    title: "Read service metadata",
+    description: "Lightweight public metadata route for service identity and environment sanity checks.",
+    authLabel: "No auth",
+    authDescription: "This route is public and can be used for non-sensitive health or environment checks.",
+    parameters: [],
+    requestExamples: [
+      {
+        label: "cURL",
+        language: "bash",
+        filename: "meta.sh",
+        code: `curl "${API_BASE_URL}/v1/meta"`,
+      },
+    ],
+    responseSchema: `{
+  "service": "string",
+  "framework": "string",
+  "environment": "string"
+}`,
+    responseExample: `{
+  "service": "cerul-api",
+  "framework": "fastapi",
+  "environment": "development"
+}`,
+  },
+] as const;
+
+export function getApiReferenceEndpoint(endpointId = "search-v1") {
+  return (
+    apiReferenceEndpoints.find((endpoint) => endpoint.id === endpointId)
+    ?? apiReferenceEndpoints[0]
+  );
 }

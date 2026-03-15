@@ -45,7 +45,7 @@ export function DashboardShell({
               </p>
               <p className="mt-2 text-xl font-bold text-white">Cerul Sandbox</p>
               <p className="mt-1 text-sm text-[var(--foreground-secondary)]">
-                Shared platform for b-roll and knowledge search.
+                Shared workspace for API keys, usage, and search operations.
               </p>
             </div>
             <nav className="mt-4 space-y-1">
