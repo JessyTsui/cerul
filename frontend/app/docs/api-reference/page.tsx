@@ -1,8 +1,8 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { BrandMark } from "@/components/brand-mark";
 import { CodeBlock } from "@/components/code-block";
 import { DocsTabs } from "@/components/docs-tabs";
+import { SiteHeader } from "@/components/site-header";
 import { apiReferenceEndpoints } from "@/lib/docs";
 
 export const metadata: Metadata = {
@@ -40,32 +40,9 @@ export default function ApiReferencePage() {
   return (
     <div className="min-h-screen px-4 pb-8 pt-4 sm:px-6 lg:px-8">
       <div className="mx-auto max-w-[1520px]">
-        <header className="rounded-[24px] border border-[var(--border)] bg-[rgba(9,13,21,0.92)] px-5 py-4 shadow-[0_22px_60px_rgba(2,6,18,0.2)]">
-          <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-            <div className="flex items-center gap-4">
-              <BrandMark />
-              <div>
-                <p className="font-mono text-[11px] uppercase tracking-[0.18em] text-[var(--brand-bright)]">
-                  API Reference
-                </p>
-                <p className="mt-1 text-sm text-[var(--foreground-secondary)]">
-                  Endpoint shapes, request parameters, and response examples.
-                </p>
-              </div>
-            </div>
+        <SiteHeader currentPath="/docs/api-reference" />
 
-            <div className="flex items-center gap-3">
-              <span className="rounded-full border border-[var(--border)] px-3 py-1 text-sm text-[var(--foreground-secondary)]">
-                v2.0
-              </span>
-              <span className="rounded-full border border-[var(--border-brand)] bg-[var(--brand-subtle)] px-3 py-1 text-sm text-[var(--brand-bright)]">
-                Base URL: https://api.cerul.ai
-              </span>
-            </div>
-          </div>
-        </header>
-
-        <div className="mt-6 grid gap-6 lg:grid-cols-[300px_minmax(0,1fr)_360px]">
+        <div className="mt-8 grid gap-6 lg:grid-cols-[300px_minmax(0,1fr)_360px]">
           <aside className="sticky top-24 h-fit rounded-[24px] border border-[var(--border)] bg-[rgba(9,13,21,0.92)] p-4 shadow-[0_22px_60px_rgba(2,6,18,0.16)]">
             <div className="rounded-[16px] border border-[var(--border-brand)] bg-[rgba(34,211,238,0.08)] px-4 py-4">
               <p className="font-mono text-[11px] uppercase tracking-[0.16em] text-[var(--brand-bright)]">
@@ -115,6 +92,14 @@ export default function ApiReferencePage() {
               <p className="font-mono text-[11px] uppercase tracking-[0.18em] text-[var(--brand-bright)]">
                 API contract
               </p>
+              <div className="mt-4 flex flex-wrap items-center gap-3 text-sm text-[var(--foreground-secondary)]">
+                <span className="rounded-full border border-[var(--border)] px-3 py-1">
+                  v2.0
+                </span>
+                <span className="rounded-full border border-[var(--border-brand)] bg-[var(--brand-subtle)] px-3 py-1 text-[var(--brand-bright)]">
+                  Base URL: https://api.cerul.ai
+                </span>
+              </div>
               <h1 className="mt-4 text-4xl font-semibold tracking-[-0.05em] text-white sm:text-5xl">
                 Public endpoints, accurate payloads, no dashboard-only chrome.
               </h1>

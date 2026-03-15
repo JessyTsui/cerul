@@ -1,7 +1,6 @@
 "use client";
 
 import Link from "next/link";
-import { useId, useState } from "react";
 import { BrandMark } from "@/components/brand-mark";
 import { isPrimaryNavigationActive, primaryNavigation } from "@/lib/site";
 
@@ -10,56 +9,16 @@ type SiteHeaderProps = {
 };
 
 export function SiteHeader({ currentPath }: SiteHeaderProps) {
-  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const navigationId = useId();
-  const actionsId = useId();
   const visibleNavigation = primaryNavigation.filter((item) => item.href !== "/dashboard");
 
   return (
     <header className="sticky top-4 z-50 mx-auto max-w-[1400px]">
-      <div className="surface-elevated flex flex-col gap-4 rounded-[26px] px-5 py-4 backdrop-blur-xl lg:flex-row lg:items-center lg:justify-between lg:px-6">
-        <div className="flex items-center justify-between gap-4">
+      <div className="surface-elevated flex flex-col gap-4 rounded-[26px] px-5 py-4 backdrop-blur-xl lg:grid lg:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] lg:items-center lg:gap-8 lg:px-6 xl:gap-12">
+        <div className="flex items-center gap-4 lg:pr-8">
           <BrandMark />
-          <button
-            type="button"
-            aria-controls={`${navigationId} ${actionsId}`}
-            aria-expanded={mobileMenuOpen}
-            className="button-ghost focus-ring lg:hidden"
-            onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-            aria-label="Toggle menu"
-          >
-            <svg
-              width="24"
-              height="24"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            >
-              {mobileMenuOpen ? (
-                <>
-                  <line x1="18" y1="6" x2="6" y2="18" />
-                  <line x1="6" y1="6" x2="18" y2="18" />
-                </>
-              ) : (
-                <>
-                  <line x1="4" y1="6" x2="20" y2="6" />
-                  <line x1="4" y1="12" x2="20" y2="12" />
-                  <line x1="4" y1="18" x2="20" y2="18" />
-                </>
-              )}
-            </svg>
-          </button>
         </div>
 
-        <nav
-          id={navigationId}
-          className={`flex-col gap-4 lg:flex lg:flex-row lg:items-center lg:gap-7 ${
-            mobileMenuOpen ? "flex" : "hidden"
-          }`}
-        >
+        <nav className="flex flex-wrap items-center gap-4 lg:justify-self-center lg:gap-7">
           {visibleNavigation.map((item) => {
             const isActive = isPrimaryNavigationActive(currentPath, item.href);
 
@@ -68,7 +27,6 @@ export function SiteHeader({ currentPath }: SiteHeaderProps) {
                 key={item.label}
                 href={item.href}
                 className={`nav-link px-2 ${isActive ? "nav-link-active" : ""}`}
-                onClick={() => setMobileMenuOpen(false)}
               >
                 {item.label}
               </Link>
@@ -76,12 +34,7 @@ export function SiteHeader({ currentPath }: SiteHeaderProps) {
           })}
         </nav>
 
-        <div
-          id={actionsId}
-          className={`flex-col gap-3 lg:flex lg:flex-row lg:items-center ${
-            mobileMenuOpen ? "flex" : "hidden"
-          }`}
-        >
+        <div className="flex flex-wrap items-center gap-3 lg:justify-self-end">
           <a
             href="https://github.com/JessyTsui/cerul"
             target="_blank"

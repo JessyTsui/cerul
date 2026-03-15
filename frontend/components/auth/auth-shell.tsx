@@ -5,9 +5,6 @@ type AuthShellProps = {
   heroEyebrow: string;
   heroTitle: string;
   heroDescription: string;
-  formEyebrow: string;
-  formTitle: string;
-  formDescription: string;
   highlights: readonly string[];
   children: ReactNode;
 };
@@ -16,73 +13,97 @@ export function AuthShell({
   heroEyebrow,
   heroTitle,
   heroDescription,
-  formEyebrow,
-  formTitle,
-  formDescription,
   highlights,
   children,
 }: AuthShellProps) {
   return (
-    <div className="min-h-screen px-4 py-4 sm:px-6 lg:px-8">
-      <div className="relative mx-auto min-h-[calc(100vh-2rem)] max-w-[1560px] overflow-hidden rounded-[36px] border border-[rgba(148,163,184,0.14)] bg-[#05070d] shadow-[0_40px_140px_rgba(2,6,18,0.55)]">
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_16%_22%,rgba(69,122,255,0.18),transparent_20%),radial-gradient(circle_at_38%_50%,rgba(73,67,185,0.18),transparent_26%),radial-gradient(circle_at_72%_72%,rgba(34,211,238,0.12),transparent_20%),linear-gradient(180deg,#08101d_0%,#060912_55%,#05070d_100%)]" />
-        <div className="absolute inset-0 bg-[linear-gradient(90deg,rgba(255,255,255,0.02),transparent_18%,transparent_82%,rgba(255,255,255,0.02))]" />
-        <div className="pointer-events-none absolute inset-y-[8%] left-[56%] hidden w-px bg-[linear-gradient(180deg,transparent,rgba(255,255,255,0.06),transparent)] lg:block" />
+    <div className="min-h-screen">
+      <div className="relative mx-auto grid min-h-screen lg:grid-cols-2">
+        {/* Left Panel - Hero */}
+        <section className="relative hidden flex-col justify-between overflow-hidden bg-[#05070d] px-12 py-10 lg:flex lg:px-16 xl:px-20">
+          {/* Background Effects */}
+          <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_35%,rgba(34,211,238,0.15),transparent_50%),radial-gradient(circle_at_80%_80%,rgba(14,165,233,0.1),transparent_40%)]" />
+          <div className="absolute inset-0 bg-[linear-gradient(135deg,rgba(255,255,255,0.02)_0%,transparent_50%)]" />
 
-        <div className="relative grid min-h-[calc(100vh-2rem)] lg:grid-cols-[1.08fr_0.92fr]">
-          <section className="relative flex min-h-[340px] flex-col justify-between overflow-hidden px-8 py-8 sm:px-10 lg:px-14 lg:py-14">
-            <div className="absolute inset-0 bg-[linear-gradient(135deg,rgba(255,255,255,0.02),transparent_28%,transparent_72%,rgba(255,255,255,0.015))]" />
+          {/* Top - Logo */}
+          <div className="relative z-10">
+            <BrandMark />
+          </div>
 
-            <div className="relative">
-              <BrandMark />
-            </div>
-
-            <div className="relative max-w-[560px]">
-              <p className="font-mono text-[11px] uppercase tracking-[0.22em] text-[rgba(194,208,255,0.76)]">
+          {/* Middle - Content */}
+          <div className="relative z-10 max-w-[520px]">
+            <div className="inline-flex items-center gap-2 rounded-full border border-[var(--border-brand)] bg-[var(--brand-subtle)] px-4 py-1.5">
+              <span className="h-1.5 w-1.5 rounded-full bg-[var(--brand-bright)]" />
+              <span className="font-mono text-[11px] uppercase tracking-[0.16em] text-[var(--brand-bright)]">
                 {heroEyebrow}
-              </p>
-              <h1 className="mt-6 max-w-[11ch] text-5xl font-semibold tracking-[-0.07em] text-white sm:text-6xl lg:text-7xl">
-                {heroTitle}
-              </h1>
-              <p className="mt-6 max-w-[520px] text-lg leading-9 text-[rgba(209,218,235,0.72)]">
-                {heroDescription}
-              </p>
+              </span>
             </div>
 
-            <div className="relative mt-10 grid gap-3 border-t border-[rgba(148,163,184,0.12)] pt-6 sm:grid-cols-3">
+            <h1 className="mt-6 text-4xl font-semibold leading-[1.15] tracking-tight text-white xl:text-5xl">
+              {heroTitle}
+            </h1>
+
+            <p className="mt-5 text-base leading-relaxed text-[var(--foreground-secondary)]">
+              {heroDescription}
+            </p>
+
+            {/* Features */}
+            <div className="mt-10 flex flex-wrap gap-3">
               {highlights.map((item) => (
-                <div
+                <span
                   key={item}
-                  className="rounded-[20px] border border-[rgba(148,163,184,0.12)] bg-[rgba(8,13,23,0.44)] px-4 py-4 text-sm text-[rgba(209,218,235,0.78)] backdrop-blur-sm"
+                  className="inline-flex items-center gap-2 rounded-full border border-[var(--border)] bg-[rgba(255,255,255,0.02)] px-4 py-2 text-sm text-[var(--foreground-secondary)]"
                 >
-                  <span className="flex h-9 w-9 items-center justify-center rounded-full border border-[rgba(255,255,255,0.08)] bg-[rgba(255,255,255,0.03)] text-[var(--brand-bright)]">
-                    <span className="h-2 w-2 rounded-full bg-current" />
-                  </span>
-                  <span className="mt-4 block">{item}</span>
-                </div>
+                  <svg
+                    className="h-4 w-4 text-[var(--brand-bright)]"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                  >
+                    <path d="M20 6L9 17l-5-5" />
+                  </svg>
+                  {item}
+                </span>
               ))}
             </div>
-          </section>
+          </div>
 
-          <section className="relative flex items-center justify-center px-6 py-10 sm:px-8 lg:px-12">
-            <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_18%,rgba(255,255,255,0.03),transparent_24%),radial-gradient(circle_at_50%_100%,rgba(34,211,238,0.05),transparent_34%)]" />
-
-            <div className="relative w-full max-w-[510px] rounded-[34px] border border-[rgba(148,163,184,0.14)] bg-[linear-gradient(180deg,rgba(4,7,12,0.82),rgba(7,10,16,0.92))] px-6 py-8 shadow-[0_28px_90px_rgba(0,0,0,0.28)] backdrop-blur-2xl sm:px-8 sm:py-9">
-              <div className="pointer-events-none absolute inset-0 rounded-[34px] border border-[rgba(255,255,255,0.03)]" />
-              <p className="font-mono text-[11px] uppercase tracking-[0.2em] text-[rgba(194,208,255,0.7)]">
-                {formEyebrow}
+          {/* Bottom - Quote */}
+          <div className="relative z-10">
+            <blockquote className="border-l-2 border-[var(--border-brand)] pl-5">
+              <p className="text-sm leading-relaxed text-[var(--foreground-secondary)]">
+                &ldquo;Video understanding should be as simple as a search query.&rdquo;
               </p>
-              <h2 className="mt-4 text-4xl font-semibold tracking-[-0.06em] text-white sm:text-5xl">
-                {formTitle}
-              </h2>
-              <p className="mt-4 max-w-[38ch] text-base leading-8 text-[rgba(209,218,235,0.66)]">
-                {formDescription}
+              <p className="mt-2 text-xs text-[var(--foreground-tertiary)]">
+                — Cerul Team
               </p>
+            </blockquote>
+          </div>
+        </section>
 
-              <div className="mt-8">{children}</div>
+        {/* Right Panel - Form */}
+        <section className="relative flex min-h-screen flex-col items-center justify-center bg-[var(--background)] px-6 py-12 sm:px-8 lg:bg-[linear-gradient(180deg,#080a10_0%,#05070d_100%)] lg:px-12">
+          {/* Mobile Logo */}
+          <div className="mb-8 flex items-center gap-3 lg:hidden">
+            <BrandMark />
+          </div>
+
+          {/* Form Container */}
+          <div className="relative w-full max-w-[420px]">
+            {/* Subtle glow effect */}
+            <div className="absolute -inset-px rounded-3xl bg-gradient-to-b from-[rgba(34,211,238,0.08)] to-transparent opacity-50 blur-sm" />
+
+            <div className="relative rounded-3xl border border-[var(--border)] bg-[rgba(8,11,18,0.8)] p-8 shadow-2xl backdrop-blur-xl sm:p-10">
+              {children}
             </div>
-          </section>
-        </div>
+          </div>
+
+          {/* Footer */}
+          <p className="mt-8 max-w-[420px] text-center text-xs leading-6 text-[var(--foreground-tertiary)]">
+            Browser sessions only unlock the Cerul console. Public API calls still use scoped bearer keys.
+          </p>
+        </section>
       </div>
     </div>
   );

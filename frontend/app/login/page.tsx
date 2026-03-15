@@ -33,9 +33,6 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
       heroEyebrow="Console access"
       heroTitle="Search video evidence without losing operator clarity."
       heroDescription="Sign in to manage API keys, usage, and billing in one clean console while your production integrations keep using scoped bearer keys."
-      formEyebrow="Welcome back"
-      formTitle="Sign in"
-      formDescription="Use your Cerul account to continue to the dashboard. Web sessions stay separate from public API key auth."
       highlights={["Operator console", "Scoped API keys", "Usage and billing"]}
     >
       <AuthSessionRedirect nextPath={nextPath} />

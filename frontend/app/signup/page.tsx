@@ -33,9 +33,6 @@ export default async function SignupPage({ searchParams }: SignupPageProps) {
       heroEyebrow="Create workspace"
       heroTitle="One account for the console, separate keys for every app."
       heroDescription="Create your Cerul workspace, land in the dashboard immediately, and issue API keys per environment instead of routing everything through one long-lived secret."
-      formEyebrow="Get started"
-      formTitle="Create your account"
-      formDescription="Sign up for the console first. After onboarding, generate the API keys your product will actually use."
       highlights={["Sandbox first", "Separate web auth", "Production-ready keys"]}
     >
       <AuthSessionRedirect nextPath={nextPath} />

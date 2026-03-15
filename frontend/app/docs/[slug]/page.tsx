@@ -2,10 +2,10 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { AIToolbar } from "@/components/ai-toolbar";
-import { BrandMark } from "@/components/brand-mark";
 import { CodeBlock } from "@/components/code-block";
 import { DocsSidebar } from "@/components/docs-sidebar";
 import { DocsToc, type TocItem } from "@/components/docs-toc";
+import { SiteHeader } from "@/components/site-header";
 import {
   getDocBySlug,
   getDocsPageCanonical,
@@ -59,33 +59,9 @@ export default async function DocDetailPage({ params }: DocPageProps) {
   return (
     <div className="min-h-screen px-4 pb-8 pt-4 sm:px-6 lg:px-8">
       <div className="mx-auto max-w-[1480px]">
-        <header className="rounded-[24px] border border-[var(--border)] bg-[rgba(9,13,21,0.92)] px-5 py-4 shadow-[0_22px_60px_rgba(2,6,18,0.2)]">
-          <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-            <div className="flex items-center gap-4">
-              <BrandMark />
-              <div className="min-w-0">
-                <p className="font-mono text-[11px] uppercase tracking-[0.18em] text-[var(--brand-bright)]">
-                  Cerul API
-                </p>
-                <div className="mt-1 flex flex-wrap items-center gap-2 text-sm text-[var(--foreground-secondary)]">
-                  <Link href="/docs" className="transition hover:text-white">
-                    Documentation
-                  </Link>
-                  <span>/</span>
-                  <span>{page.kicker}</span>
-                  <span>/</span>
-                  <span className="text-white">{page.title}</span>
-                </div>
-              </div>
-            </div>
+        <SiteHeader currentPath={`/docs/${slug}`} />
 
-            <Link href="/docs" className="button-secondary self-start lg:self-auto">
-              Back to docs
-            </Link>
-          </div>
-        </header>
-
-        <div className="mt-6 grid gap-6 lg:grid-cols-[260px_minmax(0,1fr)_260px]">
+        <div className="mt-8 grid gap-6 lg:grid-cols-[260px_minmax(0,1fr)_260px]">
           <DocsSidebar currentSlug={slug} />
 
           <main
@@ -96,6 +72,15 @@ export default async function DocDetailPage({ params }: DocPageProps) {
               <p className="font-mono text-[11px] uppercase tracking-[0.18em] text-[var(--brand-bright)]">
                 {page.kicker}
               </p>
+              <div className="mt-4 flex flex-wrap items-center gap-2 text-sm text-[var(--foreground-secondary)]">
+                <Link href="/docs" className="transition hover:text-white">
+                  Documentation
+                </Link>
+                <span>/</span>
+                <span>{page.kicker}</span>
+                <span>/</span>
+                <span className="text-white">{page.title}</span>
+              </div>
               <h1 className="mt-4 text-4xl font-semibold tracking-[-0.05em] text-white sm:text-5xl">
                 {page.title}
               </h1>
@@ -123,6 +108,9 @@ export default async function DocDetailPage({ params }: DocPageProps) {
                     Quick action
                   </p>
                   <div className="mt-3 flex flex-wrap gap-3">
+                    <Link href="/docs" className="button-secondary">
+                      Back to docs
+                    </Link>
                     <Link href="/docs/api-reference" className="button-secondary">
                       API Reference
                     </Link>

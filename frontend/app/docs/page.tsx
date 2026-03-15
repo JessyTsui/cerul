@@ -2,8 +2,8 @@ import type { Metadata } from "next";
 import type { Route } from "next";
 import Link from "next/link";
 import { AIToolbar } from "@/components/ai-toolbar";
-import { BrandMark } from "@/components/brand-mark";
 import { DocsSidebar } from "@/components/docs-sidebar";
+import { SiteHeader } from "@/components/site-header";
 import { docsFeatureCards, docsPopularTopics, getDocsIndexCards } from "@/lib/docs";
 
 export const revalidate = 3600;
@@ -22,32 +22,9 @@ export default function DocsPage() {
   return (
     <div className="min-h-screen px-4 pb-8 pt-4 sm:px-6 lg:px-8">
       <div className="mx-auto max-w-[1480px]">
-        <header className="rounded-[24px] border border-[var(--border)] bg-[rgba(9,13,21,0.92)] px-5 py-4 shadow-[0_22px_60px_rgba(2,6,18,0.2)]">
-          <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-            <div className="flex items-center gap-4">
-              <BrandMark />
-              <div>
-                <p className="font-mono text-[11px] uppercase tracking-[0.18em] text-[var(--brand-bright)]">
-                  Documentation
-                </p>
-                <p className="mt-1 text-sm text-[var(--foreground-secondary)]">
-                  Guides, endpoint references, and integration notes.
-                </p>
-              </div>
-            </div>
+        <SiteHeader currentPath="/docs" />
 
-            <div className="flex flex-wrap items-center gap-3">
-              <span className="rounded-full border border-[var(--border)] px-3 py-1 text-sm text-[var(--foreground-secondary)]">
-                Base URL: https://api.cerul.ai
-              </span>
-              <Link href="/docs/api-reference" className="button-secondary">
-                Open API reference
-              </Link>
-            </div>
-          </div>
-        </header>
-
-        <div className="mt-6 grid gap-6 lg:grid-cols-[260px_minmax(0,1fr)_260px]">
+        <div className="mt-8 grid gap-6 lg:grid-cols-[260px_minmax(0,1fr)_260px]">
           <DocsSidebar currentPath="/docs" />
 
           <main className="min-w-0 space-y-6">
@@ -56,6 +33,12 @@ export default function DocsPage() {
                 <p className="font-mono text-[11px] uppercase tracking-[0.18em] text-[var(--brand-bright)]">
                   Developer docs
                 </p>
+                <div className="mt-4 flex flex-wrap items-center gap-3 text-sm text-[var(--foreground-secondary)]">
+                  <span className="rounded-full border border-[var(--border)] px-3 py-1">
+                    Base URL: https://api.cerul.ai
+                  </span>
+                  <span>Guides, endpoint references, and integration notes.</span>
+                </div>
                 <h1 className="mt-4 text-4xl font-semibold tracking-[-0.05em] text-white sm:text-5xl">
                   Build against Cerul without reverse-engineering the product.
                 </h1>

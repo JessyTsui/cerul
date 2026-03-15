@@ -14,24 +14,24 @@ export function AuthModeSwitcher({
   nextPath,
 }: AuthModeSwitcherProps) {
   return (
-    <div className="rounded-[18px] border border-[rgba(148,163,184,0.12)] bg-[rgba(255,255,255,0.015)] p-1 shadow-[inset_0_1px_0_rgba(255,255,255,0.03)]">
+    <div className="rounded-2xl border border-[var(--border)] bg-[rgba(255,255,255,0.02)] p-1">
       <div className="grid grid-cols-2 gap-1">
         <Link
           href={buildAuthPageHref("/login", nextPath) as Route}
-          className={`focus-ring rounded-[14px] px-4 py-3 text-center text-sm font-medium transition ${
+          className={`inline-flex min-h-11 items-center justify-center rounded-[14px] px-4 text-base font-medium transition ${
             activeMode === "login"
-              ? "bg-[linear-gradient(180deg,rgba(255,255,255,0.96),rgba(237,243,255,0.88))] text-[#090c14] shadow-[0_14px_30px_rgba(255,255,255,0.08)]"
-              : "text-[rgba(209,218,235,0.6)] hover:bg-white/5 hover:text-white"
+              ? "border border-[var(--border-brand)] bg-[rgba(34,211,238,0.1)] text-[var(--brand-bright)] shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]"
+              : "border border-transparent text-[var(--foreground-tertiary)] hover:bg-[rgba(255,255,255,0.03)] hover:text-[var(--foreground-secondary)]"
           }`}
         >
           Sign in
         </Link>
         <Link
           href={buildAuthPageHref("/signup", nextPath) as Route}
-          className={`focus-ring rounded-[14px] px-4 py-3 text-center text-sm font-medium transition ${
+          className={`inline-flex min-h-11 items-center justify-center rounded-[14px] px-4 text-base font-medium transition ${
             activeMode === "signup"
-              ? "bg-[linear-gradient(180deg,rgba(255,255,255,0.96),rgba(237,243,255,0.88))] text-[#090c14] shadow-[0_14px_30px_rgba(255,255,255,0.08)]"
-              : "text-[rgba(209,218,235,0.6)] hover:bg-white/5 hover:text-white"
+              ? "border border-[var(--border-brand)] bg-[rgba(34,211,238,0.1)] text-[var(--brand-bright)] shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]"
+              : "border border-transparent text-[var(--foreground-tertiary)] hover:bg-[rgba(255,255,255,0.03)] hover:text-[var(--foreground-secondary)]"
           }`}
         >
           Sign up
