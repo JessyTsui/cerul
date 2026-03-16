@@ -15,7 +15,7 @@
   },
   "dependencies": {
     "better-auth": "^1.5.4",
-    "kysely": "^0.28.11",
+    "kysely": "^0.28.12",
     "next": "16.1.6",
     "pg": "^8.20.0",
     "react": "19.2.4",
