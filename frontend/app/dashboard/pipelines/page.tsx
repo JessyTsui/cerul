@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { DashboardPipelinesScreen } from "@/components/dashboard/pipelines-screen";
+import { redirect } from "next/navigation";
 
 export const metadata: Metadata = {
   title: "Dashboard Pipelines",
@@ -10,5 +10,5 @@ export const metadata: Metadata = {
 };
 
 export default function DashboardPipelinesPage() {
-  return <DashboardPipelinesScreen />;
+  redirect("/admin/pipelines");
 }

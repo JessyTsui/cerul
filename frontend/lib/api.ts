@@ -1,4 +1,4 @@
-const DEFAULT_API_BASE_URL = "http://localhost:9104";
+import { buildConsoleProxyPath } from "./console-api";
 
 type JsonBody =
   | Record<string, unknown>
@@ -264,7 +264,7 @@ export function getApiErrorMessage(
   fallback = "Something went wrong while contacting the dashboard API.",
 ): string {
   if (error instanceof TypeError) {
-    return "Could not reach the dashboard API. Verify NEXT_PUBLIC_API_BASE_URL and ensure CORS allows credentialed requests from this app.";
+    return "Could not reach the dashboard API. Verify NEXT_PUBLIC_API_BASE_URL or API_BASE_URL and ensure the backend is reachable from the frontend proxy.";
   }
 
   if (error instanceof ApiClientError) {
@@ -286,16 +286,8 @@ function isJsonBody(body: FetchWithAuthOptions["body"]): body is JsonBody {
   return isPlainObject(body) || Array.isArray(body);
 }
 
-function getApiBaseUrl(): string {
-  return (
-    process.env.NEXT_PUBLIC_API_BASE_URL?.replace(/\/$/, "") ??
-    DEFAULT_API_BASE_URL
-  );
-}
-
 function buildUrl(path: string): string {
-  const normalizedPath = path.startsWith("/") ? path : `/${path}`;
-  return `${getApiBaseUrl()}${normalizedPath}`;
+  return buildConsoleProxyPath(path);
 }
 
 async function parseResponseBody(response: Response): Promise<unknown> {

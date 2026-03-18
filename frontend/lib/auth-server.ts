@@ -104,6 +104,35 @@ function createAuth() {
 }
 
 let authInstance: ReturnType<typeof createAuth> | null = null;
+const SESSION_CACHE_TTL_MS = process.env.NODE_ENV === "development" ? 15_000 : 5_000;
+const SESSION_CACHE_LIMIT = 128;
+const sessionCache = new Map<
+  string,
+  {
+    expiresAt: number;
+    value: Awaited<ReturnType<ReturnType<typeof getAuth>["api"]["getSession"]>>;
+  }
+>();
+
+function pruneExpiredSessionCache(now: number) {
+  for (const [key, entry] of sessionCache.entries()) {
+    if (entry.expiresAt <= now) {
+      sessionCache.delete(key);
+    }
+  }
+
+  if (sessionCache.size <= SESSION_CACHE_LIMIT) {
+    return;
+  }
+
+  const overflow = sessionCache.size - SESSION_CACHE_LIMIT;
+  for (const key of sessionCache.keys()) {
+    sessionCache.delete(key);
+    if (sessionCache.size <= SESSION_CACHE_LIMIT - overflow) {
+      break;
+    }
+  }
+}
 
 export function getAuth() {
   if (!authInstance) {
@@ -119,12 +148,28 @@ export function getAuthRouteHandlers() {
 
 export const getServerSession = cache(async function getServerSession() {
   const requestHeaders = await headers();
+  const cookieHeader = requestHeaders.get("cookie");
 
-  if (!requestHeaders.get("cookie")) {
+  if (!cookieHeader) {
     return null;
   }
 
-  return getAuth().api.getSession({
+  const now = Date.now();
+  const cached = sessionCache.get(cookieHeader);
+
+  if (cached && cached.expiresAt > now) {
+    return cached.value;
+  }
+
+  const session = await getAuth().api.getSession({
     headers: requestHeaders,
   });
+
+  sessionCache.set(cookieHeader, {
+    expiresAt: now + SESSION_CACHE_TTL_MS,
+    value: session,
+  });
+  pruneExpiredSessionCache(now);
+
+  return session;
 });

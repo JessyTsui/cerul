@@ -1,4 +1,4 @@
-from .access import require_admin_access, require_operator_access
+from .access import require_admin_access
 from .models import (
     AdminSummaryResponse,
     AdminTargetsResponse,
@@ -27,6 +27,5 @@ __all__ = [
     "fetch_targets_summary",
     "fetch_users_summary",
     "require_admin_access",
-    "require_operator_access",
     "upsert_targets",
 ]

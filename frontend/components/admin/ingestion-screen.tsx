@@ -27,7 +27,7 @@ export function AdminIngestionScreen() {
       actions={
         <>
           <AdminRangePicker value={range} onChange={setRange} />
-          <Link className="button-secondary" href="/dashboard/pipelines">
+          <Link className="button-secondary" href="/admin/pipelines">
             Pipeline detail
           </Link>
           <button className="button-primary" onClick={() => void refresh()} type="button">

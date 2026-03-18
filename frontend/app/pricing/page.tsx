@@ -118,7 +118,7 @@ export default function PricingPage() {
             </h2>
             <p className="mt-4 text-[var(--foreground-secondary)]">
               The repository stays infrastructure-oriented and public-safe, while the
-              hosted product compounds through indexing assets, tuning, and operator
+              hosted product compounds through indexing assets, tuning, and admin
               workflows.
             </p>
           </article>

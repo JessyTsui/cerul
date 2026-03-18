@@ -10,6 +10,7 @@ import {
   getTierLabel,
   resolveDashboardBillingAction,
 } from "@/lib/dashboard";
+import { useConsoleViewer } from "@/components/console/console-viewer-context";
 import { DashboardLayout } from "./dashboard-layout";
 import {
   DashboardNotice,
@@ -56,6 +57,7 @@ print(response.json())`,
 type ExampleTab = keyof typeof requestExamples;
 
 export function DashboardOverviewScreen() {
+  const viewer = useConsoleViewer();
   const { data, error, isLoading, refresh } = useMonthlyUsage();
   const [billingError, setBillingError] = useState<string | null>(null);
   const [billingAction, setBillingAction] = useState<"checkout" | "portal" | null>(
@@ -106,12 +108,13 @@ export function DashboardOverviewScreen() {
   }
 
   const featuredKey = keys[0] ?? null;
+  const viewerLabel = viewer.displayName?.split(/\s+/)[0] ?? "Workspace";
 
   return (
     <DashboardLayout
       currentPath="/dashboard"
-      title="Welcome to Cerul"
-      description="Get started in 3 steps, generate credentials, make the first request, and move into the docs with the same private dashboard data powering the operator console."
+      title="Workspace Overview"
+      description="Run the first grounded query, keep quota visible, and move from setup into real usage without leaving the control surface."
       actions={
         <>
           <Link href="/docs/api-reference" className="button-secondary">
@@ -173,181 +176,284 @@ export function DashboardOverviewScreen() {
             />
           ) : null}
 
-          <section className="grid gap-6 xl:grid-cols-[1.2fr_0.8fr]">
-            <div className="space-y-6">
-              <div className="grid gap-6 lg:grid-cols-3">
-                <article className="surface-elevated rounded-[28px] px-5 py-5">
-                  <div className="flex items-center justify-between">
-                    <span className="flex h-10 w-10 items-center justify-center rounded-[14px] bg-[var(--brand-subtle)] text-xl font-semibold text-[var(--brand-bright)]">
-                      1
-                    </span>
-                    <span className="font-mono text-[11px] uppercase tracking-[0.18em] text-[var(--foreground-tertiary)]">
-                      API Key
-                    </span>
-                  </div>
-                  <h2 className="mt-5 text-3xl font-semibold text-white">
-                    Your API Key is Ready
-                  </h2>
-                  <div className="mt-5 rounded-[22px] border border-[var(--border)] bg-[rgba(255,255,255,0.03)] px-4 py-4">
-                    <div className="flex items-center justify-between gap-3">
-                      <p className="font-mono text-sm text-white">
-                        {featuredKey?.prefix ?? "Create your first key"}
-                      </p>
-                      <Link href="/dashboard/keys" className="button-secondary min-w-[96px]">
-                        {featuredKey ? "Manage" : "Create"}
-                      </Link>
-                    </div>
-                    <div className="mt-4 flex flex-wrap gap-2">
-                      <span className="rounded-full bg-[var(--brand-subtle)] px-3 py-1 text-sm text-[var(--brand-bright)]">
-                        Active
-                      </span>
-                      <span className="rounded-full bg-[rgba(255,255,255,0.05)] px-3 py-1 text-sm text-[var(--foreground-secondary)]">
-                        {formatNumber(keys.length)} active key(s)
-                      </span>
-                    </div>
-                    <p className="mt-4 text-sm leading-6 text-[var(--foreground-secondary)]">
-                      {featuredKey
-                        ? "Raw secrets are only shown at creation time. Use the keys page to rotate or generate a fresh key."
-                        : "No active key yet. Create one now to test the public API surface."}
+          {!viewer.isAdmin ? (
+            <section>
+              <article className="surface rounded-[28px] px-6 py-5">
+                <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+                  <div className="max-w-2xl">
+                    <p className="font-mono text-[11px] uppercase tracking-[0.16em] text-[var(--foreground-tertiary)]">
+                      Admin access
+                    </p>
+                    <p className="mt-3 text-sm leading-7 text-[var(--foreground-secondary)]">
+                      If you are bootstrapping the first administrator, open
+                      settings to use the one-time promotion flow. If an admin
+                      already exists, ask them to grant access instead.
                     </p>
                   </div>
-                </article>
+                  <Link className="button-secondary" href="/dashboard/settings">
+                    Open Settings
+                  </Link>
+                </div>
+              </article>
+            </section>
+          ) : null}
 
-                <article className="surface-elevated rounded-[28px] px-5 py-5 lg:col-span-2">
-                  <div className="flex items-center justify-between">
-                    <span className="flex h-10 w-10 items-center justify-center rounded-[14px] bg-[var(--brand-subtle)] text-xl font-semibold text-[var(--brand-bright)]">
-                      2
+          <section className="grid gap-6 xl:grid-cols-[1.18fr_0.82fr]">
+            <article className="surface-elevated relative overflow-hidden rounded-[36px] px-6 py-6 sm:px-7">
+              <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(103,232,249,0.16),transparent_34%),radial-gradient(circle_at_85%_18%,rgba(249,115,22,0.12),transparent_26%)]" />
+              <div className="relative">
+                <div className="flex flex-wrap gap-2">
+                  {[
+                    getTierLabel(data.tier),
+                    formatBillingPeriod(data.periodStart, data.periodEnd),
+                    `${formatNumber(keys.length)} active key${keys.length === 1 ? "" : "s"}`,
+                    viewer.isAdmin ? "Admin-enabled workspace" : "Private workspace",
+                  ].map((item) => (
+                    <span
+                      key={item}
+                      className="inline-flex items-center rounded-full border border-[var(--border)] bg-[rgba(255,255,255,0.04)] px-3 py-1.5 text-sm text-[var(--foreground-secondary)]"
+                    >
+                      {item}
                     </span>
-                    <div className="flex gap-2">
-                      {(["curl", "python", "node"] as ExampleTab[]).map((tab) => (
-                        <button
-                          key={tab}
-                          type="button"
-                          onClick={() => setActiveTab(tab)}
-                          className={`rounded-full px-3 py-1.5 text-sm transition ${
-                            activeTab === tab
-                              ? "bg-[var(--brand-subtle)] text-[var(--brand-bright)]"
-                              : "text-[var(--foreground-secondary)] hover:text-white"
-                          }`}
+                  ))}
+                </div>
+
+                <div className="mt-6 grid gap-6 xl:grid-cols-[0.96fr_1.04fr]">
+                  <div>
+                    <p className="font-mono text-[11px] uppercase tracking-[0.18em] text-[var(--brand-bright)]">
+                      Launch board
+                    </p>
+                    <h2 className="mt-4 text-4xl font-semibold tracking-[-0.06em] text-white sm:text-5xl">
+                      {viewerLabel}, ship the first grounded query.
+                    </h2>
+                    <p className="mt-4 max-w-xl text-base leading-8 text-[var(--foreground-secondary)]">
+                      This workspace is already wired to billing, usage, and key
+                      inventory. Use it like a workspace console: create a key,
+                      run a real request, and keep the ledger visible while you
+                      move from evaluation into production.
+                    </p>
+
+                    <div className="mt-6 grid gap-3 sm:grid-cols-3">
+                      {[
+                        {
+                          title: featuredKey ? "Manage keys" : "Create first key",
+                          body: featuredKey ? featuredKey.prefix : "No active key yet",
+                          href: "/dashboard/keys" as Route,
+                        },
+                        {
+                          title: "Inspect usage",
+                          body: `${formatNumber(data.creditsUsed)} credits used`,
+                          href: "/dashboard/usage" as Route,
+                        },
+                        {
+                          title: "Read docs",
+                          body: "Quickstart, API reference, examples",
+                          href: "/docs/quickstart" as Route,
+                        },
+                      ].map((item) => (
+                        <Link
+                          key={item.title}
+                          href={item.href}
+                          className="rounded-[24px] border border-[var(--border)] bg-[rgba(255,255,255,0.04)] px-4 py-4 transition hover:border-[var(--border-brand)] hover:bg-[rgba(34,211,238,0.08)]"
                         >
-                          {tab === "node" ? "Node.js" : tab === "curl" ? "cURL" : "Python"}
-                        </button>
+                          <p className="text-sm text-[var(--foreground-tertiary)]">{item.title}</p>
+                          <p className="mt-3 text-lg font-semibold text-white">{item.body}</p>
+                        </Link>
                       ))}
                     </div>
                   </div>
-                  <h2 className="mt-5 text-3xl font-semibold text-white">
-                    Make Your First Request
-                  </h2>
-                  <div className="mt-5 overflow-hidden rounded-[22px] border border-[var(--border)] bg-[linear-gradient(180deg,rgba(7,12,22,0.9),rgba(7,10,18,0.98))]">
-                    <div className="border-b border-[var(--border)] px-4 py-3 font-mono text-[11px] uppercase tracking-[0.16em] text-[var(--foreground-tertiary)]">
-                      /v1/search
+
+                  <div className="rounded-[28px] border border-[var(--border)] bg-[linear-gradient(180deg,rgba(7,12,22,0.9),rgba(7,10,18,0.98))]">
+                    <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[var(--border)] px-4 py-4">
+                      <div>
+                        <p className="font-mono text-[11px] uppercase tracking-[0.16em] text-[var(--foreground-tertiary)]">
+                          First request
+                        </p>
+                        <p className="mt-2 text-lg font-semibold text-white">Use the live public contract</p>
+                      </div>
+                      <div className="flex gap-2">
+                        {(["curl", "python", "node"] as ExampleTab[]).map((tab) => (
+                          <button
+                            key={tab}
+                            type="button"
+                            onClick={() => setActiveTab(tab)}
+                            className={`rounded-full px-3 py-1.5 text-sm transition ${
+                              activeTab === tab
+                                ? "bg-[var(--brand-subtle)] text-[var(--brand-bright)]"
+                                : "text-[var(--foreground-secondary)] hover:text-white"
+                            }`}
+                          >
+                            {tab === "node" ? "Node.js" : tab === "curl" ? "cURL" : "Python"}
+                          </button>
+                        ))}
+                      </div>
                     </div>
                     <pre className="overflow-x-auto px-4 py-5 font-mono text-sm leading-7 text-[#d7f7ff]">
                       <code>{requestExamples[activeTab]}</code>
                     </pre>
                   </div>
-                </article>
-              </div>
-
-              <article className="surface-elevated rounded-[28px] px-5 py-5">
-                <div className="flex items-center gap-4">
-                  <span className="flex h-10 w-10 items-center justify-center rounded-[14px] bg-[var(--brand-subtle)] text-xl font-semibold text-[var(--brand-bright)]">
-                    3
-                  </span>
-                  <div>
-                    <h2 className="text-3xl font-semibold text-white">Explore the Docs</h2>
-                    <p className="mt-1 text-sm text-[var(--foreground-secondary)]">
-                      Move from first request to deeper API and usage references.
-                    </p>
-                  </div>
                 </div>
-                <div className="mt-5 grid gap-4 sm:grid-cols-3">
+              </div>
+            </article>
+
+            <div className="space-y-6">
+              <article className="surface-elevated rounded-[32px] px-5 py-5">
+                <p className="font-mono text-[11px] uppercase tracking-[0.16em] text-[var(--foreground-tertiary)]">
+                  Workspace state
+                </p>
+                <div className="mt-5 grid gap-4 sm:grid-cols-2 xl:grid-cols-1">
                   {[
-                    { title: "API Reference", href: "/docs/api-reference" as Route },
-                    { title: "Getting Started Guide", href: "/docs/quickstart" as Route },
-                    { title: "Integration Tutorials", href: "/docs/search-api" as Route },
+                    {
+                      label: "Requests made",
+                      value: formatNumber(data.requestCount),
+                    },
+                    {
+                      label: "Credit headroom",
+                      value: `${Math.max(0, 100 - Math.round((data.creditsUsed / Math.max(1, data.creditsLimit)) * 100))}%`,
+                    },
+                    {
+                      label: "Current plan",
+                      value: getTierLabel(data.tier),
+                    },
+                    {
+                      label: "Billing control",
+                      value: availableBillingAction === "portal"
+                        ? "Self-serve portal"
+                        : availableBillingAction === "checkout"
+                          ? "Upgrade available"
+                          : "Manual / stable",
+                    },
                   ].map((item) => (
-                    <Link
-                      key={item.title}
-                      href={item.href}
-                      className="rounded-[22px] border border-[var(--border-brand)] bg-[var(--brand-subtle)] px-5 py-5 text-2xl font-semibold text-white transition hover:-translate-y-1"
+                    <div
+                      key={item.label}
+                      className="rounded-[22px] border border-[var(--border)] bg-[rgba(255,255,255,0.03)] px-4 py-4"
                     >
-                      {item.title}
-                    </Link>
+                      <p className="text-sm text-[var(--foreground-secondary)]">{item.label}</p>
+                      <p className="mt-2 text-2xl font-semibold text-white">{item.value}</p>
+                    </div>
                   ))}
                 </div>
               </article>
 
-              <article className="surface-elevated rounded-[28px] px-5 py-5">
-                <h2 className="text-3xl font-semibold text-white">What&apos;s Next?</h2>
-                <div className="mt-5 grid gap-4 sm:grid-cols-3">
+              <article className="surface-elevated rounded-[32px] px-5 py-5">
+                <p className="font-mono text-[11px] uppercase tracking-[0.16em] text-[var(--foreground-tertiary)]">
+                  Next moves
+                </p>
+                <div className="mt-5 space-y-3">
                   {[
                     {
-                      title: "Upload First Video",
-                      description: "Prepare ingestion and indexing workflows for your own source material.",
-                      href: "/docs/architecture" as Route,
+                      step: "01",
+                      title: featuredKey ? "Rotate or issue a scoped key" : "Create a scoped key",
+                      description: featuredKey
+                        ? "Treat the dashboard key inventory as your source of truth for environments."
+                        : "The console only reveals raw secrets once, so create the key from the keys page before wiring any client.",
+                      href: "/dashboard/keys" as Route,
                     },
                     {
-                      title: "Try Knowledge Search",
-                      description: "Query transcript + visual evidence in one API request.",
-                      href: "/docs/search-api" as Route,
+                      step: "02",
+                      title: "Move into usage visibility",
+                      description: "Watch credits, request counts, and the billing window from the same private surface.",
+                      href: "/dashboard/usage" as Route,
                     },
                     {
-                      title: "Set Up Webhooks",
-                      description: "Prepare follow-up automations for ingestion or retrieval events.",
+                      step: "03",
+                      title: "Deepen the integration path",
+                      description: "Use docs and examples to move from manual requests into a real app or skill.",
                       href: "/docs/api-reference" as Route,
                     },
                   ].map((item) => (
                     <Link
-                      key={item.title}
+                      key={item.step}
                       href={item.href}
-                      className="rounded-[24px] border border-[var(--border)] bg-[rgba(255,255,255,0.03)] px-5 py-5 transition hover:border-[var(--border-brand)] hover:bg-[rgba(34,211,238,0.06)]"
+                      className="flex gap-4 rounded-[24px] border border-[var(--border)] bg-[rgba(255,255,255,0.03)] px-4 py-4 transition hover:border-[var(--border-brand)] hover:bg-[rgba(34,211,238,0.06)]"
                     >
-                      <h3 className="text-2xl font-semibold text-white">{item.title}</h3>
-                      <p className="mt-3 text-sm leading-7 text-[var(--foreground-secondary)]">
-                        {item.description}
-                      </p>
+                      <span className="font-mono text-[11px] uppercase tracking-[0.16em] text-[var(--brand-bright)]">
+                        {item.step}
+                      </span>
+                      <div>
+                        <p className="text-lg font-semibold text-white">{item.title}</p>
+                        <p className="mt-2 text-sm leading-7 text-[var(--foreground-secondary)]">
+                          {item.description}
+                        </p>
+                      </div>
                     </Link>
                   ))}
                 </div>
               </article>
             </div>
+          </section>
 
-            <aside className="surface-elevated rounded-[28px] px-5 py-5">
-              <h2 className="text-3xl font-semibold text-white">Quick Stats</h2>
+          <section className="grid gap-6 xl:grid-cols-[1.08fr_0.92fr]">
+            <article className="surface-elevated rounded-[32px] px-5 py-5">
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+                <div>
+                  <p className="font-mono text-[11px] uppercase tracking-[0.16em] text-[var(--foreground-tertiary)]">
+                    Docs runway
+                  </p>
+                  <h2 className="mt-2 text-3xl font-semibold text-white">Use the shortest path to working requests</h2>
+                </div>
+              </div>
+              <div className="mt-5 grid gap-4 sm:grid-cols-3">
+                {[
+                  { title: "API Reference", href: "/docs/api-reference" as Route, body: "Exact request and response shapes." },
+                  { title: "Quickstart", href: "/docs/quickstart" as Route, body: "Fastest route from zero to the first result." },
+                  { title: "Search Guide", href: "/docs/search-api" as Route, body: "Ground transcript and visual evidence together." },
+                ].map((item) => (
+                  <Link
+                    key={item.title}
+                    href={item.href}
+                    className="rounded-[24px] border border-[var(--border)] bg-[rgba(255,255,255,0.03)] px-5 py-5 transition hover:border-[var(--border-brand)] hover:bg-[rgba(34,211,238,0.06)]"
+                  >
+                    <p className="text-xl font-semibold text-white">{item.title}</p>
+                    <p className="mt-3 text-sm leading-7 text-[var(--foreground-secondary)]">
+                      {item.body}
+                    </p>
+                  </Link>
+                ))}
+              </div>
+            </article>
+
+            <article className="surface-elevated rounded-[32px] px-5 py-5">
+              <p className="font-mono text-[11px] uppercase tracking-[0.16em] text-[var(--foreground-tertiary)]">
+                Operational posture
+              </p>
               <div className="mt-5 space-y-4">
                 {[
                   {
-                    label: "Requests made",
-                    value: formatNumber(data.requestCount),
+                    title: "Featured key",
+                    value: featuredKey?.prefix ?? "No active key yet",
+                    note: featuredKey
+                      ? "Use the keys page to rotate, revoke, or issue an environment-specific replacement."
+                      : "Create a key before wiring any integration.",
                   },
                   {
-                    label: "Quota available",
-                    value: `${Math.max(0, 100 - Math.round((data.creditsUsed / Math.max(1, data.creditsLimit)) * 100))}%`,
-                  },
-                  {
-                    label: "Account status",
-                    value: "Active",
-                  },
-                  {
-                    label: "Current plan",
-                    value: getTierLabel(data.tier),
-                  },
-                  {
-                    label: "Billing window",
+                    title: "Billing window",
                     value: formatBillingPeriod(data.periodStart, data.periodEnd),
+                    note: `${formatNumber(data.creditsRemaining)} credits remain in the current ledger.`,
+                  },
+                  {
+                    title: "Upgrade state",
+                    value: availableBillingAction === "portal"
+                      ? "Plan can be managed from this console"
+                      : availableBillingAction === "checkout"
+                        ? "Upgrade path is available now"
+                        : "No self-serve upgrade action",
+                    note: "Billing state is read from the same private usage payload as the rest of the dashboard.",
                   },
                 ].map((item) => (
                   <div
-                    key={item.label}
-                    className="rounded-[20px] border border-[var(--border)] bg-[rgba(255,255,255,0.03)] px-4 py-4"
+                    key={item.title}
+                    className="rounded-[24px] border border-[var(--border)] bg-[rgba(255,255,255,0.03)] px-4 py-4"
                   >
-                    <p className="text-sm text-[var(--foreground-secondary)]">{item.label}</p>
-                    <p className="mt-2 text-2xl font-semibold text-white">{item.value}</p>
+                    <p className="text-sm text-[var(--foreground-secondary)]">{item.title}</p>
+                    <p className="mt-2 text-xl font-semibold text-white">{item.value}</p>
+                    <p className="mt-2 text-sm leading-7 text-[var(--foreground-tertiary)]">
+                      {item.note}
+                    </p>
                   </div>
                 ))}
               </div>
-            </aside>
+            </article>
           </section>
         </>
       ) : (

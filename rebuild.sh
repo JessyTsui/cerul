@@ -8,6 +8,7 @@ BACKEND_DIR="${ROOT_DIR}/backend"
 BACKEND_VENV="${BACKEND_DIR}/.venv"
 FAST_MODE="false"
 SKIP_MIGRATIONS="false"
+ENV_FILE="${CERUL_ENV_FILE:-${ROOT_DIR}/.env}"
 
 FRONTEND_PORT="${FRONTEND_PORT:-3000}"
 BACKEND_PORT="${BACKEND_PORT:-8000}"
@@ -19,6 +20,7 @@ Usage: ./rebuild.sh [--fast]
 Options:
   --fast, -f   Skip dependency reinstall and only clear generated caches before restarting
   --skip-migrate  Skip database migrations before starting the app
+  --env-file PATH  Load runtime variables from a specific env file
   --help, -h   Show this help
 EOF
 }
@@ -33,6 +35,10 @@ while [[ $# -gt 0 ]]; do
       SKIP_MIGRATIONS="true"
       shift
       ;;
+    --env-file)
+      ENV_FILE="${2:-}"
+      shift 2
+      ;;
     --help|-h)
       print_help
       exit 0
@@ -45,9 +51,9 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
-if [ -f "${ROOT_DIR}/.env" ]; then
+if [ -f "${ENV_FILE}" ]; then
   set -a
-  . "${ROOT_DIR}/.env"
+  . "${ENV_FILE}"
   set +a
   FRONTEND_PORT="${FRONTEND_PORT:-${WEB_PORT:-3000}}"
   BACKEND_PORT="${BACKEND_PORT:-${API_PORT:-8000}}"
@@ -173,7 +179,16 @@ run_migrations() {
   fi
 
   echo "[rebuild] Applying database migrations..."
-  "${ROOT_DIR}/scripts/migrate-db.sh"
+  "${ROOT_DIR}/scripts/migrate-db.sh" --env-file "${ENV_FILE}"
+}
+
+ensure_local_infra() {
+  if [ ! -x "${ROOT_DIR}/scripts/ensure-local-infra.sh" ]; then
+    echo "[rebuild] Local infrastructure helper is missing or not executable." >&2
+    exit 1
+  fi
+
+  "${ROOT_DIR}/scripts/ensure-local-infra.sh" --env-file "${ENV_FILE}"
 }
 
 echo "=========================================="
@@ -183,6 +198,7 @@ else
   echo "  Cerul - Clean Rebuild"
 fi
 echo "=========================================="
+echo "[rebuild] env file: ${ENV_FILE}"
 
 kill_port "${FRONTEND_PORT}"
 kill_port "${BACKEND_PORT}"
@@ -202,10 +218,13 @@ else
   fi
 fi
 
+ensure_local_infra
 run_migrations
 
 echo ""
 echo "[rebuild] Restarting Cerul development environment..."
 echo ""
 
+export CERUL_ENV_FILE="${ENV_FILE}"
+export CERUL_LOCAL_INFRA_READY="1"
 exec "${ROOT_DIR}/scripts/dev.sh"

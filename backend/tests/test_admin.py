@@ -75,7 +75,7 @@ def seed_admin_metrics(database) -> None:
             created_at,
             updated_at
         )
-        VALUES ($1, $2, 'operator', 'free', 1000, 5, $3, $3)
+        VALUES ($1, $2, 'user', 'free', 1000, 5, $3, $3)
         RETURNING id
         """,
         "user_admin_prev",

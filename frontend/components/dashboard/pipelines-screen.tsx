@@ -12,7 +12,7 @@ import {
   type JobTrack,
 } from "@/lib/api";
 import { formatDashboardDateTime, formatNumber } from "@/lib/dashboard";
-import { DashboardLayout } from "./dashboard-layout";
+import { AdminLayout } from "@/components/admin/admin-layout";
 import {
   DashboardNotice,
   DashboardSkeleton,
@@ -265,7 +265,7 @@ function StatOverview({
     {
       label: "Active queue",
       value: formatNumber(activeQueue),
-      note: "Pending, running, and retrying jobs still consuming operator attention.",
+      note: "Pending, running, and retrying jobs still consuming admin attention.",
       tone: "text-[var(--brand-bright)]",
       shell:
         "border-[var(--border-brand)] bg-[rgba(34,211,238,0.08)] shadow-[0_18px_40px_rgba(14,165,233,0.12)]",
@@ -296,7 +296,7 @@ function StatOverview({
               Watch the queue, retries, and final outcomes in one surface.
             </h2>
             <p className="mt-4 text-base leading-8 text-[var(--foreground-secondary)]">
-              This panel is the operator-facing stream for worker health. Use it to spot retry
+              This panel is the admin-facing stream for worker health. Use it to spot retry
               pressure early, compare track mix, and decide which jobs need a deeper forensic read.
             </p>
           </div>
@@ -391,7 +391,7 @@ function StatOverview({
                 label: "Completed",
                 value: stats.completed,
                 tone: "badge-success",
-                note: "Finished cleanly without requiring operator intervention.",
+                note: "Finished cleanly without requiring admin intervention.",
               },
             ].map((item) => (
               <div
@@ -730,7 +730,7 @@ export function DashboardPipelinesScreen() {
   }
 
   return (
-    <DashboardLayout
+    <AdminLayout
       actions={
         <>
           <Link className="button-secondary" href="/docs/architecture">
@@ -741,8 +741,8 @@ export function DashboardPipelinesScreen() {
           </button>
         </>
       }
-      currentPath="/dashboard/pipelines"
-      description="Inspect live processing telemetry from the private dashboard API, including retry posture, per-job execution state, and step-level artifacts written by workers."
+      currentPath="/admin/pipelines"
+      description="Inspect job-by-job worker telemetry, retry posture, and step artifacts from the shared processing pipeline."
       title="Pipelines"
     >
       {isInitialLoading ? (
@@ -1134,6 +1134,6 @@ export function DashboardPipelinesScreen() {
           )}
         </>
       )}
-    </DashboardLayout>
+    </AdminLayout>
   );
 }

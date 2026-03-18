@@ -105,11 +105,18 @@ scripts/      Bootstrap and utility scripts
 ## Development
 
 ```bash
+# Local development uses .env by default. Keep deployment-only secrets in .env.production.
+# When .env points to the local docker database, rebuild.sh will start the compose db service automatically.
+
 # Quick start — install deps, run database migrations, and start both servers
 ./rebuild.sh
 
 # Apply SQL migrations manually (useful for remote or one-off database updates)
 ./scripts/migrate-db.sh
+
+# Load a different env file explicitly when needed
+./rebuild.sh --env-file ./.env.production
+./scripts/migrate-db.sh --env-file ./.env.production
 
 # Or run frontend and backend separately
 pnpm --dir frontend dev

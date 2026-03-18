@@ -39,7 +39,7 @@ describe("fetchWithAuth", () => {
     });
 
     expect(global.fetch).toHaveBeenCalledWith(
-      "http://localhost:9104/dashboard/api-keys",
+      "/api/console/dashboard/api-keys",
       expect.objectContaining({
         credentials: "include",
         method: "POST",
@@ -353,7 +353,7 @@ describe("dashboard API client", () => {
     });
 
     expect(global.fetch).toHaveBeenCalledWith(
-      "http://localhost:9104/dashboard/jobs?status=running&track=knowledge&limit=25&offset=0",
+      "/api/console/dashboard/jobs?status=running&track=knowledge&limit=25&offset=0",
       expect.objectContaining({
         credentials: "include",
         method: "GET",

@@ -54,8 +54,8 @@ describe("isDashboardRouteActive", () => {
 });
 
 describe("adminRoutes", () => {
-  it("includes the admin ingestion console entry", () => {
-    expect(adminRoutes.some((item) => item.href === "/admin/ingestion")).toBe(true);
+  it("includes the admin pipelines console entry", () => {
+    expect(adminRoutes.some((item) => item.href === "/admin/pipelines")).toBe(true);
   });
 });
 

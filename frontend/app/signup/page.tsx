@@ -1,7 +1,8 @@
-import type { Metadata } from "next";
-import { AuthSessionRedirect } from "@/components/auth/auth-session-redirect";
+import type { Metadata, Route } from "next";
+import { redirect } from "next/navigation";
 import { AuthShell } from "@/components/auth/auth-shell";
 import { normalizeAuthRedirectPath } from "@/lib/auth-shared";
+import { getServerSession } from "@/lib/auth-server";
 import { SignupForm } from "./signup-form";
 
 export const metadata: Metadata = {
@@ -27,6 +28,11 @@ export default async function SignupPage({ searchParams }: SignupPageProps) {
     ? resolvedSearchParams.next[0]
     : resolvedSearchParams.next;
   const nextPath = normalizeAuthRedirectPath(nextValue);
+  const session = await getServerSession();
+
+  if (session?.user?.id) {
+    redirect(nextPath as Route);
+  }
 
   return (
     <AuthShell
@@ -35,7 +41,6 @@ export default async function SignupPage({ searchParams }: SignupPageProps) {
       heroDescription="Create your Cerul workspace, land in the dashboard immediately, and issue API keys per environment instead of routing everything through one long-lived secret."
       highlights={["Sandbox first", "Separate web auth", "Production-ready keys"]}
     >
-      <AuthSessionRedirect nextPath={nextPath} />
       <SignupForm nextPath={nextPath} />
     </AuthShell>
   );

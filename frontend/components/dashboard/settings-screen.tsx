@@ -2,8 +2,10 @@
 
 import type { Route } from "next";
 import Link from "next/link";
-import { useState } from "react";
+import { useRouter } from "next/navigation";
+import { useEffect, useState } from "react";
 import { billing, getApiErrorMessage } from "@/lib/api";
+import { useConsoleViewer } from "@/components/console/console-viewer-context";
 import {
   formatBillingPeriod,
   formatNumber,
@@ -16,12 +18,13 @@ import {
   DashboardSkeleton,
   DashboardState,
 } from "./dashboard-state";
+import { CreditUsageBar } from "./credit-usage-bar";
 import { useMonthlyUsage } from "./use-monthly-usage";
 
 const planDescriptions: Record<string, string> = {
-  free: "Best for evaluating the public API surface and the operator workflow.",
+  free: "Best for evaluating the public API surface and the workspace workflow.",
   builder:
-    "Built for teams that need predictable usage, more active keys, and a cleaner operator surface.",
+    "Built for teams that need predictable usage, more active keys, and a cleaner console surface.",
   pro: "Built for active teams that need more credits, more keys, and direct billing controls.",
   enterprise:
     "Reserved for private ingestion, security review, and negotiated usage envelopes.",
@@ -50,12 +53,29 @@ const planFeatures: Record<string, string[]> = {
   ],
 };
 
+type BootstrapAdminStatus =
+  | "loading"
+  | "available"
+  | "already_admin"
+  | "disabled"
+  | "managed_by_emails"
+  | "admin_exists"
+  | "unavailable";
+
 export function DashboardSettingsScreen() {
+  const router = useRouter();
+  const viewer = useConsoleViewer();
   const { data, error, isLoading, refresh } = useMonthlyUsage();
   const [billingAction, setBillingAction] = useState<"checkout" | "portal" | null>(
     null,
   );
   const [billingError, setBillingError] = useState<string | null>(null);
+  const [bootstrapSecret, setBootstrapSecret] = useState("");
+  const [bootstrapError, setBootstrapError] = useState<string | null>(null);
+  const [isPromotingAdmin, setIsPromotingAdmin] = useState(false);
+  const [bootstrapStatus, setBootstrapStatus] = useState<BootstrapAdminStatus>(
+    () => (viewer.isAdmin ? "already_admin" : "loading"),
+  );
   const normalizedTier = data?.tier.toLowerCase() ?? "free";
   const availableBillingAction = data
     ? resolveDashboardBillingAction(data.tier, data.hasStripeCustomer)
@@ -87,6 +107,51 @@ export function DashboardSettingsScreen() {
       ? "Private / not exposed"
       : `${formatNumber(data.rateLimitPerSec)} req/s`;
 
+  useEffect(() => {
+    if (viewer.isAdmin) {
+      setBootstrapStatus("already_admin");
+      return;
+    }
+
+    let cancelled = false;
+
+    void fetch("/api/console/bootstrap-admin/status", {
+      credentials: "include",
+      cache: "no-store",
+    })
+      .then(async (response) => {
+        if (cancelled) {
+          return;
+        }
+
+        if (!response.ok) {
+          setBootstrapStatus("unavailable");
+          return;
+        }
+
+        const payload = await response.json() as {
+          eligible?: boolean;
+          reason?: BootstrapAdminStatus;
+        };
+
+        if (payload.eligible === true) {
+          setBootstrapStatus("available");
+          return;
+        }
+
+        setBootstrapStatus(payload.reason ?? "unavailable");
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setBootstrapStatus("unavailable");
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [viewer.isAdmin]);
+
   async function handleCheckout() {
     setBillingAction("checkout");
     setBillingError(null);
@@ -117,6 +182,160 @@ export function DashboardSettingsScreen() {
     }
   }
 
+  async function handleBootstrapAdmin() {
+    const trimmedSecret = bootstrapSecret.trim();
+
+    if (!trimmedSecret) {
+      setBootstrapError("Bootstrap admin secret is required.");
+      return;
+    }
+
+    setIsPromotingAdmin(true);
+    setBootstrapError(null);
+
+    try {
+      const response = await fetch("/api/console/bootstrap-admin", {
+        method: "POST",
+        credentials: "include",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ secret: trimmedSecret }),
+      });
+
+      const payload = await response.json().catch(() => null) as { detail?: string } | null;
+
+      if (!response.ok) {
+        setBootstrapError(payload?.detail ?? "Unable to promote this account to administrator.");
+        return;
+      }
+
+      router.replace("/admin");
+      router.refresh();
+    } catch {
+      setBootstrapError("Unable to promote this account to administrator.");
+    } finally {
+      setIsPromotingAdmin(false);
+    }
+  }
+
+  const bootstrapPanel = viewer.isAdmin ? null : bootstrapStatus === "available" ? (
+    <section>
+      <article className="surface-elevated rounded-[32px] px-6 py-6">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+          <div className="max-w-2xl">
+            <p className="eyebrow">Bootstrap admin</p>
+            <h2 className="mt-4 text-3xl font-semibold tracking-[-0.04em] text-white">
+              Promote this logged-in account to administrator
+            </h2>
+            <p className="mt-3 text-sm leading-7 text-[var(--foreground-secondary)]">
+              This is a one-time bootstrap path for the first admin. Sign in with the
+              account you want to elevate, then enter the secret from
+              <span className="font-mono text-white"> BOOTSTRAP_ADMIN_SECRET</span>.
+            </p>
+          </div>
+          <span className="inline-flex items-center rounded-full border border-[var(--border-brand)] bg-[var(--brand-subtle)] px-3 py-1.5 font-mono text-[11px] uppercase tracking-[0.16em] text-[var(--brand-bright)]">
+            No admin exists yet
+          </span>
+        </div>
+
+        <div className="mt-6 grid gap-5 xl:grid-cols-[minmax(0,1fr)_320px]">
+          <label className="space-y-2 text-sm text-[var(--foreground-secondary)]">
+            <span className="block font-mono text-[11px] uppercase tracking-[0.16em] text-[var(--foreground-tertiary)]">
+              Bootstrap secret
+            </span>
+            <input
+              type="password"
+              value={bootstrapSecret}
+              onChange={(event) => setBootstrapSecret(event.target.value)}
+              placeholder="Enter bootstrap admin secret"
+              className="h-12 w-full rounded-[14px] border border-[var(--border)] bg-[var(--surface)] px-4 text-white outline-none transition focus:border-[var(--brand)]"
+              autoComplete="off"
+            />
+          </label>
+
+          <div className="space-y-3">
+            <button
+              className="button-primary w-full"
+              type="button"
+              disabled={isPromotingAdmin}
+              onClick={() => void handleBootstrapAdmin()}
+            >
+              {isPromotingAdmin ? "Promoting..." : "Promote current account"}
+            </button>
+            <p className="text-xs leading-6 text-[var(--foreground-tertiary)]">
+              After success, this account will be redirected into the admin console.
+            </p>
+          </div>
+        </div>
+
+        {bootstrapError ? (
+          <div className="mt-4 rounded-[18px] border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-100">
+            {bootstrapError}
+          </div>
+        ) : null}
+      </article>
+    </section>
+  ) : bootstrapStatus === "loading" ? (
+    <section>
+      <article className="surface rounded-[28px] px-6 py-5">
+        <p className="text-sm text-[var(--foreground-tertiary)]">
+          Checking admin bootstrap status...
+        </p>
+      </article>
+    </section>
+  ) : bootstrapStatus === "disabled" ? (
+    <section>
+      <article className="surface rounded-[28px] px-6 py-5">
+        <p className="font-mono text-[11px] uppercase tracking-[0.16em] text-[var(--foreground-tertiary)]">
+          Admin bootstrap unavailable
+        </p>
+        <p className="mt-3 text-sm leading-7 text-[var(--foreground-secondary)]">
+          Set <span className="font-mono text-white">BOOTSTRAP_ADMIN_SECRET</span> in
+          <span className="font-mono text-white"> .env</span> if you want the first logged-in
+          account to be able to self-promote to admin.
+        </p>
+      </article>
+    </section>
+  ) : bootstrapStatus === "managed_by_emails" ? (
+    <section>
+      <article className="surface rounded-[28px] px-6 py-5">
+        <p className="font-mono text-[11px] uppercase tracking-[0.16em] text-[var(--foreground-tertiary)]">
+          Admin access managed by email
+        </p>
+        <p className="mt-3 text-sm leading-7 text-[var(--foreground-secondary)]">
+          This workspace is using <span className="font-mono text-white">ADMIN_CONSOLE_EMAILS</span>,
+          so bootstrap promotion is intentionally disabled.
+        </p>
+      </article>
+    </section>
+  ) : bootstrapStatus === "admin_exists" ? (
+    <section>
+      <article className="surface rounded-[28px] px-6 py-5">
+        <p className="font-mono text-[11px] uppercase tracking-[0.16em] text-[var(--foreground-tertiary)]">
+          Administrator already exists
+        </p>
+        <p className="mt-3 text-sm leading-7 text-[var(--foreground-secondary)]">
+          Bootstrap promotion is only available for the first administrator. This
+          workspace already has an admin account, so access must be granted by an
+          existing administrator instead.
+        </p>
+      </article>
+    </section>
+  ) : bootstrapStatus === "unavailable" ? (
+    <section>
+      <article className="surface rounded-[28px] px-6 py-5">
+        <p className="font-mono text-[11px] uppercase tracking-[0.16em] text-[var(--foreground-tertiary)]">
+          Admin bootstrap status unavailable
+        </p>
+        <p className="mt-3 text-sm leading-7 text-[var(--foreground-secondary)]">
+          The console could not confirm bootstrap eligibility for this session.
+          Refresh the page and verify the current environment configuration.
+        </p>
+      </article>
+    </section>
+  ) : null;
+
   return (
     <DashboardLayout
       actions={
@@ -134,18 +353,24 @@ export function DashboardSettingsScreen() {
       title="Settings"
     >
       {isLoading && !data ? (
-        <DashboardSkeleton />
+        <>
+          {bootstrapPanel}
+          <DashboardSkeleton />
+        </>
       ) : error && !data ? (
-        <DashboardState
-          action={
-            <button className="button-primary" onClick={() => void refresh()} type="button">
-              Retry request
-            </button>
-          }
-          description={error}
-          title="Plan data could not be loaded"
-          tone="error"
-        />
+        <>
+          {bootstrapPanel}
+          <DashboardState
+            action={
+              <button className="button-primary" onClick={() => void refresh()} type="button">
+                Retry request
+              </button>
+            }
+            description={error}
+            title="Plan data could not be loaded"
+            tone="error"
+          />
+        </>
       ) : data ? (
         <>
           {error ? (
@@ -163,173 +388,196 @@ export function DashboardSettingsScreen() {
               tone="error"
             />
           ) : null}
+          {bootstrapPanel}
 
-          <section className="grid gap-5 xl:grid-cols-[1.15fr_0.85fr]">
-            <article className="surface-elevated rounded-[32px] px-6 py-6">
-              <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
-                <div className="max-w-2xl">
-                  <p className="eyebrow">Workspace plan</p>
-                  <h2 className="mt-4 text-4xl font-semibold tracking-[-0.05em] text-white sm:text-5xl">
-                    {tierLabel}
-                  </h2>
-                  <p className="mt-4 text-base leading-8 text-[var(--foreground-secondary)]">
-                    {currentPlanDescription}
-                  </p>
+          <section className="grid gap-6 xl:grid-cols-[1.12fr_0.88fr]">
+            <article className="surface-elevated relative overflow-hidden rounded-[36px] px-6 py-6 sm:px-7">
+              <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(103,232,249,0.16),transparent_34%),radial-gradient(circle_at_84%_18%,rgba(249,115,22,0.12),transparent_28%)]" />
+              <div className="relative">
+                <div className="flex flex-wrap gap-2">
+                  {[
+                    tierLabel,
+                    billingRouteLabel,
+                    supportLane,
+                    rateLimitLabel,
+                  ].map((item) => (
+                    <span
+                      key={item}
+                      className="inline-flex items-center rounded-full border border-[var(--border)] bg-[rgba(255,255,255,0.04)] px-3 py-1.5 text-sm text-[var(--foreground-secondary)]"
+                    >
+                      {item}
+                    </span>
+                  ))}
                 </div>
-                <span
-                  className={`label ${
-                    normalizedTier === "enterprise"
-                      ? "label-accent"
-                      : normalizedTier === "free"
-                        ? ""
-                        : "label-brand"
-                  }`}
-                >
-                  {usesManualBilling ? "Managed account" : "Active plan"}
-                </span>
-              </div>
 
-              <div className="mt-8 grid gap-4 md:grid-cols-3">
-                {[
-                  {
-                    label: "Billing window",
-                    value: formatBillingPeriod(data.periodStart, data.periodEnd),
-                    note: "Current active ledger period",
-                  },
-                  {
-                    label: "Credit envelope",
-                    value: `${formatNumber(data.creditsUsed)} / ${formatNumber(data.creditsLimit)}`,
-                    note: `${formatNumber(data.creditsRemaining)} credits remaining`,
-                  },
-                  {
-                    label: "Billing route",
-                    value: billingRouteLabel,
-                    note: usesManualBilling
-                      ? "Changes route through Cerul support"
-                      : "Available from this console",
-                  },
-                ].map((item) => (
-                  <div
-                    key={item.label}
-                    className="rounded-[20px] border border-[var(--border)] bg-[rgba(255,255,255,0.03)] px-4 py-4"
-                  >
-                    <p className="font-mono text-[11px] uppercase tracking-[0.16em] text-[var(--foreground-tertiary)]">
-                      {item.label}
+                <div className="mt-6 grid gap-6 xl:grid-cols-[0.92fr_1.08fr]">
+                  <div>
+                    <p className="font-mono text-[11px] uppercase tracking-[0.18em] text-[var(--brand-bright)]">
+                      Billing posture
                     </p>
-                    <p className="mt-3 text-xl font-semibold text-white">{item.value}</p>
-                    <p className="mt-2 text-sm leading-6 text-[var(--foreground-secondary)]">
-                      {item.note}
+                    <h2 className="mt-4 text-4xl font-semibold tracking-[-0.06em] text-white sm:text-5xl">
+                      Keep usage, quota, and upgrade path visible in one workspace ledger.
+                    </h2>
+                    <p className="mt-4 max-w-xl text-base leading-8 text-[var(--foreground-secondary)]">
+                      {currentPlanDescription} The plan surface should explain how
+                      the workspace is allowed to grow, not force you to cross-check
+                      Stripe, docs, and quota numbers in three separate places.
                     </p>
+
+                    <div className="mt-6 grid gap-3 sm:grid-cols-2">
+                      {[
+                        {
+                          label: "Billing window",
+                          value: formatBillingPeriod(data.periodStart, data.periodEnd),
+                        },
+                        {
+                          label: "Workspace status",
+                          value: usesManualBilling ? "Managed account" : "Self-serve active",
+                        },
+                        {
+                          label: "Requests this period",
+                          value: formatNumber(data.requestCount),
+                        },
+                        {
+                          label: "Active API keys",
+                          value: formatNumber(data.apiKeysActive),
+                        },
+                      ].map((item) => (
+                        <div
+                          key={item.label}
+                          className="rounded-[22px] border border-[var(--border)] bg-[rgba(255,255,255,0.03)] px-4 py-4"
+                        >
+                          <p className="text-sm text-[var(--foreground-secondary)]">{item.label}</p>
+                          <p className="mt-2 text-xl font-semibold text-white">{item.value}</p>
+                        </div>
+                      ))}
+                    </div>
                   </div>
-                ))}
-              </div>
 
-              <div className="mt-8 grid gap-4 lg:grid-cols-[0.95fr_1.05fr]">
-                <div className="surface-gradient rounded-[24px] px-5 py-5">
-                  <p className="font-mono text-[11px] uppercase tracking-[0.16em] text-[var(--brand-bright)]">
-                    Current posture
-                  </p>
-                  <p className="mt-3 text-3xl font-semibold tracking-[-0.04em] text-white">
-                    {formatNumber(data.requestCount)} requests
-                  </p>
-                  <p className="mt-2 text-sm leading-6 text-[var(--foreground-secondary)]">
-                    Requests, keys, and quota all resolve against the same workspace envelope.
-                  </p>
+                  <div className="space-y-4">
+                    <CreditUsageBar
+                      label="Current credit envelope"
+                      used={data.creditsUsed}
+                      limit={data.creditsLimit}
+                      remaining={data.creditsRemaining}
+                    />
+                    <div className="grid gap-3 sm:grid-cols-3">
+                      {currentPlanFeatures.map((feature) => (
+                        <div
+                          key={feature}
+                          className="rounded-[20px] border border-[var(--border)] bg-[rgba(255,255,255,0.03)] px-4 py-4"
+                        >
+                          <span className="font-mono text-[11px] uppercase tracking-[0.16em] text-[var(--brand-bright)]">
+                            Included
+                          </span>
+                          <p className="mt-3 text-sm leading-6 text-white">{feature}</p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
                 </div>
+              </div>
+            </article>
 
-                <div className="grid gap-3 sm:grid-cols-3">
-                  {currentPlanFeatures.map((feature) => (
+            <div className="space-y-6">
+              <article className="surface-elevated rounded-[32px] px-6 py-6">
+                <p className="eyebrow">Billing controls</p>
+                <h2 className="mt-4 text-3xl font-semibold tracking-[-0.04em] text-white">
+                  Manage subscription state
+                </h2>
+                <p className="mt-3 text-sm leading-7 text-[var(--foreground-secondary)]">
+                  Checkout is only used when moving from free evaluation into a paid workspace.
+                  Existing self-serve customers jump straight into Stripe portal management.
+                </p>
+
+                <div className="mt-6 space-y-3">
+                  {[
+                    {
+                      label: "Billing route",
+                      value: billingRouteLabel,
+                    },
+                    {
+                      label: "Support lane",
+                      value: supportLane,
+                    },
+                    {
+                      label: "Rate policy",
+                      value: rateLimitLabel,
+                    },
+                  ].map((item) => (
                     <div
-                      key={feature}
+                      key={item.label}
                       className="rounded-[18px] border border-[var(--border)] bg-[var(--surface)] px-4 py-4"
                     >
-                      <span className="font-mono text-[11px] uppercase tracking-[0.16em] text-[var(--brand-bright)]">
-                        Included
-                      </span>
-                      <p className="mt-3 text-sm leading-6 text-white">{feature}</p>
+                      <p className="font-mono text-[11px] uppercase tracking-[0.16em] text-[var(--foreground-tertiary)]">
+                        {item.label}
+                      </p>
+                      <p className="mt-2 text-base font-semibold text-white">{item.value}</p>
                     </div>
                   ))}
                 </div>
-              </div>
-            </article>
 
-            <article className="surface-elevated rounded-[32px] px-6 py-6">
-              <p className="eyebrow">Billing controls</p>
-              <h2 className="mt-4 text-3xl font-semibold tracking-[-0.04em] text-white">
-                Manage subscription state
-              </h2>
-              <p className="mt-3 text-sm leading-7 text-[var(--foreground-secondary)]">
-                Checkout is only used when moving from free evaluation into a paid workspace.
-                Existing self-serve customers jump straight into Stripe portal management.
-              </p>
+                <div className="mt-6 flex flex-col gap-3">
+                  {canUpgrade ? (
+                    <button
+                      className="button-primary w-full"
+                      disabled={billingAction !== null}
+                      onClick={() => void handleCheckout()}
+                      type="button"
+                    >
+                      {billingAction === "checkout"
+                        ? "Redirecting..."
+                        : "Upgrade to Builder"}
+                    </button>
+                  ) : null}
 
-              <div className="mt-6 space-y-3">
-                {[
-                  {
-                    label: "Billing route",
-                    value: billingRouteLabel,
-                  },
-                  {
-                    label: "Support lane",
-                    value: supportLane,
-                  },
-                  {
-                    label: "Workspace status",
-                    value: "Active",
-                  },
-                ].map((item) => (
-                  <div
-                    key={item.label}
-                    className="rounded-[18px] border border-[var(--border)] bg-[var(--surface)] px-4 py-4"
-                  >
-                    <p className="font-mono text-[11px] uppercase tracking-[0.16em] text-[var(--foreground-tertiary)]">
-                      {item.label}
-                    </p>
-                    <p className="mt-2 text-base font-semibold text-white">{item.value}</p>
-                  </div>
-                ))}
-              </div>
+                  {canManageSubscription ? (
+                    <button
+                      className="button-secondary w-full"
+                      disabled={billingAction !== null}
+                      onClick={() => void handlePortal()}
+                      type="button"
+                    >
+                      {billingAction === "portal"
+                        ? "Opening portal..."
+                        : "Open billing portal"}
+                    </button>
+                  ) : null}
 
-              <div className="mt-6 flex flex-col gap-3">
-                {canUpgrade ? (
-                  <button
-                    className="button-primary w-full"
-                    disabled={billingAction !== null}
-                    onClick={() => void handleCheckout()}
-                    type="button"
-                  >
-                    {billingAction === "checkout"
-                      ? "Redirecting..."
-                      : "Upgrade to Builder"}
-                  </button>
-                ) : null}
+                  {usesManualBilling ? (
+                    <div className="rounded-[18px] border border-[var(--border-brand)] bg-[var(--brand-subtle)] px-4 py-4">
+                      <p className="font-mono text-[11px] uppercase tracking-[0.16em] text-[var(--brand-bright)]">
+                        Manual coordination
+                      </p>
+                      <p className="mt-2 text-sm leading-6 text-white">
+                        This workspace is handled outside self-serve Stripe flows. Contact Cerul if
+                        invoicing, seats, or contract terms need to change.
+                      </p>
+                    </div>
+                  ) : null}
+                </div>
+              </article>
 
-                {canManageSubscription ? (
-                  <button
-                    className="button-secondary w-full"
-                    disabled={billingAction !== null}
-                    onClick={() => void handlePortal()}
-                    type="button"
-                  >
-                    {billingAction === "portal"
-                      ? "Opening portal..."
-                      : "Open billing portal"}
-                  </button>
-                ) : null}
-
-                {usesManualBilling ? (
-                  <div className="rounded-[18px] border border-[var(--border-brand)] bg-[var(--brand-subtle)] px-4 py-4">
-                    <p className="font-mono text-[11px] uppercase tracking-[0.16em] text-[var(--brand-bright)]">
-                      Manual coordination
-                    </p>
-                    <p className="mt-2 text-sm leading-6 text-white">
-                      This workspace is handled outside self-serve Stripe flows. Contact Cerul if
-                      invoicing, seats, or contract terms need to change.
-                    </p>
-                  </div>
-                ) : null}
-              </div>
-            </article>
+              <article className="surface-elevated rounded-[32px] px-6 py-6">
+                <p className="font-mono text-[11px] uppercase tracking-[0.18em] text-[var(--foreground-tertiary)]">
+                  Account note
+                </p>
+                <div className="mt-5 space-y-3">
+                  {[
+                    "Usage, API keys, and billing all resolve against one workspace envelope.",
+                    "Stripe actions do not replace key rotation. Treat them as separate admin controls.",
+                    "When the backend does not expose a concrete rate policy, the dashboard says so explicitly.",
+                  ].map((item) => (
+                    <div
+                      key={item}
+                      className="rounded-[20px] border border-[var(--border)] bg-[rgba(255,255,255,0.03)] px-4 py-4 text-sm leading-6 text-[var(--foreground-secondary)]"
+                    >
+                      {item}
+                    </div>
+                  ))}
+                </div>
+              </article>
+            </div>
           </section>
 
           <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
@@ -494,30 +742,22 @@ export function DashboardSettingsScreen() {
                   ))}
                 </div>
               </article>
-
-              <article className="surface rounded-[28px] px-6 py-6">
-                <p className="font-mono text-[11px] uppercase tracking-[0.16em] text-[var(--foreground-tertiary)]">
-                  Account note
-                </p>
-                <p className="mt-3 text-sm leading-7 text-[var(--foreground-secondary)]">
-                  Raw API key secrets are only revealed at creation time. Billing controls do not
-                  duplicate API credential state, so the safest operating pattern is still per-env
-                  key rotation plus periodic usage review.
-                </p>
-              </article>
             </div>
           </section>
         </>
       ) : (
-        <DashboardState
-          action={
-            <button className="button-primary" onClick={() => void refresh()} type="button">
-              Retry request
-            </button>
-          }
-          description="The dashboard API returned no plan payload."
-          title="No plan data available"
-        />
+        <>
+          {bootstrapPanel}
+          <DashboardState
+            action={
+              <button className="button-primary" onClick={() => void refresh()} type="button">
+                Retry request
+              </button>
+            }
+            description="The dashboard API returned no plan payload."
+            title="No plan data available"
+          />
+        </>
       )}
     </DashboardLayout>
   );

@@ -227,17 +227,17 @@ export const dashboardRoutes = [
   { label: "Overview", href: "/dashboard", meta: "01" },
   { label: "API Keys", href: "/dashboard/keys", meta: "02" },
   { label: "Usage", href: "/dashboard/usage", meta: "03" },
-  { label: "Pipelines", href: "/dashboard/pipelines", meta: "04" },
-  { label: "Settings", href: "/dashboard/settings", meta: "05" },
+  { label: "Settings", href: "/dashboard/settings", meta: "04" },
 ] as const;
 
 export const adminRoutes = [
   { label: "Overview", href: "/admin", meta: "A1" },
-  { label: "Users", href: "/admin/users", meta: "A2" },
+  { label: "Pipelines", href: "/admin/pipelines", meta: "A2" },
   { label: "Requests", href: "/admin/requests", meta: "A3" },
-  { label: "Content", href: "/admin/content", meta: "A4" },
-  { label: "Ingestion", href: "/admin/ingestion", meta: "A5" },
-  { label: "Targets", href: "/admin/settings", meta: "A6" },
+  { label: "Users", href: "/admin/users", meta: "A4" },
+  { label: "Content", href: "/admin/content", meta: "A5" },
+  { label: "Ingestion", href: "/admin/ingestion", meta: "A6" },
+  { label: "Targets", href: "/admin/settings", meta: "A7" },
 ] as const;
 
 export function isPrimaryRoute(path: string): boolean {

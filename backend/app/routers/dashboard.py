@@ -11,7 +11,7 @@ from typing import Any, Literal, Mapping, cast
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from pydantic import BaseModel, ConfigDict, Field
 
-from ..admin.access import require_operator_access
+from ..admin.access import require_admin_access
 from ..auth import SessionContext, require_session
 from ..billing import (
     is_paid_tier,
@@ -174,6 +174,53 @@ def generate_api_key() -> tuple[str, str, str]:
     return raw_key, key_hash, raw_key[:API_KEY_PREFIX_LENGTH]
 
 
+async def _find_auth_user(db: Any, user_id: str) -> dict[str, Any] | None:
+    row = await db.fetchrow(
+        '''
+        SELECT id, email, name
+        FROM "user"
+        WHERE id = $1
+        ''',
+        user_id,
+    )
+    return _record_to_dict(row)
+
+
+async def _provision_user_profile_from_auth_user(
+    db: Any,
+    user_id: str,
+) -> dict[str, Any] | None:
+    auth_user = await _find_auth_user(db, user_id)
+
+    if auth_user is None:
+        return None
+
+    email = str(auth_user.get("email") or "").strip().lower() or None
+    display_name = str(auth_user.get("name") or "").strip() or None
+    row = await db.fetchrow(
+        """
+        INSERT INTO user_profiles (id, email, display_name)
+        VALUES ($1, $2, $3)
+        ON CONFLICT (id) DO UPDATE
+        SET email = COALESCE(EXCLUDED.email, user_profiles.email),
+            display_name = COALESCE(EXCLUDED.display_name, user_profiles.display_name),
+            updated_at = NOW()
+        RETURNING
+            id,
+            email,
+            console_role,
+            tier,
+            monthly_credit_limit,
+            rate_limit_per_sec,
+            stripe_customer_id
+        """,
+        user_id,
+        email,
+        display_name,
+    )
+    return _record_to_dict(row)
+
+
 async def fetch_user_profile(db: Any, user_id: str) -> dict[str, Any] | None:
     row = await db.fetchrow(
         """
@@ -190,7 +237,12 @@ async def fetch_user_profile(db: Any, user_id: str) -> dict[str, Any] | None:
         """,
         user_id,
     )
-    return _record_to_dict(row)
+    profile = _record_to_dict(row)
+
+    if profile is not None:
+        return profile
+
+    return await _provision_user_profile_from_auth_user(db, user_id)
 
 
 async def count_active_api_keys(db: Any, user_id: str) -> int:
@@ -233,6 +285,63 @@ async def insert_api_key(
     return cast(dict[str, Any], _record_to_dict(row))
 
 
+def _normalize_api_key_summary(record: dict[str, Any] | None) -> dict[str, Any]:
+    payload = record or {}
+    return {
+        "id": str(payload.get("id") or ""),
+        "name": str(payload.get("name") or ""),
+        "prefix": str(payload.get("prefix") or ""),
+        "created_at": payload.get("created_at"),
+        "last_used_at": payload.get("last_used_at"),
+        "is_active": bool(payload.get("is_active", False)),
+    }
+
+
+def _normalize_processing_job_summary(record: dict[str, Any] | None) -> dict[str, Any]:
+    payload = record or {}
+    return {
+        "id": str(payload.get("id") or ""),
+        "track": payload.get("track"),
+        "job_type": str(payload.get("job_type") or ""),
+        "status": payload.get("status"),
+        "attempts": int(payload.get("attempts", 0) or 0),
+        "max_attempts": int(payload.get("max_attempts", 0) or 0),
+        "error_message": payload.get("error_message"),
+        "created_at": payload.get("created_at"),
+        "started_at": payload.get("started_at"),
+        "completed_at": payload.get("completed_at"),
+        "updated_at": payload.get("updated_at"),
+    }
+
+
+def _normalize_processing_job_detail(record: dict[str, Any] | None) -> dict[str, Any]:
+    payload = _normalize_processing_job_summary(record)
+    source_id = (record or {}).get("source_id")
+    detail_payload = {
+        **payload,
+        "source_id": str(source_id) if source_id is not None else None,
+        "input_payload": (record or {}).get("input_payload") or {},
+        "locked_by": (record or {}).get("locked_by"),
+        "locked_at": (record or {}).get("locked_at"),
+        "next_retry_at": (record or {}).get("next_retry_at"),
+    }
+    return detail_payload
+
+
+def _normalize_processing_job_step(record: dict[str, Any] | None) -> dict[str, Any]:
+    payload = record or {}
+    return {
+        "id": str(payload.get("id") or ""),
+        "step_name": str(payload.get("step_name") or ""),
+        "status": payload.get("status"),
+        "artifacts": payload.get("artifacts") or {},
+        "error_message": payload.get("error_message"),
+        "started_at": payload.get("started_at"),
+        "completed_at": payload.get("completed_at"),
+        "updated_at": payload.get("updated_at"),
+    }
+
+
 async def list_api_keys_for_user(db: Any, user_id: str) -> list[dict[str, Any]]:
     rows = await db.fetch(
         """
@@ -243,7 +352,10 @@ async def list_api_keys_for_user(db: Any, user_id: str) -> list[dict[str, Any]]:
         """,
         user_id,
     )
-    return [cast(dict[str, Any], _record_to_dict(row)) for row in rows]
+    return [
+        _normalize_api_key_summary(cast(dict[str, Any], _record_to_dict(row)))
+        for row in rows
+    ]
 
 
 async def soft_delete_api_key(db: Any, key_id: str, user_id: str) -> bool:
@@ -363,7 +475,10 @@ async def list_processing_jobs(
         limit,
         offset,
     )
-    return [cast(dict[str, Any], _record_to_dict(row)) for row in rows]
+    return [
+        _normalize_processing_job_summary(cast(dict[str, Any], _record_to_dict(row)))
+        for row in rows
+    ]
 
 
 async def fetch_processing_job(
@@ -394,7 +509,12 @@ async def fetch_processing_job(
         """,
         job_id,
     )
-    return _record_to_dict(row)
+    payload = _record_to_dict(row)
+
+    if payload is None:
+        return None
+
+    return _normalize_processing_job_detail(payload)
 
 
 async def list_processing_job_steps(
@@ -420,7 +540,10 @@ async def list_processing_job_steps(
         """,
         job_id,
     )
-    return [cast(dict[str, Any], _record_to_dict(row)) for row in rows]
+    return [
+        _normalize_processing_job_step(cast(dict[str, Any], _record_to_dict(row)))
+        for row in rows
+    ]
 
 
 async def fetch_processing_job_stats(
@@ -581,7 +704,7 @@ async def get_dashboard_jobs(
     session: SessionContext = Depends(require_session),
     db: Any = Depends(get_db),
 ) -> JobListResponse:
-    await require_operator_access(session, db)
+    await require_admin_access(session, db)
     jobs = await list_processing_jobs(
         db,
         job_status=status_filter,
@@ -602,7 +725,7 @@ async def get_dashboard_job_stats(
     session: SessionContext = Depends(require_session),
     db: Any = Depends(get_db),
 ) -> JobStatsResponse:
-    await require_operator_access(session, db)
+    await require_admin_access(session, db)
     stats = await fetch_processing_job_stats(db)
     return JobStatsResponse(
         total=stats["total"],
@@ -624,7 +747,7 @@ async def get_dashboard_job_detail(
     session: SessionContext = Depends(require_session),
     db: Any = Depends(get_db),
 ) -> JobDetailResponse:
-    await require_operator_access(session, db)
+    await require_admin_access(session, db)
     job = await fetch_processing_job(db, job_id)
     if job is None:
         raise HTTPException(

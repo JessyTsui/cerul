@@ -38,46 +38,12 @@ def _email_allowed(email: str | None, allowed_emails: set[str]) -> bool:
     return normalized_email is not None and normalized_email in allowed_emails
 
 
-def _operator_emails() -> set[str]:
-    return {
-        email
-        for email in get_settings().dashboard.operator_emails
-        if email
-    }
-
-
 def _admin_emails() -> set[str]:
-    admin_emails = {
+    return {
         email
         for email in get_settings().dashboard.admin_emails
         if email
     }
-    return admin_emails or _operator_emails()
-
-
-async def require_operator_access(
-    session: SessionContext,
-    db: Any,
-) -> dict[str, Any]:
-    identity = await fetch_console_identity(db, session.user_id)
-    console_role = str((identity or {}).get("console_role") or "user").strip().lower()
-    profile_email = _normalize_email((identity or {}).get("email"))
-    session_email = _normalize_email(session.email) or profile_email
-
-    if console_role in {"operator", "admin"} or _email_allowed(
-        session_email,
-        _operator_emails(),
-    ):
-        return identity or {
-            "id": session.user_id,
-            "email": session_email,
-            "console_role": console_role,
-        }
-
-    raise HTTPException(
-        status_code=status.HTTP_403_FORBIDDEN,
-        detail="Pipeline telemetry is restricted to configured operator accounts.",
-    )
 
 
 async def require_admin_access(

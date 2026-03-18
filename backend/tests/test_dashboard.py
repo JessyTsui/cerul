@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 from typing import Any, cast
+from uuid import uuid4
 
 import pytest
 from fastapi.testclient import TestClient
@@ -16,6 +17,7 @@ from app.routers import dashboard
 class DashboardDb:
     def __init__(self) -> None:
         self.profiles: dict[str, dict[str, object]] = {}
+        self.auth_users: dict[str, dict[str, object]] = {}
         self.api_keys: list[dict[str, object]] = []
         self.jobs: list[dict[str, object]] = []
         self.job_steps: list[dict[str, object]] = []
@@ -65,6 +67,27 @@ class DashboardDb:
         if "FROM user_profiles" in normalized:
             return self.profiles.get(str(params[0]))
 
+        if 'FROM "user"' in normalized:
+            return self.auth_users.get(str(params[0]))
+
+        if "INSERT INTO user_profiles" in normalized:
+            profile = self.profiles.get(str(params[0])) or {
+                "id": str(params[0]),
+                "email": params[1],
+                "display_name": params[2],
+                "console_role": "user",
+                "tier": "free",
+                "monthly_credit_limit": 1_000,
+                "rate_limit_per_sec": 1,
+                "stripe_customer_id": None,
+            }
+            if params[1]:
+                profile["email"] = params[1]
+            if params[2]:
+                profile["display_name"] = params[2]
+            self.profiles[str(params[0])] = profile
+            return profile
+
         if "INSERT INTO api_keys" in normalized:
             created = {
                 "id": f"key_{len(self.api_keys) + 1}",
@@ -97,7 +120,7 @@ class DashboardDb:
         if "FROM processing_jobs" in normalized and "WHERE id = $1" in normalized:
             job_id = str(params[0])
             for job in self.jobs:
-                if job["id"] == job_id:
+                if str(job["id"]) == job_id:
                     return job
             return None
 
@@ -137,7 +160,7 @@ class DashboardDb:
 
         if "FROM processing_job_steps" in normalized:
             job_id = str(params[0])
-            items = [step for step in self.job_steps if step["job_id"] == job_id]
+            items = [step for step in self.job_steps if str(step["job_id"]) == job_id]
             return sorted(
                 items,
                 key=lambda item: (
@@ -173,7 +196,7 @@ class DashboardDb:
 @pytest.fixture
 def client(monkeypatch: pytest.MonkeyPatch) -> TestClient:
     db = DashboardDb()
-    monkeypatch.setenv("DASHBOARD_OPERATOR_EMAILS", "owner@example.com")
+    monkeypatch.setenv("ADMIN_CONSOLE_EMAILS", "owner@example.com")
     reset_settings_cache()
 
     async def get_db_override() -> DashboardDb:
@@ -246,6 +269,52 @@ def test_api_key_creation_returns_raw_key_once(client: TestClient) -> None:
     assert payload["key_id"] == "key_1"
     assert payload["raw_key"].startswith("cerul_sk_")
     assert db.api_keys[0]["key_hash"] != payload["raw_key"]
+
+
+def test_api_key_list_serializes_uuid_ids(client: TestClient) -> None:
+    db = client.app.state.test_db
+    db.profiles["user_123"] = {
+        "id": "user_123",
+        "email": "owner@example.com",
+        "tier": "pro",
+        "monthly_credit_limit": 10_000,
+        "stripe_customer_id": None,
+    }
+    db.api_keys.append(
+        {
+            "id": uuid4(),
+            "user_id": "user_123",
+            "name": "CLI key",
+            "key_hash": "hashed",
+            "prefix": "cerul_sk_test",
+            "created_at": datetime.now(timezone.utc),
+            "last_used_at": None,
+            "is_active": True,
+        },
+    )
+
+    response = client.get("/dashboard/api-keys")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["api_keys"][0]["id"] == str(db.api_keys[0]["id"])
+
+
+def test_api_key_creation_provisions_missing_profile_from_auth_user(
+    client: TestClient,
+) -> None:
+    db = client.app.state.test_db
+    db.auth_users["user_123"] = {
+        "id": "user_123",
+        "email": "owner@example.com",
+        "name": "Owner",
+    }
+
+    response = client.post("/dashboard/api-keys", json={"name": "CLI key"})
+
+    assert response.status_code == 201
+    assert db.profiles["user_123"]["email"] == "owner@example.com"
+    assert db.api_keys[0]["user_id"] == "user_123"
 
 
 def test_api_key_deletion_requires_ownership(client: TestClient) -> None:
@@ -349,6 +418,37 @@ def test_job_list_supports_filters_and_pagination(client: TestClient) -> None:
     assert payload["jobs"][0]["error_message"] == "ASR provider timeout"
 
 
+def test_job_list_serializes_uuid_ids(client: TestClient) -> None:
+    db = client.app.state.test_db
+    now = datetime.now(timezone.utc)
+    db.jobs = [
+        {
+            "id": uuid4(),
+            "track": "knowledge",
+            "source_id": None,
+            "job_type": "transcribe",
+            "status": "running",
+            "input_payload": {},
+            "error_message": None,
+            "attempts": 1,
+            "max_attempts": 3,
+            "locked_by": None,
+            "locked_at": None,
+            "next_retry_at": None,
+            "created_at": now,
+            "started_at": now,
+            "completed_at": None,
+            "updated_at": now,
+        },
+    ]
+
+    response = client.get("/dashboard/jobs")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["jobs"][0]["id"] == str(db.jobs[0]["id"])
+
+
 def test_job_detail_returns_steps(client: TestClient) -> None:
     db = client.app.state.test_db
     now = datetime.now(timezone.utc)
@@ -407,6 +507,55 @@ def test_job_detail_returns_steps(client: TestClient) -> None:
         "embed_segments",
     ]
     assert payload["steps"][0]["artifacts"] == {"transcript_language": "en"}
+
+
+def test_job_detail_serializes_uuid_fields(client: TestClient) -> None:
+    db = client.app.state.test_db
+    now = datetime.now(timezone.utc)
+    job_id = uuid4()
+    source_id = uuid4()
+    step_id = uuid4()
+    db.jobs = [
+        {
+            "id": job_id,
+            "track": "knowledge",
+            "source_id": source_id,
+            "job_type": "index",
+            "status": "running",
+            "input_payload": {},
+            "error_message": None,
+            "attempts": 1,
+            "max_attempts": 3,
+            "locked_by": "worker-a",
+            "locked_at": now,
+            "next_retry_at": None,
+            "created_at": now,
+            "started_at": now,
+            "completed_at": None,
+            "updated_at": now,
+        },
+    ]
+    db.job_steps = [
+        {
+            "id": step_id,
+            "job_id": str(job_id),
+            "step_name": "embed",
+            "status": "completed",
+            "artifacts": {},
+            "error_message": None,
+            "started_at": now,
+            "completed_at": now,
+            "updated_at": now,
+        },
+    ]
+
+    response = client.get(f"/dashboard/jobs/{job_id}")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["id"] == str(job_id)
+    assert payload["source_id"] == str(source_id)
+    assert payload["steps"][0]["id"] == str(step_id)
 
 
 def test_job_detail_returns_404_for_unknown_job(client: TestClient) -> None:
@@ -538,7 +687,7 @@ def test_job_stats_returns_status_and_track_counts(client: TestClient) -> None:
         "/dashboard/jobs/job_secure",
     ],
 )
-def test_job_telemetry_requires_operator_access(
+def test_job_telemetry_requires_admin_access(
     client: TestClient,
     path: str,
 ) -> None:
@@ -573,7 +722,7 @@ def test_job_telemetry_requires_operator_access(
 
     assert response.status_code == 403
     assert response.json()["detail"] == (
-        "Pipeline telemetry is restricted to configured operator accounts."
+        "Admin console access is restricted to administrator accounts."
     )
 
 

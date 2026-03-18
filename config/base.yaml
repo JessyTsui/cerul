@@ -17,4 +17,4 @@ knowledge:
 
 dashboard:
   admin_emails: []
-  operator_emails: []
+  bootstrap_admin_secret: null

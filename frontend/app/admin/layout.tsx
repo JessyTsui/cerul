@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 import { redirect } from "next/navigation";
-import { SignOutButton } from "@/app/dashboard/sign-out-button";
-import { getServerSession } from "@/lib/auth-server";
+import { ConsoleViewerProvider } from "@/components/console/console-viewer-context";
+import { getConsoleViewer } from "@/lib/console-viewer";
 
 type AdminAppLayoutProps = {
   children: ReactNode;
@@ -10,18 +10,19 @@ type AdminAppLayoutProps = {
 export default async function AdminAppLayout({
   children,
 }: AdminAppLayoutProps) {
-  const session = await getServerSession();
+  const viewer = await getConsoleViewer();
 
-  if (!session?.user?.id) {
+  if (!viewer) {
     redirect("/login");
   }
 
+  if (!viewer.isAdmin) {
+    redirect("/dashboard");
+  }
+
   return (
-    <>
-      <div className="pointer-events-none fixed right-4 top-24 z-50 sm:right-6">
-        <SignOutButton email={session.user.email ?? null} />
-      </div>
+    <ConsoleViewerProvider viewer={viewer}>
       {children}
-    </>
+    </ConsoleViewerProvider>
   );
 }

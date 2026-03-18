@@ -1,7 +1,6 @@
-"use client";
-
 import Link from "next/link";
 import { BrandMark } from "@/components/brand-mark";
+import { SiteHeaderAuthActions } from "@/components/site-header-auth-actions";
 import { isPrimaryNavigationActive, primaryNavigation } from "@/lib/site";
 
 type SiteHeaderProps = {
@@ -51,12 +50,7 @@ export function SiteHeader({ currentPath }: SiteHeaderProps) {
             </svg>
             GitHub
           </a>
-          <Link href="/login" className="button-secondary focus-ring">
-            Sign in
-          </Link>
-          <Link href="/signup" className="button-primary focus-ring min-w-[112px]">
-            Sign up
-          </Link>
+          <SiteHeaderAuthActions currentPath={currentPath} />
         </div>
       </div>
     </header>

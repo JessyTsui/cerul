@@ -201,7 +201,7 @@ export function AdminSettingsScreen() {
     <AdminLayout
       currentPath="/admin/settings"
       title="Targets"
-      description="Configure the expected operating envelope for Cerul so the console can show actuals against explicit goals instead of forcing operators to eyeball raw numbers."
+      description="Configure the expected operating envelope for Cerul so the console can show actuals against explicit goals instead of forcing admins to eyeball raw numbers."
       actions={
         <>
           <AdminRangePicker value={range} onChange={setRange} />
@@ -395,7 +395,7 @@ export function AdminSettingsScreen() {
                             note: event.target.value || null,
                           })
                         }
-                        placeholder="Optional operator note"
+                        placeholder="Optional admin note"
                         value={target.note ?? ""}
                       />
                     </label>

@@ -18,8 +18,6 @@ import {
 import { UsageChart } from "./usage-chart";
 import { useMonthlyUsage } from "./use-monthly-usage";
 
-const rangeOptions = ["Last 7 days", "30 days", "90 days", "Custom"] as const;
-
 export function DashboardUsageScreen() {
   const { data, error, isLoading, refresh } = useMonthlyUsage();
 
@@ -72,36 +70,27 @@ export function DashboardUsageScreen() {
   }
 
   const chartData = buildUsageChartData(data);
-  const recentPoints = chartData.slice(-7);
-  const avgLatency = 210 + (data.requestCount % 60);
-  const successRate = data.requestCount === 0 ? 100 : 99.7;
-  const dataProcessedTb = Math.max(0.2, Number((data.creditsUsed / 520).toFixed(1)));
+  const activeDays = chartData.filter((point) => point.requestCount > 0 || point.creditsUsed > 0);
+  const averageDailyRequests = chartData.length === 0
+    ? 0
+    : Math.round(data.requestCount / chartData.length);
+  const creditsPerRequest = data.requestCount === 0
+    ? 0
+    : Number((data.creditsUsed / data.requestCount).toFixed(2));
+  const busiestDays = [...activeDays]
+    .sort((left, right) => {
+      if (right.requestCount !== left.requestCount) {
+        return right.requestCount - left.requestCount;
+      }
 
-  // TODO: Replace these placeholders with real endpoint analytics once the dashboard API exposes them.
-  const topEndpoints = [
-    { label: "/api/v2/video/upload", value: data.requestCount || 0 },
-    { label: "/api/v2/data/query", value: Math.max(0, Math.round(data.requestCount * 0.32)) },
-    { label: "/api/v1/user/profile", value: Math.max(0, Math.round(data.requestCount * 0.14)) },
-    { label: "/api/v2/stream/live", value: Math.max(0, Math.round(data.requestCount * 0.08)) },
-  ];
-
-  // TODO: Replace these placeholder slices with real request-mix metrics once available from the API.
-  const distribution = [
-    { label: "Tutorials", value: 33, color: "bg-[var(--brand)]" },
-    { label: "Demos", value: 20, color: "bg-white/80" },
-    { label: "Webinars", value: 15, color: "bg-white/55" },
-    { label: "Other", value: 19, color: "bg-white/25" },
-  ];
-
-  const tableRows = recentPoints.map((point, index) => ({
-    date: point.fullLabel,
-    endpoint: topEndpoints[index % topEndpoints.length]?.label ?? "/api/v1/search",
-    requests: point.requestCount,
-    latency: `${avgLatency + index * 3}ms`,
-    errors: index === 1 ? 2 : 0,
-  }));
-
-  const totalEndpointValue = Math.max(1, ...topEndpoints.map((item) => item.value));
+      return right.creditsUsed - left.creditsUsed;
+    })
+    .slice(0, 5);
+  const topCreditsDay = [...activeDays]
+    .sort((left, right) => right.creditsUsed - left.creditsUsed)[0] ?? null;
+  const topRequestsDay = busiestDays[0] ?? null;
+  const recentRows = [...chartData].slice(-14).reverse();
+  const totalRequestValue = Math.max(1, ...busiestDays.map((item) => item.requestCount));
 
   return (
     <DashboardLayout
@@ -127,28 +116,12 @@ export function DashboardUsageScreen() {
         />
       ) : null}
 
-      <div className="flex flex-wrap justify-end gap-2">
-        {rangeOptions.map((option, index) => (
-          <button
-            key={option}
-            type="button"
-            className={`rounded-full border px-4 py-2 text-sm transition ${
-              index === 0
-                ? "border-[var(--border)] bg-[rgba(255,255,255,0.06)] text-white"
-                : "border-transparent text-[var(--foreground-secondary)] hover:border-[var(--border)] hover:bg-[rgba(255,255,255,0.03)] hover:text-white"
-            }`}
-          >
-            {option}
-          </button>
-        ))}
-      </div>
-
       <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         {[
-          { label: "Total Requests", value: formatNumber(data.requestCount), note: "+12% trend" },
-          { label: "Avg Response Time", value: `${avgLatency}ms`, note: "7-day rolling" },
-          { label: "Success Rate", value: `${successRate}%`, note: "Healthy" },
-          { label: "Data Processed", value: `${dataProcessedTb}TB`, note: "Visual + transcript" },
+          { label: "Total Requests", value: formatNumber(data.requestCount), note: "Current billing window" },
+          { label: "Credits Used", value: formatNumber(data.creditsUsed), note: `${formatNumber(data.creditsLimit)} available this period` },
+          { label: "Credits Remaining", value: formatNumber(data.creditsRemaining), note: "Server-reported balance" },
+          { label: "Active Days", value: formatNumber(activeDays.length), note: `${formatNumber(chartData.length)} tracked days` },
         ].map((item) => (
           <article key={item.label} className="surface-elevated rounded-[24px] px-5 py-5">
             <div className="flex items-center justify-between gap-3">
@@ -166,43 +139,76 @@ export function DashboardUsageScreen() {
 
       <UsageChart
         title="Request Volume Over Time"
-        description="Daily credits are plotted as the primary series, with request count shown as a proxy comparison line until per-track analytics are exposed."
+        description="Daily credits and request counts reported by the dashboard usage API for the current billing window."
         data={chartData}
       />
 
       <section className="grid gap-5 xl:grid-cols-[1.05fr_0.95fr]">
         <article className="surface-elevated rounded-[28px] px-5 py-5">
-          <h2 className="text-2xl font-semibold text-white">Top Endpoints</h2>
+          <h2 className="text-2xl font-semibold text-white">Most Active Days</h2>
           <div className="mt-5 space-y-4">
-            {topEndpoints.map((item) => (
-              <div key={item.label} className="grid gap-2 sm:grid-cols-[200px_minmax(0,1fr)_72px] sm:items-center">
-                <span className="text-sm text-[var(--foreground-secondary)]">{item.label}</span>
+            {busiestDays.length > 0 ? busiestDays.map((item) => (
+              <div key={item.date} className="grid gap-2 sm:grid-cols-[120px_minmax(0,1fr)_92px] sm:items-center">
+                <div>
+                  <span className="text-sm text-white">{item.fullLabel}</span>
+                  <p className="text-xs text-[var(--foreground-tertiary)]">
+                    {formatNumber(item.creditsUsed)} credits
+                  </p>
+                </div>
                 <div className="h-4 rounded-full bg-[rgba(255,255,255,0.06)]">
                   <div
                     className="h-full rounded-full bg-[linear-gradient(90deg,var(--brand),var(--brand-deep))]"
-                    style={{ width: `${Math.max(16, (item.value / totalEndpointValue) * 100)}%` }}
+                    style={{ width: `${Math.max(16, (item.requestCount / totalRequestValue) * 100)}%` }}
                   />
                 </div>
-                <span className="text-right text-sm text-white">{formatNumber(item.value)}</span>
+                <span className="text-right text-sm text-white">{formatNumber(item.requestCount)}</span>
               </div>
-            ))}
+            )) : (
+              <DashboardState
+                title="No active days yet"
+                description="Requests and credit consumption will appear here once usage is recorded in the current billing window."
+              />
+            )}
           </div>
         </article>
 
         <article className="surface-elevated rounded-[28px] px-5 py-5">
-          <h2 className="text-2xl font-semibold text-white">Request Distribution</h2>
-          <div className="mt-6 flex flex-col gap-6 sm:flex-row sm:items-center">
-            <div className="relative mx-auto h-44 w-44 rounded-full bg-[conic-gradient(var(--brand)_0_33%,rgba(255,255,255,0.8)_33%_53%,rgba(255,255,255,0.55)_53%_68%,rgba(255,255,255,0.2)_68%_100%)]">
-              <div className="absolute inset-[26px] rounded-full bg-[var(--background)]" />
-            </div>
-            <div className="space-y-3">
-              {distribution.map((item) => (
-                <div key={item.label} className="flex items-center gap-3 text-sm">
-                  <span className={`h-3 w-3 rounded-full ${item.color}`} />
-                  <span className="min-w-[90px] text-[var(--foreground-secondary)]">{item.label}</span>
-                  <span className="text-white">{item.value}%</span>
-                </div>
-              ))}
+          <h2 className="text-2xl font-semibold text-white">Usage Snapshot</h2>
+          <div className="mt-5 grid gap-4">
+            {[
+              {
+                label: "Peak request day",
+                value: topRequestsDay ? `${topRequestsDay.fullLabel} · ${formatNumber(topRequestsDay.requestCount)} requests` : "No requests yet",
+              },
+              {
+                label: "Peak credit day",
+                value: topCreditsDay ? `${topCreditsDay.fullLabel} · ${formatNumber(topCreditsDay.creditsUsed)} credits` : "No credit usage yet",
+              },
+              {
+                label: "Average requests / day",
+                value: formatNumber(averageDailyRequests),
+              },
+              {
+                label: "Credits / request",
+                value: creditsPerRequest === 0 ? "0" : creditsPerRequest.toFixed(2),
+              },
+            ].map((item) => (
+              <div
+                key={item.label}
+                className="rounded-[20px] border border-[var(--border)] bg-[rgba(255,255,255,0.03)] px-4 py-4"
+              >
+                <p className="text-sm text-[var(--foreground-secondary)]">{item.label}</p>
+                <p className="mt-2 text-lg font-semibold text-white">{item.value}</p>
+              </div>
+            ))}
+            <div className="rounded-[20px] border border-[var(--border)] bg-[rgba(255,255,255,0.03)] px-4 py-4">
+              <p className="text-sm text-[var(--foreground-secondary)]">Data coverage</p>
+              <p className="mt-2 text-lg font-semibold text-white">
+                {formatNumber(activeDays.length)} active days, {formatNumber(Math.max(chartData.length - activeDays.length, 0))} idle days
+              </p>
+              <p className="mt-2 text-sm text-[var(--foreground-tertiary)]">
+                This view only uses values returned by the dashboard usage API. Endpoint-level breakdowns are hidden until the backend exposes them.
+              </p>
             </div>
           </div>
         </article>
@@ -210,26 +216,30 @@ export function DashboardUsageScreen() {
 
       <section className="grid gap-5 xl:grid-cols-[1.15fr_0.85fr]">
         <article className="surface-elevated rounded-[28px] px-5 py-5">
-          <h2 className="text-2xl font-semibold text-white">Detailed Usage</h2>
+          <h2 className="text-2xl font-semibold text-white">Recent Daily Breakdown</h2>
           <div className="mt-5 overflow-x-auto">
             <table className="min-w-full text-left text-sm">
               <thead className="text-[var(--foreground-secondary)]">
                 <tr>
                   <th className="pb-3 font-medium">Date</th>
-                  <th className="pb-3 font-medium">Endpoint</th>
                   <th className="pb-3 font-medium">Requests</th>
-                  <th className="pb-3 font-medium">Avg Latency</th>
-                  <th className="pb-3 font-medium">Errors</th>
+                  <th className="pb-3 font-medium">Credits Used</th>
+                  <th className="pb-3 font-medium">Request Share</th>
+                  <th className="pb-3 font-medium">Credit Share</th>
                 </tr>
               </thead>
               <tbody>
-                {tableRows.map((row) => (
-                  <tr key={`${row.date}-${row.endpoint}`} className="border-t border-[var(--border)] text-[var(--foreground-secondary)]">
-                    <td className="py-3">{row.date}</td>
-                    <td className="py-3 text-white">{row.endpoint}</td>
-                    <td className="py-3 text-[var(--brand-bright)]">{formatNumber(row.requests)}</td>
-                    <td className="py-3">{row.latency}</td>
-                    <td className="py-3">{row.errors}</td>
+                {recentRows.map((row) => (
+                  <tr key={row.date} className="border-t border-[var(--border)] text-[var(--foreground-secondary)]">
+                    <td className="py-3 text-white">{row.fullLabel}</td>
+                    <td className="py-3 text-[var(--brand-bright)]">{formatNumber(row.requestCount)}</td>
+                    <td className="py-3">{formatNumber(row.creditsUsed)}</td>
+                    <td className="py-3">
+                      {data.requestCount === 0 ? "0%" : `${Math.round((row.requestCount / data.requestCount) * 100)}%`}
+                    </td>
+                    <td className="py-3">
+                      {data.creditsUsed === 0 ? "0%" : `${Math.round((row.creditsUsed / data.creditsUsed) * 100)}%`}
+                    </td>
                   </tr>
                 ))}
               </tbody>

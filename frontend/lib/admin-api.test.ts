@@ -150,7 +150,7 @@ describe("admin targets client", () => {
     await admin.getSummary("today");
 
     expect(global.fetch).toHaveBeenCalledWith(
-      "http://localhost:9104/admin/summary?range=today",
+      "/api/console/admin/summary?range=today",
       expect.objectContaining({
         credentials: "include",
         method: "GET",

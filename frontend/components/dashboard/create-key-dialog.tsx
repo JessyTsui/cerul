@@ -204,7 +204,7 @@ export function CreateKeyDialog({
                 value={name}
               />
               <p className="mt-2 text-sm text-[var(--foreground-secondary)]">
-                Use a descriptive name so operators can revoke the correct key later.
+                Use a descriptive name so admins can revoke the correct key later.
               </p>
             </div>
 

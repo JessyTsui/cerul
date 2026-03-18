@@ -120,7 +120,7 @@ export default function RootLayout({
       lang="en"
       className={`${spaceGroteskDisplay.variable} ${spaceGroteskSans.variable} ${jetBrainsMono.variable}`}
     >
-      <body>{children}</body>
+      <body suppressHydrationWarning>{children}</body>
     </html>
   );
 }

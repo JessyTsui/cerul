@@ -49,5 +49,5 @@ variables for metadata, canonical URLs, `robots.txt`, and `sitemap.xml`.
 - `/pricing` pricing page
 - `/login` and `/signup` auth mock pages
 - `/dashboard` private console overview
-- `/dashboard/keys`, `/dashboard/usage`, `/dashboard/pipelines`, `/dashboard/settings`
+- `/dashboard/keys`, `/dashboard/usage`, `/dashboard/settings`, `/admin/pipelines`
 - `/api/demo/search` and `/api/demo/dashboard` mock API routes for the frontend demo

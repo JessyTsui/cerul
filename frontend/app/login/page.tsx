@@ -1,7 +1,8 @@
-import type { Metadata } from "next";
-import { AuthSessionRedirect } from "@/components/auth/auth-session-redirect";
+import type { Metadata, Route } from "next";
+import { redirect } from "next/navigation";
 import { AuthShell } from "@/components/auth/auth-shell";
 import { normalizeAuthRedirectPath } from "@/lib/auth-shared";
+import { getServerSession } from "@/lib/auth-server";
 import { LoginForm } from "./login-form";
 
 export const metadata: Metadata = {
@@ -27,15 +28,19 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
     ? resolvedSearchParams.next[0]
     : resolvedSearchParams.next;
   const nextPath = normalizeAuthRedirectPath(nextValue);
+  const session = await getServerSession();
+
+  if (session?.user?.id) {
+    redirect(nextPath as Route);
+  }
 
   return (
     <AuthShell
       heroEyebrow="Console access"
-      heroTitle="Search video evidence without losing operator clarity."
+      heroTitle="Search video evidence without losing console clarity."
       heroDescription="Sign in to manage API keys, usage, and billing in one clean console while your production integrations keep using scoped bearer keys."
       highlights={["Operator console", "Scoped API keys", "Usage and billing"]}
     >
-      <AuthSessionRedirect nextPath={nextPath} />
       <LoginForm nextPath={nextPath} />
     </AuthShell>
   );

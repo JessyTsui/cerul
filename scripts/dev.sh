@@ -6,6 +6,7 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 FRONTEND_DIR="${ROOT_DIR}/frontend"
 BACKEND_DIR="${ROOT_DIR}/backend"
 BACKEND_VENV="${BACKEND_DIR}/.venv"
+ENV_FILE="${CERUL_ENV_FILE:-${ROOT_DIR}/.env}"
 
 FRONTEND_HOST="${FRONTEND_HOST:-127.0.0.1}"
 FRONTEND_PORT="${FRONTEND_PORT:-3000}"
@@ -13,9 +14,9 @@ BACKEND_HOST="${BACKEND_HOST:-127.0.0.1}"
 BACKEND_PORT="${BACKEND_PORT:-8000}"
 
 load_env() {
-  if [ -f "${ROOT_DIR}/.env" ]; then
+  if [ -f "${ENV_FILE}" ]; then
     set -a
-    . "${ROOT_DIR}/.env"
+    . "${ENV_FILE}"
     set +a
   fi
 
@@ -99,9 +100,19 @@ load_env
 require_frontend_package_manager
 require_command python3
 
+if [ "${CERUL_LOCAL_INFRA_READY:-0}" != "1" ]; then
+  if [ ! -x "${ROOT_DIR}/scripts/ensure-local-infra.sh" ]; then
+    echo "[dev] Local infrastructure helper is missing or not executable." >&2
+    exit 1
+  fi
+
+  "${ROOT_DIR}/scripts/ensure-local-infra.sh" --env-file "${ENV_FILE}"
+fi
+
 echo "=========================================="
 echo "  Cerul Development Environment"
 echo "=========================================="
+echo "[dev] env file: ${ENV_FILE}"
 echo "[dev] frontend: http://${FRONTEND_HOST}:${FRONTEND_PORT}"
 echo "[dev] backend:  http://${BACKEND_HOST}:${BACKEND_PORT}"
 echo ""

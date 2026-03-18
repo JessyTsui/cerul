@@ -18,8 +18,8 @@ import yaml
 _CONFIG_ENV_PREFIX = "CERUL__"
 _LEGACY_ENV_OVERRIDES: dict[str, tuple[str, ...]] = {
     "ADMIN_CONSOLE_EMAILS": ("dashboard", "admin_emails"),
+    "BOOTSTRAP_ADMIN_SECRET": ("dashboard", "bootstrap_admin_secret"),
     "DATABASE_URL": ("database", "url"),
-    "DASHBOARD_OPERATOR_EMAILS": ("dashboard", "operator_emails"),
     "MMR_LAMBDA": ("search", "mmr_lambda"),
     "NEXT_PUBLIC_API_BASE_URL": ("public", "api_base_url"),
     "NEXT_PUBLIC_SITE_URL": ("public", "web_base_url"),
@@ -83,11 +83,11 @@ class DashboardSettings(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     admin_emails: list[str] = Field(default_factory=list)
-    operator_emails: list[str] = Field(default_factory=list)
+    bootstrap_admin_secret: str | None = None
 
-    @field_validator("admin_emails", "operator_emails", mode="before")
+    @field_validator("admin_emails", mode="before")
     @classmethod
-    def normalize_operator_emails(cls, value: Any) -> list[str]:
+    def normalize_admin_emails(cls, value: Any) -> list[str]:
         if value is None:
             return []
 
@@ -97,7 +97,7 @@ class DashboardSettings(BaseModel):
             values = value
         else:
             raise TypeError(
-                "dashboard.operator_emails must be a list or comma-separated string",
+                "dashboard.admin_emails must be a list or comma-separated string",
             )
 
         normalized: list[str] = []
@@ -115,6 +115,15 @@ class DashboardSettings(BaseModel):
             normalized.append(cleaned)
 
         return normalized
+
+    @field_validator("bootstrap_admin_secret", mode="before")
+    @classmethod
+    def normalize_bootstrap_admin_secret(cls, value: Any) -> str | None:
+        if value is None:
+            return None
+
+        cleaned = str(value).strip()
+        return cleaned or None
 
 
 class Settings(BaseModel):
@@ -272,11 +281,6 @@ _SKIP = _SkipValue()
 
 def _parse_legacy_override(name: str, raw_value: str) -> Any:
     cleaned = raw_value.strip()
-    if name == "DASHBOARD_OPERATOR_EMAILS":
-        if not cleaned:
-            return []
-        return [item.strip() for item in cleaned.split(",") if item.strip()]
-
     if name == "MMR_LAMBDA":
         try:
             return float(cleaned)

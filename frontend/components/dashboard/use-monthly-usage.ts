@@ -1,11 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import {
-  getApiErrorMessage,
-  type DashboardMonthlyUsage,
-  usage,
-} from "@/lib/api";
+import type { DashboardMonthlyUsage } from "@/lib/api";
+import { useDashboardUsageContext } from "./dashboard-usage-context";
 
 type UseMonthlyUsageResult = {
   data: DashboardMonthlyUsage | null;
@@ -15,37 +11,11 @@ type UseMonthlyUsageResult = {
 };
 
 export function useMonthlyUsage(): UseMonthlyUsageResult {
-  const [data, setData] = useState<DashboardMonthlyUsage | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const context = useDashboardUsageContext();
 
-  async function loadUsage(options?: { preserveData?: boolean }) {
-    if (!options?.preserveData) {
-      setIsLoading(true);
-    }
-
-    setError(null);
-
-    try {
-      const nextUsage = await usage.getMonthly();
-      setData(nextUsage);
-    } catch (nextError) {
-      setError(getApiErrorMessage(nextError, "Failed to load monthly usage."));
-    } finally {
-      setIsLoading(false);
-    }
+  if (context) {
+    return context;
   }
 
-  useEffect(() => {
-    void loadUsage();
-  }, []);
-
-  return {
-    data,
-    isLoading,
-    error,
-    refresh: async () => {
-      await loadUsage({ preserveData: data !== null });
-    },
-  };
+  throw new Error("useMonthlyUsage must be used within DashboardUsageProvider.");
 }
