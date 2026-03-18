@@ -37,6 +37,17 @@ describe("console settings helpers", () => {
     ]);
   });
 
+  it("accepts comma-delimited shared admin email overrides", () => {
+    delete process.env.ADMIN_CONSOLE_EMAILS;
+    process.env.CERUL__DASHBOARD__ADMIN_EMAILS =
+      "owner@example.com,admin@example.com";
+
+    expect(Array.from(getConfiguredAdminEmails()).sort()).toEqual([
+      "admin@example.com",
+      "owner@example.com",
+    ]);
+  });
+
   it("prefers the legacy bootstrap secret when both forms are set", () => {
     process.env.BOOTSTRAP_ADMIN_SECRET = "legacy-secret";
     process.env.CERUL__DASHBOARD__BOOTSTRAP_ADMIN_SECRET = "shared-secret";

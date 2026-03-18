@@ -102,7 +102,16 @@ function parseYamlEmailValue(value: string | undefined): string[] {
   }
 
   const scalar = parseScalar(normalized);
-  const normalizedEmail = scalar ? normalizeEmail(scalar) : null;
+
+  if (!scalar) {
+    return [];
+  }
+
+  if (scalar.includes(",")) {
+    return normalizeEmailList(scalar);
+  }
+
+  const normalizedEmail = normalizeEmail(scalar);
   return normalizedEmail ? [normalizedEmail] : [];
 }
 

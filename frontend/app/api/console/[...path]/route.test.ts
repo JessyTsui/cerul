@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { createHmac } from "node:crypto";
 
 const getServerSessionUncachedMock = vi.fn();
 const getBackendApiBaseUrlMock = vi.fn();
@@ -125,6 +126,24 @@ describe("console proxy route", () => {
     expect(target).toBeInstanceOf(URL);
     expect(String(target)).toBe(
       "http://127.0.0.1:8000/backend/admin/targets?range=7d",
+    );
+
+    const [, init] = vi.mocked(global.fetch).mock.calls[0] ?? [];
+    const headers = init?.headers as Headers;
+    const timestamp = headers.get("x-cerul-session-timestamp");
+
+    expect(headers.get("x-cerul-session-signature")).toBe(
+      createHmac("sha256", "test-secret")
+        .update(
+          [
+            "user_123",
+            "owner@example.com",
+            timestamp,
+            "PUT",
+            "/backend/admin/targets",
+          ].join("\n"),
+        )
+        .digest("hex"),
     );
   });
 });

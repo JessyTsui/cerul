@@ -152,7 +152,7 @@ async function proxyConsoleRequest(
       email: session.user.email,
       timestamp,
       method: request.method,
-      path: forwardPath,
+      path: upstreamUrl.pathname,
       secret: authProxySecret,
     }),
   );
