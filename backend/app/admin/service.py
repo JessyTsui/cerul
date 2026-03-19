@@ -32,6 +32,11 @@ from .models import (
     AdminUsersMetrics,
     AdminUsersSummaryResponse,
     AdminWindow,
+    AdminWorkerCompletedJob,
+    AdminWorkerJob,
+    AdminWorkerLiveResponse,
+    AdminWorkerQueueCounts,
+    AdminWorkerStep,
 )
 
 ALLOWED_TARGET_METRICS = {
@@ -1686,4 +1691,133 @@ async def fetch_targets_summary(
         generated_at=_utc_now(),
         window=serialize_window(window),
         targets=serialized_targets,
+    )
+
+
+async def fetch_worker_live(db: Any) -> AdminWorkerLiveResponse:
+    """Return a real-time snapshot of the worker queue and active jobs."""
+
+    # Queue counts across all time
+    counts_row = await db.fetchrow("""
+        SELECT
+            COUNT(*) FILTER (WHERE status = 'pending')   AS pending,
+            COUNT(*) FILTER (WHERE status = 'running')   AS running,
+            COUNT(*) FILTER (WHERE status = 'retrying')  AS retrying,
+            COUNT(*) FILTER (WHERE status = 'completed') AS completed,
+            COUNT(*) FILTER (WHERE status = 'failed')    AS failed
+        FROM processing_jobs
+    """)
+
+    queue = AdminWorkerQueueCounts(
+        pending=_as_int(counts_row["pending"]),
+        running=_as_int(counts_row["running"]),
+        retrying=_as_int(counts_row["retrying"]),
+        completed=_as_int(counts_row["completed"]),
+        failed=_as_int(counts_row["failed"]),
+    )
+
+    # Active jobs: running first, then pending, capped at 20
+    active_rows = await db.fetch("""
+        SELECT
+            id,
+            track,
+            status,
+            input_payload->>'video_id'                          AS video_id,
+            COALESCE(
+                input_payload->'source_metadata'->>'title',
+                input_payload->>'title',
+                input_payload->>'video_id'
+            )                                                   AS title,
+            started_at,
+            created_at
+        FROM processing_jobs
+        WHERE status IN ('running', 'retrying', 'pending')
+        ORDER BY
+            CASE status
+                WHEN 'running' THEN 0
+                WHEN 'retrying' THEN 1
+                ELSE 2
+            END,
+            started_at NULLS LAST,
+            created_at
+        LIMIT 20
+    """)
+
+    # Steps for active jobs
+    active_job_ids = [str(row["id"]) for row in active_rows]
+    step_rows: list[Any] = []
+    if active_job_ids:
+        step_rows = await db.fetch("""
+            SELECT job_id, step_name, status, started_at, completed_at, error_message
+            FROM processing_job_steps
+            WHERE job_id = ANY($1::uuid[])
+            ORDER BY created_at
+        """, active_job_ids)
+
+    steps_by_job: dict[str, list[AdminWorkerStep]] = {}
+    for step in step_rows:
+        jid = str(step["job_id"])
+        steps_by_job.setdefault(jid, []).append(
+            AdminWorkerStep(
+                step_name=str(step["step_name"]),
+                status=str(step["status"]),
+                started_at=step.get("started_at"),
+                completed_at=step.get("completed_at"),
+                error_message=str(step["error_message"]) if step.get("error_message") else None,
+            )
+        )
+
+    active_jobs = [
+        AdminWorkerJob(
+            job_id=str(row["id"]),
+            track=str(row["track"]),
+            status=str(row["status"]),
+            video_id=str(row["video_id"]) if row.get("video_id") else None,
+            title=str(row["title"]) if row.get("title") else None,
+            started_at=row.get("started_at"),
+            created_at=row["created_at"],
+            steps=steps_by_job.get(str(row["id"]), []),
+        )
+        for row in active_rows
+    ]
+
+    # Recent completed jobs with segment counts
+    completed_rows = await db.fetch("""
+        SELECT
+            pj.id,
+            pj.input_payload->>'video_id'                          AS video_id,
+            COALESCE(
+                pj.input_payload->'source_metadata'->>'title',
+                pj.input_payload->>'title',
+                pj.input_payload->>'video_id'
+            )                                                       AS title,
+            pj.completed_at,
+            COUNT(ks.id)                                            AS segment_count
+        FROM processing_jobs pj
+        LEFT JOIN knowledge_videos kv
+            ON kv.source_video_id = pj.input_payload->>'video_id'
+            AND kv.source = 'youtube'
+        LEFT JOIN knowledge_segments ks ON ks.video_id = kv.id
+        WHERE pj.status = 'completed'
+        GROUP BY pj.id, pj.input_payload, pj.completed_at
+        ORDER BY pj.completed_at DESC NULLS LAST
+        LIMIT 8
+    """)
+
+    recent_completed = [
+        AdminWorkerCompletedJob(
+            job_id=str(row["id"]),
+            video_id=str(row["video_id"]) if row.get("video_id") else None,
+            title=str(row["title"]) if row.get("title") else None,
+            segment_count=_as_int(row["segment_count"]),
+            completed_at=row.get("completed_at"),
+        )
+        for row in completed_rows
+    ]
+
+    return AdminWorkerLiveResponse(
+        generated_at=_utc_now(),
+        queue=queue,
+        active_jobs=active_jobs,
+        recent_completed=recent_completed,
     )

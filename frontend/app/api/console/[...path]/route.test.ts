@@ -1,9 +1,15 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createHmac } from "node:crypto";
 
-const getServerSessionUncachedMock = vi.fn();
-const getBackendApiBaseUrlMock = vi.fn();
-const isConsolePathMock = vi.fn();
+const {
+  getServerSessionUncachedMock,
+  getBackendApiBaseUrlMock,
+  isConsolePathMock,
+} = vi.hoisted(() => ({
+  getServerSessionUncachedMock: vi.fn(),
+  getBackendApiBaseUrlMock: vi.fn(),
+  isConsolePathMock: vi.fn(),
+}));
 
 vi.mock("@/lib/auth-server", () => ({
   getServerSessionUncached: getServerSessionUncachedMock,
@@ -59,6 +65,7 @@ describe("console proxy route", () => {
         method: "PUT",
         headers: {
           accept: "application/json",
+          cookie: "better-auth.session_token=test-session; theme=dark",
           "content-type": "application/json",
         },
         body: JSON.stringify({
@@ -90,6 +97,9 @@ describe("console proxy route", () => {
     );
 
     const headers = init?.headers as Headers;
+    expect(headers.get("cookie")).toBe(
+      "better-auth.session_token=test-session; theme=dark",
+    );
     expect(headers.get("x-cerul-session-user-id")).toBe("user_123");
     expect(headers.get("x-cerul-session-user-email")).toBe("owner@example.com");
     expect(headers.get("x-cerul-session-timestamp")).toBeTruthy();

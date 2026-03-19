@@ -57,12 +57,25 @@ class SearchSettings(BaseModel):
     clip_score_threshold: float | None = None
 
 
+class EmbeddingSettings(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    model: str = "gemini-embedding-2-preview"
+    dimension: int = Field(default=768, ge=128, le=3072)
+    # Set to false to skip L2 normalisation (only relevant when dimension != 3072).
+    normalize: bool = True
+
+
 class KnowledgeSettings(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     scene_threshold: float = Field(ge=0.0, le=1.0)
     rerank_top_n: int = Field(gt=0)
     rerank_prompt_template: str
+    # "openai" → OpenAICompatibleRerankerBackend (default, pointwise, N calls/search)
+    # "cohere" → CohereRerankerBackend (batch, 1 call/search, recommended for production)
+    rerank_backend: str = "openai"
+    rerank_model: str = "gpt-4o-mini"
 
 
 class DatabaseSettings(BaseModel):
@@ -133,6 +146,7 @@ class Settings(BaseModel):
     environment: str
     public: PublicSettings
     search: SearchSettings
+    embedding: EmbeddingSettings = Field(default_factory=EmbeddingSettings)
     knowledge: KnowledgeSettings
     dashboard: DashboardSettings = Field(default_factory=DashboardSettings)
     database: DatabaseSettings = Field(default_factory=DatabaseSettings)

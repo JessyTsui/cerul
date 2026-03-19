@@ -254,6 +254,46 @@ export type AdminMetricTargetInput = {
   note: string | null;
 };
 
+export type AdminWorkerStep = {
+  stepName: string;
+  status: string;
+  startedAt: string | null;
+  completedAt: string | null;
+  errorMessage: string | null;
+};
+
+export type AdminWorkerJob = {
+  jobId: string;
+  track: string;
+  status: string;
+  videoId: string | null;
+  title: string | null;
+  startedAt: string | null;
+  createdAt: string;
+  steps: AdminWorkerStep[];
+};
+
+export type AdminWorkerCompletedJob = {
+  jobId: string;
+  videoId: string | null;
+  title: string | null;
+  segmentCount: number;
+  completedAt: string | null;
+};
+
+export type AdminWorkerLive = {
+  generatedAt: string;
+  queue: {
+    pending: number;
+    running: number;
+    retrying: number;
+    completed: number;
+    failed: number;
+  };
+  activeJobs: AdminWorkerJob[];
+  recentCompleted: AdminWorkerCompletedJob[];
+};
+
 function isPlainObject(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
@@ -631,6 +671,62 @@ export function normalizeAdminIngestionSummary(payload: unknown): AdminIngestion
   };
 }
 
+export function normalizeAdminWorkerLive(payload: unknown): AdminWorkerLive {
+  const raw = ensureObject(payload, "Invalid admin worker live response.");
+  const queue = ensureObject(raw.queue, "Admin worker live is missing queue counts.");
+
+  return {
+    generatedAt: typeof raw.generated_at === "string" ? raw.generated_at : "",
+    queue: {
+      pending: isFiniteNumber(queue.pending) ? queue.pending : 0,
+      running: isFiniteNumber(queue.running) ? queue.running : 0,
+      retrying: isFiniteNumber(queue.retrying) ? queue.retrying : 0,
+      completed: isFiniteNumber(queue.completed) ? queue.completed : 0,
+      failed: isFiniteNumber(queue.failed) ? queue.failed : 0,
+    },
+    activeJobs: Array.isArray(raw.active_jobs)
+      ? raw.active_jobs.map((item) => {
+          const job = ensureObject(item, "Invalid worker job payload.");
+          return {
+            jobId: typeof job.job_id === "string" ? job.job_id : "",
+            track: typeof job.track === "string" ? job.track : "",
+            status: typeof job.status === "string" ? job.status : "",
+            videoId: typeof job.video_id === "string" ? job.video_id : null,
+            title: typeof job.title === "string" ? job.title : null,
+            startedAt: typeof job.started_at === "string" ? job.started_at : null,
+            createdAt: typeof job.created_at === "string" ? job.created_at : "",
+            steps: Array.isArray(job.steps)
+              ? job.steps.map((s) => {
+                  const step = ensureObject(s, "Invalid worker step payload.");
+                  return {
+                    stepName: typeof step.step_name === "string" ? step.step_name : "",
+                    status: typeof step.status === "string" ? step.status : "",
+                    startedAt: typeof step.started_at === "string" ? step.started_at : null,
+                    completedAt:
+                      typeof step.completed_at === "string" ? step.completed_at : null,
+                    errorMessage:
+                      typeof step.error_message === "string" ? step.error_message : null,
+                  };
+                })
+              : [],
+          };
+        })
+      : [],
+    recentCompleted: Array.isArray(raw.recent_completed)
+      ? raw.recent_completed.map((item) => {
+          const job = ensureObject(item, "Invalid completed job payload.");
+          return {
+            jobId: typeof job.job_id === "string" ? job.job_id : "",
+            videoId: typeof job.video_id === "string" ? job.video_id : null,
+            title: typeof job.title === "string" ? job.title : null,
+            segmentCount: isFiniteNumber(job.segment_count) ? job.segment_count : 0,
+            completedAt: typeof job.completed_at === "string" ? job.completed_at : null,
+          };
+        })
+      : [],
+  };
+}
+
 export function normalizeAdminTargetsResponse(payload: unknown): AdminTargetsResponse {
   const raw = ensureObject(payload, "Invalid admin targets response.");
 
@@ -763,5 +859,14 @@ export const admin = {
     await fetchWithAuth<null>(`/admin/targets/${targetId}`, {
       method: "DELETE",
     });
+  },
+
+  async getWorkerLive(): Promise<AdminWorkerLive> {
+    const payload = await fetchWithAuth<unknown>("/admin/worker/live", {
+      method: "GET",
+      cache: "no-store",
+    });
+
+    return normalizeAdminWorkerLive(payload);
   },
 };

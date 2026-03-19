@@ -22,7 +22,7 @@ export function AdminContentScreen() {
     <AdminLayout
       currentPath="/admin/content"
       title="Content"
-      description="Track how much searchable supply Cerul actually has, where it is growing, and which sources are getting stale."
+      description="Indexed supply, growth, and source freshness."
       actions={
         <>
           <AdminRangePicker value={range} onChange={setRange} />
@@ -38,7 +38,7 @@ export function AdminContentScreen() {
         <DashboardState
           action={
             <button className="button-primary" onClick={() => void refresh()} type="button">
-              Retry request
+              Retry
             </button>
           }
           description={error}
@@ -49,139 +49,97 @@ export function AdminContentScreen() {
         <>
           {error ? (
             <DashboardNotice
-              title="Showing the last successful content snapshot."
+              title="Showing last successful snapshot."
               description={error}
               tone="error"
             />
           ) : null}
 
-          <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-            <AdminMetricCard
-              label="B-roll assets"
-              metric={data.metrics.brollAssetsTotal}
-              note="Current asset inventory available to the public search API."
-            />
-            <AdminMetricCard
-              label="Knowledge videos"
-              metric={data.metrics.knowledgeVideosTotal}
-              note="Source videos currently indexed into the knowledge track."
-            />
-            <AdminMetricCard
-              label="Knowledge segments"
-              metric={data.metrics.knowledgeSegmentsTotal}
-              note="Searchable segment units across all indexed videos."
-            />
-            <AdminMetricCard
-              label="Active sources"
-              metric={data.metrics.activeSourcesTotal}
-              note="Configured content sources that are currently active."
-            />
+          {/* Inventory totals */}
+          <section className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+            <AdminMetricCard label="B-roll assets" metric={data.metrics.brollAssetsTotal} />
+            <AdminMetricCard label="Knowledge videos" metric={data.metrics.knowledgeVideosTotal} />
+            <AdminMetricCard label="Knowledge segments" metric={data.metrics.knowledgeSegmentsTotal} />
+            <AdminMetricCard label="Active sources" metric={data.metrics.activeSourcesTotal} />
           </section>
 
-          <section className="grid gap-4 md:grid-cols-3">
-            <AdminMetricCard
-              label="B-roll added"
-              metric={data.metrics.brollAssetsAdded}
-              note="Assets added during the selected window."
-            />
-            <AdminMetricCard
-              label="Videos added"
-              metric={data.metrics.knowledgeVideosAdded}
-              note="Knowledge videos added during the selected window."
-            />
-            <AdminMetricCard
-              label="Segments added"
-              metric={data.metrics.knowledgeSegmentsAdded}
-              note="Knowledge segments generated during the selected window."
-            />
+          {/* Growth this window */}
+          <section className="grid gap-3 md:grid-cols-3">
+            <AdminMetricCard label="B-roll added" metric={data.metrics.brollAssetsAdded} />
+            <AdminMetricCard label="Videos added" metric={data.metrics.knowledgeVideosAdded} />
+            <AdminMetricCard label="Segments added" metric={data.metrics.knowledgeSegmentsAdded} />
           </section>
 
           <AdminTrendChart
-            title="Knowledge segment growth"
-            description="This is the clearest indicator that your subtitle-first knowledge ingestion is actually producing searchable units rather than just queued jobs."
+            title="Segment growth"
             data={toAdminChartData(data.dailySeries, "knowledgeSegmentsAdded")}
             metricLabel="Segments added"
-            secondaryLabel="Requests"
           />
 
-          <section className="grid gap-5 xl:grid-cols-2">
-            <article className="surface-elevated overflow-hidden px-6 py-6">
-              <p className="font-mono text-xs uppercase tracking-[0.16em] text-[var(--foreground-tertiary)]">
-                Source growth
-              </p>
-              <h2 className="mt-2 text-2xl font-semibold text-white">
-                Additions by source
-              </h2>
-              <div className="mt-5 overflow-x-auto">
-                <table className="min-w-full text-left text-sm">
-                  <thead className="text-[var(--foreground-tertiary)]">
-                    <tr>
-                      <th className="pb-3 pr-4 font-medium">Track</th>
-                      <th className="pb-3 pr-4 font-medium">Source</th>
-                      <th className="pb-3 font-medium">Additions</th>
+          <div className="grid gap-3 xl:grid-cols-2">
+            <article className="surface-elevated overflow-hidden px-5 py-5">
+              <p className="mb-4 text-sm font-semibold text-white">Source growth</p>
+              <table className="w-full text-left text-xs">
+                <thead>
+                  <tr className="text-[var(--foreground-tertiary)]">
+                    <th className="pb-2 pr-3 font-medium">Source</th>
+                    <th className="pb-2 pr-3 font-medium">Track</th>
+                    <th className="pb-2 font-medium">Added</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-white/5">
+                  {data.perSourceGrowth.map((source) => (
+                    <tr key={`${source.track}-${source.sourceKey}`}>
+                      <td className="py-2 pr-3 text-white">{source.sourceKey}</td>
+                      <td className="py-2 pr-3 text-[var(--foreground-secondary)]">{source.track}</td>
+                      <td className="py-2 text-[var(--foreground-secondary)]">{source.additions}</td>
                     </tr>
-                  </thead>
-                  <tbody className="divide-y divide-white/5 text-[var(--foreground-secondary)]">
-                    {data.perSourceGrowth.map((source) => (
-                      <tr key={`${source.track}-${source.sourceKey}`}>
-                        <td className="py-3 pr-4">{source.track}</td>
-                        <td className="py-3 pr-4 text-white">{source.sourceKey}</td>
-                        <td className="py-3">{source.additions}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+                  ))}
+                </tbody>
+              </table>
             </article>
 
-            <article className="surface-elevated overflow-hidden px-6 py-6">
-              <p className="font-mono text-xs uppercase tracking-[0.16em] text-[var(--foreground-tertiary)]">
-                Freshness
-              </p>
-              <h2 className="mt-2 text-2xl font-semibold text-white">
-                Stale source watchlist
-              </h2>
-              <div className="mt-5 overflow-x-auto">
-                <table className="min-w-full text-left text-sm">
-                  <thead className="text-[var(--foreground-tertiary)]">
-                    <tr>
-                      <th className="pb-3 pr-4 font-medium">Source</th>
-                      <th className="pb-3 pr-4 font-medium">Track</th>
-                      <th className="pb-3 pr-4 font-medium">Jobs in range</th>
-                      <th className="pb-3 font-medium">Last job</th>
+            <article className="surface-elevated overflow-hidden px-5 py-5">
+              <p className="mb-4 text-sm font-semibold text-white">Stale sources</p>
+              <table className="w-full text-left text-xs">
+                <thead>
+                  <tr className="text-[var(--foreground-tertiary)]">
+                    <th className="pb-2 pr-3 font-medium">Source</th>
+                    <th className="pb-2 pr-3 font-medium">Track</th>
+                    <th className="pb-2 pr-3 font-medium">Jobs</th>
+                    <th className="pb-2 font-medium">Last job</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-white/5">
+                  {data.staleSources.map((source) => (
+                    <tr key={source.sourceId}>
+                      <td className="py-2 pr-3 text-white">
+                        {source.displayName}
+                        {source.isStale ? (
+                          <span className="ml-1.5 rounded-full border border-amber-500/30 bg-amber-500/10 px-1.5 py-0.5 text-[10px] text-amber-200">
+                            stale
+                          </span>
+                        ) : null}
+                      </td>
+                      <td className="py-2 pr-3 text-[var(--foreground-secondary)]">{source.track}</td>
+                      <td className="py-2 pr-3 text-[var(--foreground-secondary)]">{source.jobsInRange}</td>
+                      <td className="py-2 text-[var(--foreground-secondary)]">{formatAdminDateTime(source.lastJobAt)}</td>
                     </tr>
-                  </thead>
-                  <tbody className="divide-y divide-white/5 text-[var(--foreground-secondary)]">
-                    {data.staleSources.map((source) => (
-                      <tr key={source.sourceId}>
-                        <td className="py-3 pr-4 text-white">
-                          {source.displayName}
-                          {source.isStale ? (
-                            <span className="ml-2 rounded-full border border-amber-500/30 bg-amber-500/10 px-2 py-0.5 text-[11px] text-amber-100">
-                              stale
-                            </span>
-                          ) : null}
-                        </td>
-                        <td className="py-3 pr-4">{source.track}</td>
-                        <td className="py-3 pr-4">{source.jobsInRange}</td>
-                        <td className="py-3">{formatAdminDateTime(source.lastJobAt)}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+                  ))}
+                </tbody>
+              </table>
             </article>
-          </section>
+          </div>
         </>
       ) : (
         <DashboardState
           action={
             <button className="button-primary" onClick={() => void refresh()} type="button">
-              Retry request
+              Retry
             </button>
           }
-          description="The admin API returned no content payload."
-          title="No content data available"
+          description="No content payload returned."
+          title="No data available"
         />
       )}
     </AdminLayout>

@@ -63,7 +63,7 @@ async def resolve_query_vector(
     if query_vector is None:
         resolved_vector = [
             float(value)
-            for value in await asyncio.to_thread(embedding_backend.embed_text, query)
+            for value in await asyncio.to_thread(embedding_backend.embed_query, query)
         ]
         vector_source = embedding_backend.name
     else:

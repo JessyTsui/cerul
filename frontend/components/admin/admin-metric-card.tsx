@@ -9,7 +9,7 @@ import {
 type AdminMetricCardProps = {
   label: string;
   metric: AdminMetricValue;
-  note: string;
+  note?: string;
   kind?: "number" | "percent" | "milliseconds";
 };
 
@@ -63,16 +63,20 @@ export function AdminMetricCard({
         <p className="mt-5 text-4xl font-semibold tracking-[-0.05em] text-white">
           {formatAdminMetricValue(metric.current, { kind, compact: true })}
         </p>
-        <p className="mt-3 text-sm leading-7 text-[var(--foreground-secondary)]">
-          {note}
-        </p>
+        {note ? (
+          <p className="mt-3 text-sm leading-7 text-[var(--foreground-secondary)]">
+            {note}
+          </p>
+        ) : null}
         <div className="mt-5 flex flex-wrap gap-2 text-xs">
           <span className="rounded-full border border-[var(--border)] bg-[rgba(8,12,20,0.42)] px-3 py-1.5 text-[var(--foreground-secondary)]">
             Delta {formatAdminDelta(metric, { kind })}
           </span>
-          <span className="rounded-full border border-[var(--border)] bg-[rgba(8,12,20,0.42)] px-3 py-1.5 text-[var(--foreground-secondary)]">
-            {formatTargetStatus(metric, { kind })}
-          </span>
+          {metric.target !== null ? (
+            <span className="rounded-full border border-[var(--border)] bg-[rgba(8,12,20,0.42)] px-3 py-1.5 text-[var(--foreground-secondary)]">
+              {formatTargetStatus(metric, { kind })}
+            </span>
+          ) : null}
         </div>
       </div>
     </article>

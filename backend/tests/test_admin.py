@@ -532,6 +532,107 @@ def test_admin_targets_reject_unsupported_scope(
     assert "does not support 'source' scope" in response.json()["detail"]
 
 
+def test_admin_worker_live_includes_retrying_jobs_and_steps(
+    admin_client: TestClient,
+    database,
+) -> None:
+    seed_admin_metrics(database)
+    source_id = database.fetchval(
+        "SELECT id FROM content_sources WHERE slug = 'youtube-openai'"
+    )
+    now = datetime.now(timezone.utc)
+    running_job_id = database.fetchval(
+        """
+        INSERT INTO processing_jobs (
+            track,
+            source_id,
+            job_type,
+            status,
+            input_payload,
+            started_at,
+            created_at,
+            updated_at
+        )
+        VALUES (
+            'knowledge',
+            $1::uuid,
+            'index_video',
+            'running',
+            '{"video_id":"live-running","source_metadata":{"title":"Running interview"}}'::jsonb,
+            $2,
+            $2,
+            $2
+        )
+        RETURNING id
+        """,
+        source_id,
+        now,
+    )
+    database.fetchval(
+        """
+        INSERT INTO processing_jobs (
+            track,
+            source_id,
+            job_type,
+            status,
+            input_payload,
+            started_at,
+            created_at,
+            updated_at
+        )
+        VALUES (
+            'knowledge',
+            $1::uuid,
+            'index_video',
+            'retrying',
+            '{"video_id":"live-retrying","source_metadata":{"title":"Retrying interview"}}'::jsonb,
+            $2,
+            $2,
+            $2
+        )
+        RETURNING id
+        """,
+        source_id,
+        now + timedelta(minutes=1),
+    )
+    database.fetchval(
+        """
+        INSERT INTO processing_job_steps (
+            job_id,
+            step_name,
+            status,
+            artifacts,
+            error_message,
+            started_at,
+            completed_at,
+            updated_at
+        )
+        VALUES (
+            $1::uuid,
+            'DownloadKnowledgeVideoStep',
+            'running',
+            '{}'::jsonb,
+            NULL,
+            $2,
+            NULL,
+            $2
+        )
+        RETURNING id
+        """,
+        running_job_id,
+        now,
+    )
+
+    response = admin_client.get("/admin/worker/live")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["queue"]["running"] >= 1
+    assert payload["queue"]["retrying"] >= 1
+    assert any(job["status"] == "retrying" for job in payload["active_jobs"])
+    assert payload["active_jobs"][0]["steps"][0]["step_name"] == "DownloadKnowledgeVideoStep"
+
+
 def test_admin_target_delete_rejects_invalid_uuid(
     admin_client: TestClient,
 ) -> None:

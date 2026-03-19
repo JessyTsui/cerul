@@ -293,6 +293,58 @@ class AdminIngestionSummaryResponse(BaseModel):
     failed_steps: list[AdminFailedStep]
 
 
+class AdminWorkerStep(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    step_name: str
+    status: str  # "pending" | "running" | "completed" | "failed"
+    started_at: datetime | None = None
+    completed_at: datetime | None = None
+    error_message: str | None = None
+
+
+class AdminWorkerJob(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    job_id: str
+    track: str
+    status: str
+    video_id: str | None = None
+    title: str | None = None
+    started_at: datetime | None = None
+    created_at: datetime
+    steps: list[AdminWorkerStep] = Field(default_factory=list)
+
+
+class AdminWorkerCompletedJob(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    job_id: str
+    video_id: str | None = None
+    title: str | None = None
+    segment_count: int
+    completed_at: datetime | None = None
+
+
+class AdminWorkerQueueCounts(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    pending: int
+    running: int
+    retrying: int
+    completed: int
+    failed: int
+
+
+class AdminWorkerLiveResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    generated_at: datetime
+    queue: AdminWorkerQueueCounts
+    active_jobs: list[AdminWorkerJob]
+    recent_completed: list[AdminWorkerCompletedJob]
+
+
 class AdminMetricTarget(BaseModel):
     model_config = ConfigDict(extra="forbid")
 

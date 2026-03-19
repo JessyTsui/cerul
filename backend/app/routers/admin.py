@@ -11,6 +11,7 @@ from app.admin import (
     AdminSummaryResponse,
     AdminTargetsResponse,
     AdminTargetsUpsertRequest,
+    AdminWorkerLiveResponse,
     delete_target,
     fetch_admin_summary,
     fetch_content_summary,
@@ -18,6 +19,7 @@ from app.admin import (
     fetch_requests_summary,
     fetch_targets_summary,
     fetch_users_summary,
+    fetch_worker_live,
     require_admin_access,
     upsert_targets,
 )
@@ -131,3 +133,12 @@ async def remove_admin_target(
         )
 
     return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@router.get("/worker/live", response_model=AdminWorkerLiveResponse)
+async def get_worker_live(
+    session: SessionContext = Depends(require_session),
+    db: Any = Depends(get_db),
+) -> AdminWorkerLiveResponse:
+    await require_admin_access(session, db)
+    return await fetch_worker_live(db)
