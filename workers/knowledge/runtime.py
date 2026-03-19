@@ -24,6 +24,11 @@ DEFAULT_OPENAI_UPLOAD_LIMIT_BYTES = 25 * 1024 * 1024
 logger = logging.getLogger(__name__)
 
 
+def _resolve_ytdlp_proxy(proxy_url: str | None = None) -> str | None:
+    candidate = (proxy_url or os.getenv("YTDLP_PROXY") or "").strip()
+    return candidate or None
+
+
 class KnowledgeMetadataClient(Protocol):
     async def get_video_metadata(self, video_id: str) -> Mapping[str, Any]:
         ...
@@ -109,7 +114,7 @@ class OpenAICompatibleTranscriber:
         api_key: str | None = None,
         base_url: str = DEFAULT_OPENAI_BASE_URL,
         model_name: str = DEFAULT_OPENAI_TRANSCRIBE_MODEL,
-        timeout_seconds: float = 120.0,
+        timeout_seconds: float = 600.0,
         max_upload_bytes: int = DEFAULT_OPENAI_UPLOAD_LIMIT_BYTES,
     ) -> None:
         self._api_key = (api_key or os.getenv("OPENAI_API_KEY", "")).strip()
@@ -117,6 +122,11 @@ class OpenAICompatibleTranscriber:
         self._model_name = model_name
         self._timeout_seconds = timeout_seconds
         self._max_upload_bytes = max_upload_bytes
+        self._logger = logging.getLogger(__name__)
+
+    # Maximum audio duration per Whisper API call (1 hour).  Longer audio is
+    # split into overlapping chunks so we stay well within the server-side limit.
+    _MAX_CHUNK_SECONDS: float = 3600.0
 
     async def transcribe(
         self,
@@ -131,39 +141,156 @@ class OpenAICompatibleTranscriber:
         if not resolved_video_path.exists():
             raise FileNotFoundError(f"Transcription input does not exist: {resolved_video_path}")
 
-        file_size = resolved_video_path.stat().st_size
-        if file_size > self._max_upload_bytes:
+        # If the source file is too large for direct upload, extract a low-bitrate
+        # audio track first (mp3 @ 16 kbps mono is ~7 MB/hr, so even a 3-hr video
+        # stays well under the 25 MB limit before chunking).
+        upload_path = resolved_video_path
+        tmp_audio_path: Path | None = None
+        if resolved_video_path.stat().st_size > self._max_upload_bytes:
+            tmp_audio_path = resolved_video_path.with_name(
+                resolved_video_path.stem + ".whisper.mp3"
+            )
+            try:
+                proc = await asyncio.create_subprocess_exec(
+                    "ffmpeg", "-y", "-i", str(resolved_video_path),
+                    "-vn", "-ac", "1", "-ar", "16000", "-b:a", "16k",
+                    str(tmp_audio_path),
+                    stdout=asyncio.subprocess.DEVNULL,
+                    stderr=asyncio.subprocess.DEVNULL,
+                )
+                await proc.communicate()
+                if proc.returncode == 0 and tmp_audio_path.exists():
+                    upload_path = tmp_audio_path
+                else:
+                    tmp_audio_path = None
+            except FileNotFoundError:
+                tmp_audio_path = None
+
+        if upload_path.stat().st_size > self._max_upload_bytes:
+            if tmp_audio_path and tmp_audio_path.exists():
+                tmp_audio_path.unlink(missing_ok=True)
             raise RuntimeError(
-                "Transcription input exceeds the OpenAI upload limit. "
-                "Prefer subtitles or add audio chunking for long videos."
+                "Transcription input exceeds the OpenAI upload limit even after "
+                "audio extraction. Prefer subtitles for very large videos."
             )
 
-        content_type = (
-            mimetypes.guess_type(resolved_video_path.name)[0] or "application/octet-stream"
-        )
-        payload = [
-            ("model", self._model_name),
-            ("response_format", "verbose_json"),
-            ("timestamp_granularities[]", "segment"),
-        ]
+        default_end = float(video_metadata.get("duration_seconds") or 0.0)
+        try:
+            all_segments = await self._transcribe_with_chunking(upload_path, default_end)
+        finally:
+            if tmp_audio_path and tmp_audio_path.exists():
+                tmp_audio_path.unlink(missing_ok=True)
 
-        async with httpx.AsyncClient(timeout=self._timeout_seconds) as client:
-            with resolved_video_path.open("rb") as handle:
-                response = await client.post(
-                    f"{self._base_url}/audio/transcriptions",
-                    headers={"Authorization": f"Bearer {self._api_key}"},
-                    data=payload,
-                    files={"file": (resolved_video_path.name, handle, content_type)},
+        return normalize_transcript_segments(all_segments, default_end=default_end)
+
+    async def _get_audio_duration(self, audio_path: Path) -> float:
+        """Return duration in seconds via ffprobe, or 0 on failure."""
+        try:
+            proc = await asyncio.create_subprocess_exec(
+                "ffprobe", "-v", "quiet",
+                "-show_entries", "format=duration",
+                "-of", "csv=p=0",
+                str(audio_path),
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.DEVNULL,
+            )
+            stdout, _ = await proc.communicate()
+            return float(stdout.decode().strip() or 0)
+        except Exception:
+            return 0.0
+
+    async def _transcribe_with_chunking(
+        self,
+        audio_path: Path,
+        default_end: float,
+    ) -> list[dict[str, Any]]:
+        """Transcribe audio, splitting into ≤1 hr chunks when necessary."""
+        duration = await self._get_audio_duration(audio_path)
+
+        if duration <= self._MAX_CHUNK_SECONDS:
+            response = await self._call_whisper_api(audio_path)
+            return _extract_transcript_segments(response.json(), default_end=default_end)
+
+        all_segments: list[dict[str, Any]] = []
+        chunk_start = 0.0
+        chunk_index = 0
+        while chunk_start < duration:
+            chunk_duration = min(self._MAX_CHUNK_SECONDS, duration - chunk_start)
+            chunk_path = audio_path.with_name(
+                audio_path.stem + f".chunk{chunk_index:03d}.mp3"
+            )
+            try:
+                proc = await asyncio.create_subprocess_exec(
+                    "ffmpeg", "-y",
+                    "-ss", str(chunk_start),
+                    "-i", str(audio_path),
+                    "-t", str(chunk_duration),
+                    "-c", "copy",
+                    str(chunk_path),
+                    stdout=asyncio.subprocess.DEVNULL,
+                    stderr=asyncio.subprocess.DEVNULL,
+                )
+                await proc.communicate()
+                if proc.returncode != 0 or not chunk_path.exists():
+                    self._logger.warning(
+                        "ffmpeg chunk extraction failed for chunk %d (offset %.0fs)",
+                        chunk_index, chunk_start,
+                    )
+                    chunk_start += chunk_duration
+                    chunk_index += 1
+                    continue
+
+                response = await self._call_whisper_api(chunk_path)
+                chunk_segments = _extract_transcript_segments(
+                    response.json(), default_end=chunk_duration,
+                )
+                for seg in chunk_segments:
+                    all_segments.append({
+                        **seg,
+                        "start": seg["start"] + chunk_start,
+                        "end": seg["end"] + chunk_start,
+                    })
+            finally:
+                if chunk_path.exists():
+                    chunk_path.unlink(missing_ok=True)
+
+            chunk_start += chunk_duration
+            chunk_index += 1
+
+        return all_segments
+
+    async def _call_whisper_api(self, audio_path: Path) -> httpx.Response:
+        """Upload one audio file to the Whisper endpoint and return the response."""
+        suffix = audio_path.suffix.lower()
+        content_type = "audio/mpeg" if suffix == ".mp3" else (
+            mimetypes.guess_type(audio_path.name)[0] or "application/octet-stream"
+        )
+        file_bytes = audio_path.read_bytes()
+        base_url = self._base_url
+        api_key = self._api_key
+        model_name = self._model_name
+        timeout = self._timeout_seconds
+        proxy_url = os.getenv("YTDLP_PROXY") or os.getenv("HTTPS_PROXY") or os.getenv("HTTP_PROXY") or None
+
+        def _do_request() -> httpx.Response:
+            with httpx.Client(timeout=timeout, proxy=proxy_url) as client:
+                return client.post(
+                    f"{base_url}/audio/transcriptions",
+                    headers={"Authorization": f"Bearer {api_key}"},
+                    data={
+                        "model": model_name,
+                        "response_format": "verbose_json",
+                        "timestamp_granularities[]": "segment",
+                    },
+                    files={"file": (audio_path.name, file_bytes, content_type)},
                 )
 
-        response.raise_for_status()
-        return normalize_transcript_segments(
-            _extract_transcript_segments(
-                response.json(),
-                default_end=float(video_metadata.get("duration_seconds") or 0.0),
-            ),
-            default_end=float(video_metadata.get("duration_seconds") or 0.0),
-        )
+        response = await asyncio.to_thread(_do_request)
+        if not response.is_success:
+            raise RuntimeError(
+                f"Whisper API error {response.status_code}: {response.text[:500]}"
+            )
+        return response
 
 
 class YtDlpCaptionProvider:
@@ -171,9 +298,11 @@ class YtDlpCaptionProvider:
         self,
         *,
         command: str | None = None,
+        proxy_url: str | None = None,
         logger: logging.Logger | None = None,
     ) -> None:
         self._command = (command or os.getenv("YTDLP_BIN") or "yt-dlp").strip() or "yt-dlp"
+        self._proxy_url = _resolve_ytdlp_proxy(proxy_url)
         self._logger = logger or logging.getLogger(__name__)
 
     async def resolve_transcript_segments(
@@ -197,6 +326,7 @@ class YtDlpCaptionProvider:
         output_template = output_dir / f"{source_video_id}.%(ext)s"
         command = [
             self._command,
+            "--extractor-args", "youtube:player_client=android",
             "--skip-download",
             "--write-subs",
             "--write-auto-subs",
@@ -208,6 +338,8 @@ class YtDlpCaptionProvider:
             str(output_template),
             source,
         ]
+        if self._proxy_url is not None:
+            command[1:1] = ["--proxy", self._proxy_url]
 
         try:
             completed = await self._run_command(command)
@@ -300,10 +432,12 @@ class YtDlpVideoDownloader:
         self,
         *,
         command: str | None = None,
+        proxy_url: str | None = None,
         fallback_downloader: KnowledgeVideoDownloader | None = None,
         logger: logging.Logger | None = None,
     ) -> None:
         self._command = (command or os.getenv("YTDLP_BIN") or "yt-dlp").strip() or "yt-dlp"
+        self._proxy_url = _resolve_ytdlp_proxy(proxy_url)
         self._fallback_downloader = fallback_downloader or HttpVideoDownloader()
         self._logger = logger or logging.getLogger(__name__)
 
@@ -335,12 +469,15 @@ class YtDlpVideoDownloader:
         command = [
             self._command,
             "--no-playlist",
+            "--extractor-args", "youtube:player_client=android",
             "--format",
-            "best[ext=mp4]/best",
+            "18/bestvideo[height<=720][ext=mp4]+bestaudio[ext=m4a]/bestvideo[height<=720]+bestaudio/best[height<=720]/best",
             "--output",
             str(output_template),
             source,
         ]
+        if self._proxy_url is not None:
+            command[1:1] = ["--proxy", self._proxy_url]
 
         try:
             completed = await self._run_command(command)
