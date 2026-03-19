@@ -19,9 +19,15 @@ _DURATION_RE = re.compile(
 class YouTubeClient:
     base_url = "https://www.googleapis.com/youtube/v3"
 
-    def __init__(self, api_key: str | None = None, timeout: float = 30.0) -> None:
+    def __init__(
+        self,
+        api_key: str | None = None,
+        timeout: float = 30.0,
+        proxy: str | None = None,
+    ) -> None:
         self._api_key = api_key or os.getenv("YOUTUBE_API_KEY")
         self._timeout = timeout
+        self._proxy = proxy or os.getenv("YTDLP_PROXY") or os.getenv("HTTPS_PROXY") or os.getenv("HTTP_PROXY") or None
 
     async def get_video_metadata(self, video_id: str) -> dict[str, Any]:
         video_id = video_id.strip()
@@ -121,7 +127,7 @@ class YouTubeClient:
             key: value for key, value in request_params.items() if value is not None
         }
 
-        async with httpx.AsyncClient(timeout=self._timeout) as client:
+        async with httpx.AsyncClient(timeout=self._timeout, proxy=self._proxy) as client:
             response = await client.get(f"{self.base_url}/{endpoint}", params=request_params)
 
         response.raise_for_status()

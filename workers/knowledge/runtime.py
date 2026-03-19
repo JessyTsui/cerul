@@ -18,8 +18,28 @@ from urllib.parse import urlparse
 import httpx
 
 DEFAULT_OPENAI_BASE_URL = "https://api.openai.com/v1"
-DEFAULT_OPENAI_TRANSCRIBE_MODEL = "gpt-4o-transcribe"
+DEFAULT_OPENAI_TRANSCRIBE_MODEL = "whisper-1"
 DEFAULT_OPENAI_UPLOAD_LIMIT_BYTES = 25 * 1024 * 1024
+DEFAULT_WHISPER_TARGET_CHUNK_SECONDS = 600.0
+DEFAULT_WHISPER_MIN_CHUNK_SECONDS = 240.0
+DEFAULT_WHISPER_MAX_CHUNK_SECONDS = 780.0
+DEFAULT_WHISPER_MAX_CONCURRENCY = 3
+DEFAULT_FRAME_SCENE_THRESHOLD = 0.25
+DEFAULT_FRAME_SCALE = "640:360"
+DEFAULT_FRAME_HASH_DISTANCE = 8
+DEFAULT_MAX_INFORMATIVE_FRAMES = 4
+DEFAULT_GEMINI_FLASH_MODEL = "gemini-3.1-flash-image-preview"
+
+FRAME_ANNOTATION_PROMPT = """
+You are analyzing a screenshot from a technical talk, interview, demo, or keynote.
+Return JSON only with this exact schema:
+{
+  "description": "1-2 sentences describing the frame",
+  "text_content": "All visible text from slides, charts, UI, numbers, bullets, or code",
+  "visual_type": "slide|chart|diagram|code|product_demo|whiteboard|other",
+  "key_entities": ["model", "product", "company", "metric"]
+}
+""".strip()
 
 logger = logging.getLogger(__name__)
 
@@ -116,17 +136,31 @@ class OpenAICompatibleTranscriber:
         model_name: str = DEFAULT_OPENAI_TRANSCRIBE_MODEL,
         timeout_seconds: float = 600.0,
         max_upload_bytes: int = DEFAULT_OPENAI_UPLOAD_LIMIT_BYTES,
+        chunk_target_seconds: float = DEFAULT_WHISPER_TARGET_CHUNK_SECONDS,
+        chunk_min_seconds: float = DEFAULT_WHISPER_MIN_CHUNK_SECONDS,
+        chunk_max_seconds: float = DEFAULT_WHISPER_MAX_CHUNK_SECONDS,
+        max_concurrent_requests: int = DEFAULT_WHISPER_MAX_CONCURRENCY,
+        silence_noise_level: str = "-30dB",
+        silence_duration_seconds: float = 0.5,
     ) -> None:
         self._api_key = (api_key or os.getenv("OPENAI_API_KEY", "")).strip()
         self._base_url = base_url.rstrip("/")
         self._model_name = model_name
         self._timeout_seconds = timeout_seconds
         self._max_upload_bytes = max_upload_bytes
+        self._chunk_target_seconds = max(float(chunk_target_seconds), 60.0)
+        self._chunk_min_seconds = max(
+            30.0,
+            min(float(chunk_min_seconds), self._chunk_target_seconds),
+        )
+        self._chunk_max_seconds = max(
+            self._chunk_target_seconds,
+            float(chunk_max_seconds),
+        )
+        self._max_concurrent_requests = max(int(max_concurrent_requests), 1)
+        self._silence_noise_level = silence_noise_level
+        self._silence_duration_seconds = max(float(silence_duration_seconds), 0.1)
         self._logger = logging.getLogger(__name__)
-
-    # Maximum audio duration per Whisper API call (1 hour).  Longer audio is
-    # split into overlapping chunks so we stay well within the server-side limit.
-    _MAX_CHUNK_SECONDS: float = 3600.0
 
     async def transcribe(
         self,
@@ -141,40 +175,27 @@ class OpenAICompatibleTranscriber:
         if not resolved_video_path.exists():
             raise FileNotFoundError(f"Transcription input does not exist: {resolved_video_path}")
 
-        # If the source file is too large for direct upload, extract a low-bitrate
-        # audio track first (mp3 @ 16 kbps mono is ~7 MB/hr, so even a 3-hr video
-        # stays well under the 25 MB limit before chunking).
+        source_duration = await self._get_audio_duration(resolved_video_path)
+
+        # Extract a low-bitrate mp3 before chunking so long uploads stay stable and
+        # the worker can cut at silence boundaries without m4a/moov corruption.
         upload_path = resolved_video_path
         tmp_audio_path: Path | None = None
-        if resolved_video_path.stat().st_size > self._max_upload_bytes:
+        should_extract_audio = (
+            resolved_video_path.suffix.lower() != ".mp3"
+            or resolved_video_path.stat().st_size > self._max_upload_bytes
+            or source_duration > self._chunk_target_seconds
+        )
+        if should_extract_audio:
             tmp_audio_path = resolved_video_path.with_name(
                 resolved_video_path.stem + ".whisper.mp3"
             )
-            try:
-                proc = await asyncio.create_subprocess_exec(
-                    "ffmpeg", "-y", "-i", str(resolved_video_path),
-                    "-vn", "-ac", "1", "-ar", "16000", "-b:a", "16k",
-                    str(tmp_audio_path),
-                    stdout=asyncio.subprocess.DEVNULL,
-                    stderr=asyncio.subprocess.DEVNULL,
-                )
-                await proc.communicate()
-                if proc.returncode == 0 and tmp_audio_path.exists():
-                    upload_path = tmp_audio_path
-                else:
-                    tmp_audio_path = None
-            except FileNotFoundError:
+            if await self._extract_audio_track(resolved_video_path, tmp_audio_path):
+                upload_path = tmp_audio_path
+            else:
                 tmp_audio_path = None
 
-        if upload_path.stat().st_size > self._max_upload_bytes:
-            if tmp_audio_path and tmp_audio_path.exists():
-                tmp_audio_path.unlink(missing_ok=True)
-            raise RuntimeError(
-                "Transcription input exceeds the OpenAI upload limit even after "
-                "audio extraction. Prefer subtitles for very large videos."
-            )
-
-        default_end = float(video_metadata.get("duration_seconds") or 0.0)
+        default_end = float(video_metadata.get("duration_seconds") or source_duration or 0.0)
         try:
             all_segments = await self._transcribe_with_chunking(upload_path, default_end)
         finally:
@@ -199,65 +220,185 @@ class OpenAICompatibleTranscriber:
         except Exception:
             return 0.0
 
+    async def _extract_audio_track(
+        self,
+        source_path: Path,
+        target_path: Path,
+    ) -> bool:
+        try:
+            proc = await asyncio.create_subprocess_exec(
+                "ffmpeg",
+                "-y",
+                "-i",
+                str(source_path),
+                "-vn",
+                "-ac",
+                "1",
+                "-ar",
+                "16000",
+                "-b:a",
+                "16k",
+                str(target_path),
+                stdout=asyncio.subprocess.DEVNULL,
+                stderr=asyncio.subprocess.DEVNULL,
+            )
+            await proc.communicate()
+        except FileNotFoundError:
+            return False
+
+        if proc.returncode != 0 or not target_path.exists():
+            target_path.unlink(missing_ok=True)
+            return False
+        return True
+
+    async def _detect_silence_boundaries(self, audio_path: Path) -> list[float]:
+        try:
+            completed = await asyncio.to_thread(
+                subprocess.run,
+                [
+                    "ffmpeg",
+                    "-i",
+                    str(audio_path),
+                    "-af",
+                    (
+                        "silencedetect="
+                        f"noise={self._silence_noise_level}:d={self._silence_duration_seconds}"
+                    ),
+                    "-f",
+                    "null",
+                    "-",
+                ],
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+        except FileNotFoundError:
+            return []
+
+        matches = re.findall(r"silence_end:\s*([0-9]+(?:\.[0-9]+)?)", completed.stderr)
+        return [float(value) for value in matches]
+
+    async def _extract_audio_chunk(
+        self,
+        audio_path: Path,
+        *,
+        chunk_index: int,
+        chunk_start: float,
+        chunk_end: float,
+    ) -> Path:
+        chunk_path = audio_path.with_name(f"{audio_path.stem}.chunk{chunk_index:03d}.mp3")
+        chunk_duration = max(chunk_end - chunk_start, 0.1)
+        proc = await asyncio.create_subprocess_exec(
+            "ffmpeg",
+            "-y",
+            "-ss",
+            str(chunk_start),
+            "-i",
+            str(audio_path),
+            "-t",
+            str(chunk_duration),
+            "-ac",
+            "1",
+            "-ar",
+            "16000",
+            "-b:a",
+            "16k",
+            str(chunk_path),
+            stdout=asyncio.subprocess.DEVNULL,
+            stderr=asyncio.subprocess.DEVNULL,
+        )
+        await proc.communicate()
+        if proc.returncode != 0 or not chunk_path.exists():
+            chunk_path.unlink(missing_ok=True)
+            raise RuntimeError(
+                "ffmpeg chunk extraction failed "
+                f"for chunk {chunk_index} ({chunk_start:.2f}-{chunk_end:.2f}s)."
+            )
+        return chunk_path
+
     async def _transcribe_with_chunking(
         self,
         audio_path: Path,
         default_end: float,
     ) -> list[dict[str, Any]]:
-        """Transcribe audio, splitting into ≤1 hr chunks when necessary."""
+        """Transcribe audio by splitting near silence boundaries around 10 minutes."""
         duration = await self._get_audio_duration(audio_path)
-
-        if duration <= self._MAX_CHUNK_SECONDS:
+        if duration <= 0.0:
+            if audio_path.stat().st_size > self._max_upload_bytes:
+                raise RuntimeError(
+                    "Unable to determine audio duration for oversized upload. "
+                    "Prefer subtitles or ensure ffprobe is installed."
+                )
             response = await self._call_whisper_api(audio_path)
             return _extract_transcript_segments(response.json(), default_end=default_end)
 
-        all_segments: list[dict[str, Any]] = []
-        chunk_start = 0.0
-        chunk_index = 0
-        while chunk_start < duration:
-            chunk_duration = min(self._MAX_CHUNK_SECONDS, duration - chunk_start)
-            chunk_path = audio_path.with_name(
-                audio_path.stem + f".chunk{chunk_index:03d}.mp3"
-            )
-            try:
-                proc = await asyncio.create_subprocess_exec(
-                    "ffmpeg", "-y",
-                    "-ss", str(chunk_start),
-                    "-i", str(audio_path),
-                    "-t", str(chunk_duration),
-                    "-c", "copy",
-                    str(chunk_path),
-                    stdout=asyncio.subprocess.DEVNULL,
-                    stderr=asyncio.subprocess.DEVNULL,
-                )
-                await proc.communicate()
-                if proc.returncode != 0 or not chunk_path.exists():
-                    self._logger.warning(
-                        "ffmpeg chunk extraction failed for chunk %d (offset %.0fs)",
-                        chunk_index, chunk_start,
-                    )
-                    chunk_start += chunk_duration
-                    chunk_index += 1
-                    continue
+        requires_chunking = (
+            duration > self._chunk_target_seconds
+            or audio_path.stat().st_size > self._max_upload_bytes
+        )
+        if not requires_chunking:
+            response = await self._call_whisper_api(audio_path)
+            return _extract_transcript_segments(response.json(), default_end=default_end)
 
-                response = await self._call_whisper_api(chunk_path)
-                chunk_segments = _extract_transcript_segments(
-                    response.json(), default_end=chunk_duration,
+        silence_boundaries = await self._detect_silence_boundaries(audio_path)
+        chunk_ranges = _plan_transcription_chunks(
+            duration,
+            silence_boundaries,
+            target_chunk_seconds=self._chunk_target_seconds,
+            min_chunk_seconds=self._chunk_min_seconds,
+            max_chunk_seconds=self._chunk_max_seconds,
+        )
+        if not chunk_ranges:
+            response = await self._call_whisper_api(audio_path)
+            return _extract_transcript_segments(response.json(), default_end=default_end)
+
+        self._logger.info(
+            "Transcribing %s in %d chunks using silence-aware boundaries.",
+            audio_path.name,
+            len(chunk_ranges),
+        )
+        semaphore = asyncio.Semaphore(self._max_concurrent_requests)
+
+        async def _transcribe_chunk(
+            chunk_index: int,
+            chunk_range: tuple[float, float],
+        ) -> list[dict[str, Any]]:
+            chunk_start, chunk_end = chunk_range
+            async with semaphore:
+                chunk_path = await self._extract_audio_chunk(
+                    audio_path,
+                    chunk_index=chunk_index,
+                    chunk_start=chunk_start,
+                    chunk_end=chunk_end,
                 )
-                for seg in chunk_segments:
-                    all_segments.append({
-                        **seg,
-                        "start": seg["start"] + chunk_start,
-                        "end": seg["end"] + chunk_start,
-                    })
-            finally:
-                if chunk_path.exists():
+                try:
+                    response = await self._call_whisper_api(chunk_path)
+                    chunk_segments = _extract_transcript_segments(
+                        response.json(),
+                        default_end=chunk_end - chunk_start,
+                    )
+                    return [
+                        {
+                            **segment,
+                            "start": float(segment["start"]) + chunk_start,
+                            "end": float(segment["end"]) + chunk_start,
+                        }
+                        for segment in chunk_segments
+                    ]
+                finally:
                     chunk_path.unlink(missing_ok=True)
 
-            chunk_start += chunk_duration
-            chunk_index += 1
-
-        return all_segments
+        chunk_results = await asyncio.gather(
+            *[
+                _transcribe_chunk(chunk_index, chunk_range)
+                for chunk_index, chunk_range in enumerate(chunk_ranges)
+            ]
+        )
+        return [
+            segment
+            for chunk_segments in chunk_results
+            for segment in chunk_segments
+        ]
 
     async def _call_whisper_api(self, audio_path: Path) -> httpx.Response:
         """Upload one audio file to the Whisper endpoint and return the response."""
@@ -562,7 +703,111 @@ class HeuristicSceneDetector:
         return scenes
 
 
+class GeminiFlashFrameAnnotator:
+    def __init__(
+        self,
+        *,
+        api_key: str | None = None,
+        model_name: str = DEFAULT_GEMINI_FLASH_MODEL,
+        client: Any | None = None,
+    ) -> None:
+        self._api_key = (api_key or os.getenv("GEMINI_API_KEY", "")).strip()
+        self._model_name = model_name
+        self._client = client
+        self._sdk_types: Any | None = None
+
+    def available(self) -> bool:
+        return self._client is not None or bool(self._api_key)
+
+    async def annotate(self, image_path: str | Path) -> dict[str, Any]:
+        return await asyncio.to_thread(self._annotate_sync, Path(image_path))
+
+    def _annotate_sync(self, image_path: Path) -> dict[str, Any]:
+        client = self._get_client()
+        sdk_types = self._get_sdk_types()
+        mime_type = mimetypes.guess_type(image_path.name)[0] or "image/jpeg"
+        if sdk_types is None:
+            image_part: Any = {
+                "data": image_path.read_bytes(),
+                "mime_type": mime_type,
+            }
+            config: Any = {
+                "response_mime_type": "application/json",
+                "temperature": 0,
+            }
+        else:
+            image_part = sdk_types.Part.from_bytes(
+                data=image_path.read_bytes(),
+                mime_type=mime_type,
+            )
+            config = sdk_types.GenerateContentConfig(
+                response_mime_type="application/json",
+                temperature=0,
+            )
+
+        response = client.models.generate_content(
+            model=self._model_name,
+            contents=[FRAME_ANNOTATION_PROMPT, image_part],
+            config=config,
+        )
+        return _normalize_frame_annotation_payload(_extract_generated_text(response))
+
+    def _get_client(self) -> Any:
+        if self._client is not None:
+            return self._client
+        if not self._api_key:
+            raise RuntimeError("GEMINI_API_KEY is required for frame annotation.")
+        genai_module = self._load_sdk()[0]
+        self._client = genai_module.Client(api_key=self._api_key)
+        return self._client
+
+    def _get_sdk_types(self) -> Any | None:
+        try:
+            return self._load_sdk()[1]
+        except RuntimeError:
+            if self._client is not None:
+                return None
+            raise
+
+    def _load_sdk(self) -> tuple[Any, Any]:
+        if self._sdk_types is not None:
+            from google import genai
+
+            return genai, self._sdk_types
+
+        try:
+            from google import genai
+            from google.genai import types
+        except ImportError as exc:
+            raise RuntimeError(
+                "GeminiFlashFrameAnnotator requires google-genai. "
+                "Install workers/requirements.txt."
+            ) from exc
+
+        self._sdk_types = types
+        return genai, types
+
+
 class HeuristicFrameAnalyzer:
+    def __init__(
+        self,
+        *,
+        ffmpeg_command: str = "ffmpeg",
+        scene_threshold: float = DEFAULT_FRAME_SCENE_THRESHOLD,
+        frame_scale: str = DEFAULT_FRAME_SCALE,
+        hash_distance_threshold: int = DEFAULT_FRAME_HASH_DISTANCE,
+        max_informative_frames: int = DEFAULT_MAX_INFORMATIVE_FRAMES,
+        annotation_backend: GeminiFlashFrameAnnotator | None = None,
+        logger: logging.Logger | None = None,
+    ) -> None:
+        self._ffmpeg_command = ffmpeg_command
+        self._scene_threshold = scene_threshold
+        self._frame_scale = frame_scale
+        self._hash_distance_threshold = hash_distance_threshold
+        self._max_informative_frames = max(1, int(max_informative_frames))
+        self._annotation_backend = annotation_backend or GeminiFlashFrameAnnotator()
+        self._logger = logger or logging.getLogger(__name__)
+
     async def analyze_scene(
         self,
         video_path: str | Path,
@@ -585,14 +830,220 @@ class HeuristicFrameAnalyzer:
             str(segment["text"]).strip() for segment in overlapping_segments
         ).strip() or str(scene.get("transcript_excerpt", "")).strip()
         keywords = extract_keywords(transcript_excerpt, limit=4)
+        scene_index = int(scene["scene_index"])
+        resolved_video_path = Path(video_path)
+        if not resolved_video_path.exists():
+            return self._build_fallback_analysis(
+                scene_index=scene_index,
+                keywords=keywords,
+                video_metadata=video_metadata,
+            )
+
+        output_dir = (
+            resolved_video_path.parent
+            / f"{resolved_video_path.stem}_frames"
+            / f"scene_{scene_index:04d}"
+        )
+        candidate_frames = await self._extract_candidate_frames(
+            resolved_video_path,
+            scene=scene,
+            output_dir=output_dir,
+        )
+        if not candidate_frames:
+            return {
+                "scene_index": scene_index,
+                "visual_summary": None,
+                "keywords": keywords,
+                "frame_paths": [],
+                "has_visual_embedding": False,
+                "visual_type": None,
+                "visual_description": None,
+                "visual_text_content": None,
+                "visual_entities": [],
+                "candidate_frame_count": 0,
+                "informative_frame_count": 0,
+            }
+
+        unique_frames = _deduplicate_frame_paths(
+            candidate_frames,
+            threshold=self._hash_distance_threshold,
+        )
+        informative_frames = [
+            frame_path
+            for frame_path in unique_frames
+            if self._is_informative_frame(frame_path)
+        ]
+        selected_frames = informative_frames[: self._max_informative_frames]
+
+        annotations = await self._annotate_frames(selected_frames)
+        aggregated_annotation = _aggregate_frame_annotations(annotations)
+        return {
+            "scene_index": scene_index,
+            "visual_summary": aggregated_annotation["visual_description"],
+            "keywords": _merge_keywords(keywords, aggregated_annotation["visual_entities"]),
+            "frame_paths": [str(frame_path) for frame_path in selected_frames],
+            "has_visual_embedding": bool(selected_frames),
+            "visual_type": aggregated_annotation["visual_type"],
+            "visual_description": aggregated_annotation["visual_description"],
+            "visual_text_content": aggregated_annotation["visual_text_content"],
+            "visual_entities": aggregated_annotation["visual_entities"],
+            "candidate_frame_count": len(candidate_frames),
+            "informative_frame_count": len(selected_frames),
+        }
+
+    def _build_fallback_analysis(
+        self,
+        *,
+        scene_index: int,
+        keywords: Sequence[str],
+        video_metadata: Mapping[str, Any],
+    ) -> dict[str, Any]:
         speaker = str(video_metadata.get("speaker") or "Speaker").strip()
         topic = ", ".join(keywords) if keywords else "the current discussion"
         summary = f"{speaker} is on screen discussing {topic}."
         return {
-            "scene_index": int(scene["scene_index"]),
+            "scene_index": scene_index,
             "visual_summary": summary,
-            "keywords": keywords,
+            "keywords": list(keywords),
+            "frame_paths": [],
+            "has_visual_embedding": False,
+            "visual_type": None,
+            "visual_description": None,
+            "visual_text_content": None,
+            "visual_entities": [],
+            "candidate_frame_count": 0,
+            "informative_frame_count": 0,
         }
+
+    async def _extract_candidate_frames(
+        self,
+        video_path: Path,
+        *,
+        scene: Mapping[str, Any],
+        output_dir: Path,
+    ) -> list[Path]:
+        output_dir.mkdir(parents=True, exist_ok=True)
+        for existing_file in output_dir.glob("*.jpg"):
+            existing_file.unlink(missing_ok=True)
+
+        start = float(scene["timestamp_start"])
+        end = float(scene["timestamp_end"])
+        duration = max(end - start, 0.1)
+        midpoint = start + (duration / 2.0)
+        scale_filter = f"scale={self._frame_scale}"
+        frame_pattern = output_dir / "frame_%03d.jpg"
+        scene_filter = f"select=gt(scene\\,{self._scene_threshold}),{scale_filter}"
+
+        await self._run_ffmpeg_command(
+            [
+                self._ffmpeg_command,
+                "-y",
+                "-ss",
+                str(start),
+                "-i",
+                str(video_path),
+                "-t",
+                str(duration),
+                "-vf",
+                scene_filter,
+                "-vsync",
+                "vfr",
+                "-q:v",
+                "2",
+                str(frame_pattern),
+            ],
+            description=f"scene frame extraction for scene {scene['scene_index']}",
+        )
+        midpoint_path = output_dir / "midpoint.jpg"
+        await self._run_ffmpeg_command(
+            [
+                self._ffmpeg_command,
+                "-y",
+                "-ss",
+                str(midpoint),
+                "-i",
+                str(video_path),
+                "-frames:v",
+                "1",
+                "-vf",
+                scale_filter,
+                "-q:v",
+                "2",
+                str(midpoint_path),
+            ],
+            description=f"midpoint frame extraction for scene {scene['scene_index']}",
+        )
+
+        return sorted(path for path in output_dir.glob("*.jpg") if path.is_file())
+
+    async def _run_ffmpeg_command(
+        self,
+        command: Sequence[str],
+        *,
+        description: str,
+    ) -> bool:
+        try:
+            completed = await asyncio.to_thread(
+                subprocess.run,
+                list(command),
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+        except FileNotFoundError:
+            self._logger.warning("ffmpeg is not installed; skipping %s.", description)
+            return False
+
+        if completed.returncode != 0:
+            self._logger.debug(
+                "ffmpeg command failed for %s: %s",
+                description,
+                (completed.stderr or completed.stdout).strip(),
+            )
+            return False
+        return True
+
+    def _is_informative_frame(self, frame_path: Path) -> bool:
+        try:
+            import cv2
+            import numpy as np
+        except ImportError:
+            return True
+
+        image = cv2.imread(str(frame_path))
+        if image is None:
+            return False
+
+        hsv = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
+        lower_skin_primary = np.array([0, 40, 60], dtype=np.uint8)
+        upper_skin_primary = np.array([25, 255, 255], dtype=np.uint8)
+        lower_skin_secondary = np.array([160, 40, 60], dtype=np.uint8)
+        upper_skin_secondary = np.array([180, 255, 255], dtype=np.uint8)
+        skin_mask = cv2.inRange(hsv, lower_skin_primary, upper_skin_primary)
+        skin_mask |= cv2.inRange(hsv, lower_skin_secondary, upper_skin_secondary)
+        skin_ratio = float(np.count_nonzero(skin_mask)) / float(skin_mask.size)
+
+        gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+        edges = cv2.Canny(gray, 100, 200)
+        edge_ratio = float(np.count_nonzero(edges)) / float(edges.size)
+
+        return not (skin_ratio > 0.45 and edge_ratio < 0.04)
+
+    async def _annotate_frames(self, frame_paths: Sequence[Path]) -> list[dict[str, Any]]:
+        if not frame_paths or not self._annotation_backend.available():
+            return []
+
+        annotations: list[dict[str, Any]] = []
+        for frame_path in frame_paths:
+            try:
+                annotations.append(await self._annotation_backend.annotate(frame_path))
+            except Exception as exc:
+                self._logger.warning(
+                    "Frame annotation failed for %s: %s",
+                    frame_path,
+                    exc,
+                )
+        return annotations
 
 
 def normalize_video_metadata(
@@ -1273,3 +1724,227 @@ def _segments_overlap(
     end_b: float,
 ) -> bool:
     return not (end_a <= start_b or end_b <= start_a)
+
+
+def _plan_transcription_chunks(
+    duration: float,
+    silence_points: Sequence[float],
+    *,
+    target_chunk_seconds: float,
+    min_chunk_seconds: float,
+    max_chunk_seconds: float,
+) -> list[tuple[float, float]]:
+    if duration <= 0.0:
+        return []
+
+    normalized_silence_points = sorted(
+        {
+            round(float(point), 3)
+            for point in silence_points
+            if 0.0 < float(point) < duration
+        }
+    )
+    chunk_ranges: list[tuple[float, float]] = []
+    chunk_start = 0.0
+
+    while chunk_start < duration:
+        remaining = duration - chunk_start
+        if remaining <= max_chunk_seconds:
+            chunk_end = duration
+        else:
+            candidate_points = [
+                point
+                for point in normalized_silence_points
+                if (chunk_start + min_chunk_seconds)
+                <= point
+                <= min(duration, chunk_start + max_chunk_seconds)
+            ]
+            if candidate_points:
+                target_boundary = chunk_start + target_chunk_seconds
+                chunk_end = min(
+                    candidate_points,
+                    key=lambda point: (abs(point - target_boundary), point),
+                )
+            else:
+                chunk_end = min(duration, chunk_start + target_chunk_seconds)
+
+        if chunk_end <= chunk_start:
+            chunk_end = min(duration, chunk_start + max(min_chunk_seconds, 1.0))
+
+        chunk_ranges.append((round(chunk_start, 3), round(chunk_end, 3)))
+        chunk_start = chunk_end
+
+    if (
+        len(chunk_ranges) >= 2
+        and (chunk_ranges[-1][1] - chunk_ranges[-1][0]) < (min_chunk_seconds / 2.0)
+    ):
+        previous_start, _previous_end = chunk_ranges[-2]
+        chunk_ranges[-2] = (previous_start, chunk_ranges[-1][1])
+        chunk_ranges.pop()
+
+    return chunk_ranges
+
+
+def _deduplicate_frame_paths(
+    frame_paths: Sequence[Path],
+    *,
+    threshold: int,
+) -> list[Path]:
+    try:
+        import imagehash
+        from PIL import Image
+    except ImportError:
+        return list(frame_paths)
+
+    unique_frames: list[Path] = []
+    hashes: list[Any] = []
+    for frame_path in frame_paths:
+        try:
+            with Image.open(frame_path) as image:
+                frame_hash = imagehash.phash(image)
+        except Exception:
+            continue
+
+        if any(abs(frame_hash - existing_hash) < threshold for existing_hash in hashes):
+            continue
+        unique_frames.append(frame_path)
+        hashes.append(frame_hash)
+
+    return unique_frames
+
+
+def _aggregate_frame_annotations(
+    annotations: Sequence[Mapping[str, Any]],
+) -> dict[str, Any]:
+    if not annotations:
+        return {
+            "visual_type": None,
+            "visual_description": None,
+            "visual_text_content": None,
+            "visual_entities": [],
+        }
+
+    descriptions = _ordered_unique_strings(
+        annotation.get("description") for annotation in annotations
+    )
+    text_fragments = _ordered_unique_strings(
+        annotation.get("text_content") for annotation in annotations
+    )
+    visual_types = [
+        str(annotation.get("visual_type")).strip()
+        for annotation in annotations
+        if str(annotation.get("visual_type") or "").strip()
+        and str(annotation.get("visual_type")).strip() != "other"
+    ]
+    visual_entities = _ordered_unique_strings(
+        entity
+        for annotation in annotations
+        for entity in (annotation.get("visual_entities") or [])
+    )
+
+    return {
+        "visual_type": Counter(visual_types).most_common(1)[0][0] if visual_types else None,
+        "visual_description": " ".join(descriptions[:2]).strip() or None,
+        "visual_text_content": "\n".join(text_fragments[:3]).strip() or None,
+        "visual_entities": visual_entities,
+    }
+
+
+def _ordered_unique_strings(values: Sequence[Any] | Any) -> list[str]:
+    normalized: list[str] = []
+    seen: set[str] = set()
+    for value in values:
+        cleaned = str(value or "").strip()
+        normalized_key = cleaned.lower()
+        if not cleaned or normalized_key in seen:
+            continue
+        seen.add(normalized_key)
+        normalized.append(cleaned)
+    return normalized
+
+
+def _merge_keywords(
+    base_keywords: Sequence[str],
+    visual_entities: Sequence[str],
+    *,
+    limit: int = 8,
+) -> list[str]:
+    merged: list[str] = []
+    seen: set[str] = set()
+    for value in list(base_keywords) + list(visual_entities):
+        cleaned = str(value or "").strip()
+        normalized = cleaned.lower()
+        if not cleaned or normalized in seen:
+            continue
+        seen.add(normalized)
+        merged.append(cleaned)
+        if len(merged) >= limit:
+            break
+    return merged
+
+
+def _normalize_frame_annotation_payload(payload: Any) -> dict[str, Any]:
+    if isinstance(payload, str):
+        cleaned_payload = payload.strip()
+        if cleaned_payload.startswith("```"):
+            cleaned_payload = cleaned_payload.strip("`")
+            cleaned_payload = re.sub(r"^json\s*", "", cleaned_payload, flags=re.IGNORECASE)
+        parsed_payload = json.loads(cleaned_payload or "{}")
+    elif isinstance(payload, Mapping):
+        parsed_payload = dict(payload)
+    else:
+        raise ValueError("Frame annotation payload must be a JSON object or string.")
+
+    if not isinstance(parsed_payload, Mapping):
+        raise ValueError("Frame annotation payload must decode to a JSON object.")
+
+    raw_entities = parsed_payload.get("key_entities") or parsed_payload.get("visual_entities") or []
+    if not isinstance(raw_entities, Sequence) or isinstance(raw_entities, (str, bytes)):
+        raw_entities = []
+
+    visual_type = str(parsed_payload.get("visual_type") or "").strip().lower() or None
+    if visual_type not in {"slide", "chart", "diagram", "code", "product_demo", "whiteboard", "other", None}:
+        visual_type = "other"
+
+    return {
+        "description": str(parsed_payload.get("description") or "").strip() or None,
+        "text_content": str(parsed_payload.get("text_content") or "").strip() or None,
+        "visual_type": visual_type,
+        "visual_entities": _ordered_unique_strings(raw_entities),
+    }
+
+
+def _extract_generated_text(response: Any) -> str:
+    direct_text = getattr(response, "text", None)
+    if isinstance(direct_text, str) and direct_text.strip():
+        return direct_text.strip()
+    if isinstance(response, Mapping) and isinstance(response.get("text"), str):
+        return response["text"].strip()
+
+    candidates = getattr(response, "candidates", None)
+    if candidates is None and isinstance(response, Mapping):
+        candidates = response.get("candidates")
+    if not isinstance(candidates, Sequence) or isinstance(candidates, (str, bytes)):
+        raise ValueError("Gemini frame annotation response did not include text.")
+
+    text_fragments: list[str] = []
+    for candidate in candidates:
+        content = getattr(candidate, "content", None)
+        if content is None and isinstance(candidate, Mapping):
+            content = candidate.get("content")
+        parts = getattr(content, "parts", None)
+        if parts is None and isinstance(content, Mapping):
+            parts = content.get("parts")
+        if not isinstance(parts, Sequence) or isinstance(parts, (str, bytes)):
+            continue
+        for part in parts:
+            part_text = getattr(part, "text", None)
+            if part_text is None and isinstance(part, Mapping):
+                part_text = part.get("text")
+            if isinstance(part_text, str) and part_text.strip():
+                text_fragments.append(part_text.strip())
+
+    joined_text = "".join(text_fragments).strip()
+    if not joined_text:
+        raise ValueError("Gemini frame annotation response did not include text.")
+    return joined_text
