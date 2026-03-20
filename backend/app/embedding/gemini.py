@@ -3,6 +3,7 @@ from __future__ import annotations
 import math
 import mimetypes
 import os
+from collections.abc import Sequence
 from pathlib import Path
 from typing import Any
 
@@ -57,6 +58,29 @@ class GeminiEmbeddingBackend(EmbeddingBackend):
     def embed_video(self, video_path: str | Path) -> list[float]:
         return self._embed_file(video_path, expected_mime_prefix="video/")
 
+    def embed_multimodal(
+        self,
+        text: str,
+        *,
+        image_paths: Sequence[str | Path] | None = None,
+    ) -> list[float]:
+        if not text.strip():
+            raise ValueError("text must not be empty.")
+
+        contents: list[Any] = [self._build_text_part(text)]
+        for image_path in list(image_paths or [])[:6]:
+            resolved_path = Path(image_path)
+            if not resolved_path.exists():
+                raise FileNotFoundError(f"{resolved_path} does not exist.")
+            contents.append(
+                self._build_media_part_from_path(
+                    resolved_path,
+                    expected_mime_prefix="image/",
+                )
+            )
+
+        return self._embed_content(contents, task_type=TASK_RETRIEVAL_DOCUMENT)
+
     def _embed_file(
         self,
         file_path: str | Path,
@@ -76,16 +100,21 @@ class GeminiEmbeddingBackend(EmbeddingBackend):
             raise ValueError(f"{resolved_path} is not a {kind} file.")
 
         return self._embed_content(
-            self._build_media_part(
-                data=resolved_path.read_bytes(),
-                mime_type=mime_type,
+            self._build_media_part_from_path(
+                resolved_path,
+                expected_mime_prefix=expected_mime_prefix,
             ),
             task_type=TASK_RETRIEVAL_DOCUMENT,
         )
 
     def _embed_content(self, content: Any, *, task_type: str | None = None) -> list[float]:
         client = self._get_client()
-        contents = content if isinstance(content, str) else [content]
+        if isinstance(content, str):
+            contents: Any = content
+        elif isinstance(content, Sequence) and not isinstance(content, (bytes, bytearray, str)):
+            contents = list(content)
+        else:
+            contents = [content]
         response = client.models.embed_content(
             model=self._model_name,
             contents=contents,
@@ -121,6 +150,31 @@ class GeminiEmbeddingBackend(EmbeddingBackend):
             data=data,
             mime_type=mime_type,
         )
+
+    def _build_media_part_from_path(
+        self,
+        file_path: Path,
+        *,
+        expected_mime_prefix: str,
+    ) -> Any:
+        mime_type, _ = mimetypes.guess_type(file_path.name)
+        if mime_type is None:
+            mime_type = "image/jpeg" if expected_mime_prefix == "image/" else "video/mp4"
+
+        if not mime_type.startswith(expected_mime_prefix):
+            kind = expected_mime_prefix.removesuffix("/")
+            raise ValueError(f"{file_path} is not a {kind} file.")
+
+        return self._build_media_part(
+            data=file_path.read_bytes(),
+            mime_type=mime_type,
+        )
+
+    def _build_text_part(self, text: str) -> Any:
+        sdk_types = self._get_sdk_types()
+        if sdk_types is None:
+            return text
+        return sdk_types.Part.from_text(text=text)
 
     def _extract_vector(self, response: Any) -> list[float]:
         embeddings = getattr(response, "embeddings", None)

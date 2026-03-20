@@ -18,7 +18,7 @@ from urllib.parse import urlparse
 import httpx
 
 DEFAULT_OPENAI_BASE_URL = "https://api.openai.com/v1"
-DEFAULT_OPENAI_TRANSCRIBE_MODEL = "whisper-1"
+DEFAULT_OPENAI_TRANSCRIBE_MODEL = "gpt-4o-transcribe"
 DEFAULT_OPENAI_UPLOAD_LIMIT_BYTES = 25 * 1024 * 1024
 DEFAULT_WHISPER_TARGET_CHUNK_SECONDS = 600.0
 DEFAULT_WHISPER_MIN_CHUNK_SECONDS = 240.0
@@ -133,7 +133,7 @@ class OpenAICompatibleTranscriber:
         *,
         api_key: str | None = None,
         base_url: str = DEFAULT_OPENAI_BASE_URL,
-        model_name: str = DEFAULT_OPENAI_TRANSCRIBE_MODEL,
+        model_name: str | None = None,
         timeout_seconds: float = 600.0,
         max_upload_bytes: int = DEFAULT_OPENAI_UPLOAD_LIMIT_BYTES,
         chunk_target_seconds: float = DEFAULT_WHISPER_TARGET_CHUNK_SECONDS,
@@ -145,7 +145,10 @@ class OpenAICompatibleTranscriber:
     ) -> None:
         self._api_key = (api_key or os.getenv("OPENAI_API_KEY", "")).strip()
         self._base_url = base_url.rstrip("/")
-        self._model_name = model_name
+        self._model_name = (
+            (model_name or os.getenv("OPENAI_TRANSCRIBE_MODEL", "")).strip()
+            or DEFAULT_OPENAI_TRANSCRIBE_MODEL
+        )
         self._timeout_seconds = timeout_seconds
         self._max_upload_bytes = max_upload_bytes
         self._chunk_target_seconds = max(float(chunk_target_seconds), 60.0)

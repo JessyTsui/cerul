@@ -47,10 +47,12 @@ def _write_png(path: Path) -> Path:
     return path
 
 
-def test_gemini_embedding_backend_embeds_text_image_and_video(tmp_path: Path) -> None:
+def test_gemini_embedding_backend_embeds_text_image_video_and_multimodal(
+    tmp_path: Path,
+) -> None:
     values = [float(index) for index in range(DEFAULT_GEMINI_EMBEDDING_DIMENSION)]
     client = RecordingClient(values)
-    backend = GeminiEmbeddingBackend(client=client)
+    backend = GeminiEmbeddingBackend(client=client, normalize=False)
     image_path = _write_png(tmp_path / "frame.png")
     video_path = tmp_path / "clip.mp4"
     video_path.write_bytes(b"\x00\x00\x00\x18ftypmp42")
@@ -59,18 +61,27 @@ def test_gemini_embedding_backend_embeds_text_image_and_video(tmp_path: Path) ->
         text_vector = backend.embed_text("cinematic drone shot")
         image_vector = backend.embed_image(image_path)
         video_vector = backend.embed_video(video_path)
+        multimodal_vector = backend.embed_multimodal(
+            "OpenAI Dev Day keynote",
+            image_paths=[image_path],
+        )
 
     assert text_vector == values
     assert image_vector == values
     assert video_vector == values
+    assert multimodal_vector == values
     assert len(text_vector) == DEFAULT_GEMINI_EMBEDDING_DIMENSION
     assert len(image_vector) == DEFAULT_GEMINI_EMBEDDING_DIMENSION
     assert len(video_vector) == DEFAULT_GEMINI_EMBEDDING_DIMENSION
+    assert len(multimodal_vector) == DEFAULT_GEMINI_EMBEDDING_DIMENSION
     assert client.models.calls[0]["model"] == DEFAULT_GEMINI_EMBEDDING_MODEL
     assert client.models.calls[1]["contents"][0]["mime_type"] == "image/png"
     assert client.models.calls[2]["contents"][0]["mime_type"] == "video/mp4"
+    assert client.models.calls[3]["contents"][0] == "OpenAI Dev Day keynote"
+    assert client.models.calls[3]["contents"][1]["mime_type"] == "image/png"
     assert client.models.calls[1]["config"] == {
-        "output_dimensionality": DEFAULT_GEMINI_EMBEDDING_DIMENSION
+        "output_dimensionality": DEFAULT_GEMINI_EMBEDDING_DIMENSION,
+        "task_type": "RETRIEVAL_DOCUMENT",
     }
 
 

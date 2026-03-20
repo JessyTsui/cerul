@@ -30,8 +30,24 @@ class EmbedKnowledgeSegmentsStep(PipelineStep):
         for segment in segments:
             segment_index = int(segment["segment_index"])
             payload = self._build_embedding_payload(segment)
+            frame_paths = [
+                str(frame_path).strip()
+                for frame_path in (segment.get("frame_paths") or [])
+                if str(frame_path).strip()
+            ]
             try:
-                vector = list(embedding_backend.embed_text(payload))
+                embed_multimodal = getattr(embedding_backend, "embed_multimodal", None)
+                if frame_paths and callable(embed_multimodal):
+                    vector = list(
+                        embed_multimodal(
+                            payload,
+                            image_paths=frame_paths,
+                        )
+                    )
+                    segment["has_visual_embedding"] = True
+                else:
+                    vector = list(embedding_backend.embed_text(payload))
+                    segment["has_visual_embedding"] = False
             except Exception as exc:
                 embedding_errors[segment_index] = str(exc)
                 continue
@@ -55,8 +71,19 @@ class EmbedKnowledgeSegmentsStep(PipelineStep):
     def _build_embedding_payload(self, segment: dict[str, object]) -> str:
         parts = [
             str(segment.get("title") or "").strip(),
-            str(segment.get("description") or "").strip(),
             str(segment.get("transcript_text") or "").strip(),
-            str(segment.get("visual_summary") or "").strip(),
         ]
+        visual_description = str(segment.get("visual_description") or "").strip()
+        visual_text_content = str(segment.get("visual_text_content") or "").strip()
+        visual_entities = [
+            str(entity).strip()
+            for entity in (segment.get("visual_entities") or [])
+            if str(entity).strip()
+        ]
+        if visual_description:
+            parts.append(f"[Visual content: {visual_description}]")
+        if visual_text_content:
+            parts.append(f"[Visible text: {visual_text_content}]")
+        if visual_entities:
+            parts.append(f"[Visual entities: {', '.join(visual_entities)}]")
         return "\n".join(part for part in parts if part)

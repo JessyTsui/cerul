@@ -33,6 +33,9 @@ class FakeEmbeddingBackend:
         self.calls.append(text)
         return list(self._vector)
 
+    def embed_query(self, text: str) -> list[float]:
+        return self.embed_text(text)
+
 
 class FakeDatabase:
     def __init__(self, rows: list[dict[str, object]]) -> None:
@@ -154,6 +157,11 @@ def build_knowledge_row(
         "description": "Discussion about agent workflows and reasoning models.",
         "transcript_text": transcript_text,
         "visual_summary": visual_summary,
+        "has_visual_embedding": True,
+        "visual_type": "slide",
+        "visual_description": visual_summary,
+        "visual_text_content": "Agent workflows",
+        "visual_entities": ["OpenAI", "agent workflows"],
         "video_url": "https://example.com/keynote.mp4",
         "thumbnail_url": "https://example.com/keynote.jpg",
         "duration": 3600,
@@ -183,11 +191,11 @@ def test_resolve_mmr_lambda_respects_zero_override() -> None:
     assert resolve_mmr_lambda(0.0) == 0.0
 
 
-def test_placeholder_query_vectors_match_768_embedding_schema() -> None:
+def test_placeholder_query_vectors_match_track_embedding_schemas() -> None:
     assert DEFAULT_BROLL_VECTOR_DIMENSION == 768
-    assert DEFAULT_KNOWLEDGE_VECTOR_DIMENSION == 768
+    assert DEFAULT_KNOWLEDGE_VECTOR_DIMENSION == 3072
     assert len(build_placeholder_vector("cinematic drone shot", DEFAULT_BROLL_VECTOR_DIMENSION)) == 768
-    assert len(build_placeholder_vector("agent workflows", DEFAULT_KNOWLEDGE_VECTOR_DIMENSION)) == 768
+    assert len(build_placeholder_vector("agent workflows", DEFAULT_KNOWLEDGE_VECTOR_DIMENSION)) == 3072
 
 
 def test_broll_search_embeds_query_text_and_logs_dimension(caplog: pytest.LogCaptureFixture) -> None:

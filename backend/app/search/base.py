@@ -13,11 +13,9 @@ T = TypeVar("T")
 logger = logging.getLogger(__name__)
 
 DEFAULT_MMR_LAMBDA = 0.75
-# Placeholder query vectors must stay aligned with the stored embedding schema
-# until T07 replaces them with real Gemini query embeddings.
-DEFAULT_VECTOR_DIMENSION = 768
-DEFAULT_BROLL_VECTOR_DIMENSION = DEFAULT_VECTOR_DIMENSION
-DEFAULT_KNOWLEDGE_VECTOR_DIMENSION = DEFAULT_VECTOR_DIMENSION
+# Placeholder query vectors must stay aligned with each track's stored schema.
+DEFAULT_BROLL_VECTOR_DIMENSION = 768
+DEFAULT_KNOWLEDGE_VECTOR_DIMENSION = 3072
 
 
 def resolve_mmr_lambda(override: float | None = None) -> float:

@@ -265,9 +265,15 @@ def build_rerank_prompt(
         limit=2500,
     )
     visual_description = _truncate_text(
-        _coerce_text(candidate.get("visual_summary") or candidate.get("description")),
+        _coerce_text(
+            candidate.get("visual_text_content")
+            or candidate.get("visual_description")
+            or candidate.get("visual_summary")
+            or candidate.get("description")
+        ),
         limit=1000,
     )
+    visual_type = _coerce_text(candidate.get("visual_type")) or "unknown"
     video_title = _coerce_text(candidate.get("title"))
     speaker = _coerce_text(candidate.get("speaker")) or "Unknown speaker"
     segment_title = _coerce_text(candidate.get("segment_title"))
@@ -283,7 +289,8 @@ def build_rerank_prompt(
         f"Segment title: {segment_title or 'Untitled segment'}\n"
         f"Speaker: {speaker}\n"
         f"Transcript:\n{transcript_text or 'N/A'}\n\n"
-        f"Visual description:\n{visual_description or 'N/A'}\n\n"
+        f"Visual type: {visual_type}\n"
+        f"Visual evidence:\n{visual_description or 'N/A'}\n\n"
         "Score how useful this segment is for answering the search query.\n"
         "Use 0 for irrelevant and 10 for highly relevant evidence.\n"
         'Return JSON only, for example: {"score": 8.5}.'
@@ -315,7 +322,13 @@ def _format_candidate_for_cohere(candidate: Mapping[str, Any]) -> str:
         parts.append(f"Speaker: {speaker}")
     if transcript := _coerce_text(candidate.get("transcript_text")):
         parts.append(f"Transcript: {_truncate_text(transcript, limit=2000)}")
-    if visual := _coerce_text(candidate.get("visual_summary")):
+    if visual_type := _coerce_text(candidate.get("visual_type")):
+        parts.append(f"Visual type: {visual_type}")
+    if visual := _coerce_text(
+        candidate.get("visual_text_content")
+        or candidate.get("visual_description")
+        or candidate.get("visual_summary")
+    ):
         parts.append(f"Visual: {_truncate_text(visual, limit=500)}")
     return "\n".join(parts) or "No content available."
 

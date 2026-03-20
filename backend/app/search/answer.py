@@ -125,9 +125,14 @@ def build_answer_prompt(
                     "Transcript:",
                     _truncate_text(_coerce_text(segment.get("transcript_text")), limit=3000)
                     or "N/A",
-                    "Visual description:",
+                    "Visual evidence:",
                     _truncate_text(
-                        _coerce_text(segment.get("visual_summary") or segment.get("description")),
+                        _coerce_text(
+                            segment.get("visual_text_content")
+                            or segment.get("visual_description")
+                            or segment.get("visual_summary")
+                            or segment.get("description")
+                        ),
                         limit=1200,
                     )
                     or "N/A",

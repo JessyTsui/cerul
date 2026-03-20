@@ -8,6 +8,7 @@ import pytest
 from backend.app.embedding import GeminiEmbeddingBackend
 from workers.common.pipeline import PipelineContext
 from workers.knowledge import InMemoryKnowledgeRepository, KnowledgeIndexingPipeline
+from workers.knowledge.pipeline import DEFAULT_KNOWLEDGE_EMBEDDING_DIMENSION
 from workers.knowledge.runtime import (
     HeuristicFrameAnalyzer,
     HeuristicSceneDetector,
@@ -17,6 +18,7 @@ from workers.knowledge.runtime import (
     StaticKnowledgeTranscriber,
     YtDlpCaptionProvider,
     YtDlpVideoDownloader,
+    _plan_transcription_chunks,
 )
 from workers.knowledge.steps import (
     AnalyzeKnowledgeFramesStep,
@@ -47,6 +49,25 @@ class FakeEmbeddingBackend:
 
     def embed_video(self, video_path: str) -> list[float]:
         raise NotImplementedError
+
+
+class FakeMultimodalEmbeddingBackend(FakeEmbeddingBackend):
+    def __init__(self) -> None:
+        self.multimodal_calls: list[tuple[str, list[str]]] = []
+
+    def dimension(self) -> int:
+        return DEFAULT_KNOWLEDGE_EMBEDDING_DIMENSION
+
+    def embed_multimodal(
+        self,
+        text: str,
+        *,
+        image_paths: list[str] | tuple[str, ...],
+    ) -> list[float]:
+        normalized_paths = [str(path) for path in image_paths]
+        self.multimodal_calls.append((text, normalized_paths))
+        seed = float(len(text.split()) + len(normalized_paths))
+        return [seed + float(index) for index in range(self.dimension())]
 
 
 class FakeCaptionProvider:
@@ -137,6 +158,9 @@ class FakeHtmlStreamingClient:
 class FakeTranscriptionResponse:
     def __init__(self, payload: dict[str, object]) -> None:
         self._payload = payload
+        self.is_success = True
+        self.status_code = 200
+        self.text = ""
 
     def raise_for_status(self) -> None:
         return None
@@ -149,25 +173,25 @@ class FakeTranscriptionClient:
     def __init__(self, *args, **kwargs) -> None:
         self.calls: list[dict[str, object]] = []
 
-    async def __aenter__(self) -> "FakeTranscriptionClient":
+    def __enter__(self) -> "FakeTranscriptionClient":
         return self
 
-    async def __aexit__(self, exc_type, exc, tb) -> bool:
+    def __exit__(self, exc_type, exc, tb) -> bool:
         return False
 
-    async def post(
+    def post(
         self,
         url: str,
         *,
         headers: dict[str, str],
-        data: list[tuple[str, str]],
+        data: dict[str, str],
         files: dict[str, tuple[str, object, str]],
     ) -> FakeTranscriptionResponse:
         self.calls.append(
             {
                 "url": url,
                 "headers": headers,
-                "data": list(data),
+                "data": dict(data),
                 "filename": files["file"][0],
             }
         )
@@ -632,7 +656,10 @@ def test_openai_compatible_transcriber_parses_segmented_response(tmp_path: Path)
     fake_client = FakeTranscriptionClient()
     transcriber = OpenAICompatibleTranscriber(api_key="test-key")
 
-    with patch("workers.knowledge.runtime.httpx.AsyncClient", return_value=fake_client):
+    with (
+        patch.object(transcriber, "_extract_audio_track", AsyncMock(return_value=False)),
+        patch("workers.knowledge.runtime.httpx.Client", return_value=fake_client),
+    ):
         segments = asyncio.run(
             transcriber.transcribe(
                 video_path,
@@ -652,13 +679,29 @@ def test_openai_compatible_transcriber_parses_segmented_response(tmp_path: Path)
         {
             "url": "https://api.openai.com/v1/audio/transcriptions",
             "headers": {"Authorization": "Bearer test-key"},
-            "data": [
-                ("model", "gpt-4o-transcribe"),
-                ("response_format", "verbose_json"),
-                ("timestamp_granularities[]", "segment"),
-            ],
+            "data": {
+                "model": "gpt-4o-transcribe",
+                "response_format": "verbose_json",
+                "timestamp_granularities[]": "segment",
+            },
             "filename": "devday.mp4",
         }
+    ]
+
+
+def test_plan_transcription_chunks_prefers_nearby_silence_boundaries() -> None:
+    chunk_ranges = _plan_transcription_chunks(
+        1450.0,
+        [598.4, 610.0, 1202.0],
+        target_chunk_seconds=600.0,
+        min_chunk_seconds=240.0,
+        max_chunk_seconds=780.0,
+    )
+
+    assert chunk_ranges == [
+        (0.0, 598.4),
+        (598.4, 1202.0),
+        (1202.0, 1450.0),
     ]
 
 
@@ -733,6 +776,12 @@ def test_segment_knowledge_transcript_step_merges_transcript_and_scene_analysis(
                 {
                     "scene_index": 0,
                     "visual_summary": "Speaker presenting on stage.",
+                    "visual_type": "slide",
+                    "visual_description": "Slide shows agent workflow steps.",
+                    "visual_text_content": "Plan -> Act -> Verify",
+                    "visual_entities": ["OpenAI", "agent workflow"],
+                    "frame_paths": ["/tmp/frame.jpg"],
+                    "has_visual_embedding": True,
                     "keywords": ["agents", "reasoning", "models"],
                 }
             ],
@@ -744,6 +793,9 @@ def test_segment_knowledge_transcript_step_merges_transcript_and_scene_analysis(
     segment = context.data["segments"][0]
     assert segment["title"].startswith("OpenAI Dev Day:")
     assert "agents plan tasks" in segment["transcript_text"]
+    assert segment["visual_type"] == "slide"
+    assert segment["visual_text_content"] == "Plan -> Act -> Verify"
+    assert segment["frame_paths"] == ["/tmp/frame.jpg"]
     assert segment["metadata"]["transcript_segment_count"] == 2
 
 
@@ -768,6 +820,37 @@ def test_embed_knowledge_segments_step_produces_expected_dimension() -> None:
     vector = context.data["segment_embeddings"][0]
     assert len(vector) == 768
     assert context.data["embedding_dimension"] == 768
+
+
+def test_embed_knowledge_segments_step_uses_multimodal_embeddings_when_frames_exist(
+    tmp_path: Path,
+) -> None:
+    backend = FakeMultimodalEmbeddingBackend()
+    frame_path = tmp_path / "frame.jpg"
+    frame_path.write_bytes(b"frame")
+    step = EmbedKnowledgeSegmentsStep(embedding_backend=backend)
+    context = PipelineContext(
+        data={
+            "segments": [
+                {
+                    "segment_index": 0,
+                    "title": "OpenAI Dev Day: multimodal",
+                    "transcript_text": "agents coordinate tasks",
+                    "visual_description": "Slide with workflow diagram.",
+                    "visual_text_content": "Reasoning loop",
+                    "visual_entities": ["OpenAI", "Reasoning"],
+                    "frame_paths": [str(frame_path)],
+                    "has_visual_embedding": False,
+                }
+            ]
+        }
+    )
+
+    asyncio.run(step.run(context))
+
+    assert len(context.data["segment_embeddings"][0]) == DEFAULT_KNOWLEDGE_EMBEDDING_DIMENSION
+    assert context.data["segments"][0]["has_visual_embedding"] is True
+    assert backend.multimodal_calls[0][1] == [str(frame_path)]
 
 
 def test_store_knowledge_segments_step_persists_video_and_segments() -> None:
@@ -796,12 +879,17 @@ def test_store_knowledge_segments_step_persists_video_and_segments() -> None:
                     "description": "Agent workflows.",
                     "transcript_text": "agents coordinate tasks",
                     "visual_summary": "Speaker on stage.",
+                    "has_visual_embedding": True,
+                    "visual_type": "slide",
+                    "visual_description": "Slide with orchestration diagram.",
+                    "visual_text_content": "Retriever -> Planner -> Tool",
+                    "visual_entities": ["OpenAI", "Planner"],
                     "timestamp_start": 0.0,
                     "timestamp_end": 12.0,
                     "metadata": {"scene_index": 0},
                 }
             ],
-            "segment_embeddings": {0: [0.0] * 768},
+            "segment_embeddings": {0: [0.0] * DEFAULT_KNOWLEDGE_EMBEDDING_DIMENSION},
         }
     )
 
@@ -811,7 +899,11 @@ def test_store_knowledge_segments_step_persists_video_and_segments() -> None:
     stored_segments = context.data["stored_segments"]
     assert stored_video["source_video_id"] == "openai-devday"
     assert len(stored_segments) == 1
-    assert repository.segments_by_video_id[stored_video["id"]][0]["embedding"] == [0.0] * 768
+    assert stored_segments[0]["visual_type"] == "slide"
+    assert stored_segments[0]["visual_entities"] == ["OpenAI", "Planner"]
+    assert repository.segments_by_video_id[stored_video["id"]][0]["embedding"] == [
+        0.0
+    ] * DEFAULT_KNOWLEDGE_EMBEDDING_DIMENSION
 
 
 def test_store_knowledge_segments_step_rejects_partial_embeddings_without_deleting() -> None:
@@ -847,7 +939,7 @@ def test_store_knowledge_segments_step_rejects_partial_embeddings_without_deleti
                     "timestamp_start": 0.0,
                     "timestamp_end": 10.0,
                     "metadata": {"scene_index": 0},
-                    "embedding": [1.0] * 768,
+                    "embedding": [1.0] * DEFAULT_KNOWLEDGE_EMBEDDING_DIMENSION,
                 }
             ],
         )
@@ -892,7 +984,9 @@ def test_store_knowledge_segments_step_rejects_partial_embeddings_without_deleti
                     "metadata": {"scene_index": 1},
                 },
             ],
-            "segment_embeddings": {0: [0.0] * 768},
+            "segment_embeddings": {
+                0: [0.0] * DEFAULT_KNOWLEDGE_EMBEDDING_DIMENSION
+            },
         }
     )
 
@@ -930,6 +1024,7 @@ def test_knowledge_indexing_pipeline_uses_gemini_backend_by_default() -> None:
     pipeline = KnowledgeIndexingPipeline()
 
     assert isinstance(pipeline._embedding_backend, GeminiEmbeddingBackend)
+    assert pipeline._embedding_backend.dimension() == DEFAULT_KNOWLEDGE_EMBEDDING_DIMENSION
     assert isinstance(pipeline._video_downloader, YtDlpVideoDownloader)
     assert isinstance(pipeline._transcriber, OpenAICompatibleTranscriber)
 

@@ -41,6 +41,22 @@ class SegmentKnowledgeTranscriptStep(PipelineStep):
 
             analysis = analyses_by_scene.get(int(scene["scene_index"]), {})
             visual_summary = str(analysis.get("visual_summary") or "").strip() or None
+            visual_description = str(analysis.get("visual_description") or "").strip() or None
+            visual_text_content = (
+                str(analysis.get("visual_text_content") or "").strip() or None
+            )
+            visual_type = str(analysis.get("visual_type") or "").strip() or None
+            raw_visual_entities = analysis.get("visual_entities") or []
+            visual_entities = [
+                str(entity).strip()
+                for entity in raw_visual_entities
+                if str(entity).strip()
+            ]
+            frame_paths = [
+                str(frame_path).strip()
+                for frame_path in (analysis.get("frame_paths") or [])
+                if str(frame_path).strip()
+            ]
             keywords = analysis.get("keywords") or extract_keywords(transcript_text, limit=4)
             title = self._build_segment_title(
                 video_title=str(video_metadata["title"]),
@@ -48,7 +64,7 @@ class SegmentKnowledgeTranscriptStep(PipelineStep):
             )
             description = self._build_segment_description(
                 transcript_text=transcript_text,
-                visual_summary=visual_summary,
+                visual_summary=visual_description or visual_summary,
             )
             segments.append(
                 {
@@ -57,6 +73,12 @@ class SegmentKnowledgeTranscriptStep(PipelineStep):
                     "description": description,
                     "transcript_text": transcript_text,
                     "visual_summary": visual_summary,
+                    "has_visual_embedding": bool(analysis.get("has_visual_embedding")),
+                    "visual_type": visual_type,
+                    "visual_description": visual_description,
+                    "visual_text_content": visual_text_content,
+                    "visual_entities": visual_entities,
+                    "frame_paths": frame_paths,
                     "timestamp_start": float(scene["timestamp_start"]),
                     "timestamp_end": float(scene["timestamp_end"]),
                     "metadata": {
@@ -64,6 +86,12 @@ class SegmentKnowledgeTranscriptStep(PipelineStep):
                         "keywords": list(keywords) if isinstance(keywords, list) else [],
                         "speaker": video_metadata.get("speaker"),
                         "transcript_segment_count": len(overlapping_segments),
+                        "candidate_frame_count": int(
+                            analysis.get("candidate_frame_count") or 0
+                        ),
+                        "informative_frame_count": int(
+                            analysis.get("informative_frame_count") or 0
+                        ),
                     },
                 }
             )

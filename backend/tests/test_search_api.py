@@ -46,6 +46,7 @@ def stub_query_embeddings(monkeypatch: pytest.MonkeyPatch) -> None:
         return build_placeholder_vector(text, self.dimension())
 
     monkeypatch.setattr(GeminiEmbeddingBackend, "embed_text", fake_embed_text)
+    monkeypatch.setattr(GeminiEmbeddingBackend, "embed_query", fake_embed_text)
 
 
 def test_search_endpoint_records_usage_and_query_logs(database) -> None:

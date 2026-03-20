@@ -38,6 +38,8 @@ from .steps import (
     DetectKnowledgeScenesStep,
 )
 
+DEFAULT_KNOWLEDGE_EMBEDDING_DIMENSION = 3072
+
 
 class KnowledgeIndexingPipeline:
     def __init__(
@@ -53,7 +55,9 @@ class KnowledgeIndexingPipeline:
         temp_dir_root: str | None = None,
     ) -> None:
         self._repository = repository or resolve_default_knowledge_repository()
-        self._embedding_backend = embedding_backend or GeminiEmbeddingBackend()
+        self._embedding_backend = embedding_backend or GeminiEmbeddingBackend(
+            output_dimension=DEFAULT_KNOWLEDGE_EMBEDDING_DIMENSION
+        )
         self._metadata_client = metadata_client or YouTubeClient()
         self._caption_provider = caption_provider or YtDlpCaptionProvider()
         self._video_downloader = video_downloader or YtDlpVideoDownloader(

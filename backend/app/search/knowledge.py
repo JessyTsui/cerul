@@ -32,7 +32,9 @@ class KnowledgeSearchService:
         mmr_lambda: float | None = None,
     ) -> None:
         self.db = db
-        self.embedding_backend = embedding_backend or GeminiEmbeddingBackend()
+        self.embedding_backend = embedding_backend or GeminiEmbeddingBackend(
+            output_dimension=DEFAULT_KNOWLEDGE_VECTOR_DIMENSION
+        )
         self.reranker = reranker or LLMReranker()
         self.answer_generator = answer_generator or AnswerGenerator()
         self.mmr_lambda = resolve_mmr_lambda(mmr_lambda)
@@ -63,6 +65,11 @@ class KnowledgeSearchService:
                 ks.description,
                 ks.transcript_text,
                 ks.visual_summary,
+                ks.has_visual_embedding,
+                ks.visual_type,
+                ks.visual_description,
+                ks.visual_text_content,
+                ks.visual_entities,
                 kv.video_url,
                 kv.thumbnail_url,
                 kv.duration_seconds AS duration,
