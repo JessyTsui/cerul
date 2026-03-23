@@ -947,6 +947,11 @@ async def _fetch_target_actual(
                 )
             )
         if normalized_scope_type == "source":
+            source_failed_clause = (
+                f" AND {_not_cancelled_job_condition('pj')}"
+                if job_status == "failed"
+                else ""
+            )
             return _as_float(
                 await db.fetchval(
                     f"""
@@ -957,7 +962,7 @@ async def _fetch_target_actual(
                     WHERE pj.status = $1
                       AND pj.updated_at >= $2
                       AND pj.updated_at < $3
-                      AND {_not_cancelled_job_condition("pj")}
+                      {source_failed_clause}
                       AND (
                         LOWER(COALESCE(cs.slug, '')) = $4
                         OR LOWER(COALESCE(pj.source_id::text, '')) = $4

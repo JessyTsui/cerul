@@ -467,13 +467,18 @@ async def count_processing_jobs(
     job_status: JobStatus | None = None,
     track: JobTrack | None = None,
 ) -> int:
+    failed_clause = (
+        f" AND {_not_cancelled_job_condition()}"
+        if job_status == "failed"
+        else ""
+    )
     count = await db.fetchval(
         f"""
         SELECT COUNT(*)
         FROM processing_jobs
-        WHERE {_not_cancelled_job_condition()}
-          AND ($1::text IS NULL OR status = $1)
+        WHERE ($1::text IS NULL OR status = $1)
           AND ($2::text IS NULL OR track = $2)
+          {failed_clause}
         """,
         job_status,
         track,
@@ -489,6 +494,11 @@ async def list_processing_jobs(
     limit: int,
     offset: int,
 ) -> list[dict[str, Any]]:
+    failed_clause = (
+        f" AND {_not_cancelled_job_condition()}"
+        if job_status == "failed"
+        else ""
+    )
     rows = await db.fetch(
         f"""
         SELECT
@@ -504,9 +514,9 @@ async def list_processing_jobs(
             completed_at,
             updated_at
         FROM processing_jobs
-        WHERE {_not_cancelled_job_condition()}
-          AND ($1::text IS NULL OR status = $1)
+        WHERE ($1::text IS NULL OR status = $1)
           AND ($2::text IS NULL OR track = $2)
+          {failed_clause}
         ORDER BY created_at DESC
         LIMIT $3
         OFFSET $4
@@ -598,12 +608,14 @@ async def fetch_processing_job_stats(
             COUNT(*) FILTER (WHERE status = 'running') AS running,
             COUNT(*) FILTER (WHERE status = 'retrying') AS retrying,
             COUNT(*) FILTER (WHERE status = 'completed') AS completed,
-            COUNT(*) FILTER (WHERE status = 'failed') AS failed,
+            COUNT(*) FILTER (
+                WHERE status = 'failed'
+                  AND {_not_cancelled_job_condition()}
+            ) AS failed,
             COUNT(*) FILTER (WHERE track = 'broll') AS broll,
             COUNT(*) FILTER (WHERE track = 'knowledge') AS knowledge,
             COUNT(*) FILTER (WHERE track = 'unified') AS unified
         FROM processing_jobs
-        WHERE {_not_cancelled_job_condition()}
         """
     )
     payload = _record_to_dict(row) or {}

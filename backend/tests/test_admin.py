@@ -598,6 +598,72 @@ def test_admin_targets_return_scoped_actuals(
     assert targets[("jobs_failed", "source", "youtube-openai")]["actual_value"] == 1
 
 
+def test_admin_targets_keep_source_completed_counts_when_job_is_cancelled_later(
+    admin_client: TestClient,
+    database,
+) -> None:
+    seed_admin_metrics(database)
+    source_id = database.fetchval(
+        "SELECT id FROM content_sources WHERE slug = 'youtube-openai'"
+    )
+    now = datetime.now(timezone.utc)
+    database.fetchval(
+        """
+        INSERT INTO processing_jobs (
+            track,
+            source_id,
+            job_type,
+            status,
+            input_payload,
+            started_at,
+            completed_at,
+            created_at,
+            updated_at
+        )
+        VALUES (
+            'knowledge',
+            $1::uuid,
+            'index_video',
+            'completed',
+            '{"video_id":"cancelled-after-success","cancelled_by_user":true}'::jsonb,
+            $2,
+            $2,
+            $2,
+            $2
+        )
+        RETURNING id
+        """,
+        source_id,
+        now,
+    )
+
+    response = admin_client.put(
+        "/admin/targets",
+        params={"range": "7d"},
+        json={
+            "targets": [
+                {
+                    "metric_name": "jobs_completed",
+                    "scope_type": "source",
+                    "scope_key": "youtube-openai",
+                    "range_key": "7d",
+                    "comparison_mode": "at_least",
+                    "target_value": 1,
+                    "note": "Keep source throughput visible",
+                }
+            ]
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    target = payload["targets"][0]
+    assert target["metric_name"] == "jobs_completed"
+    assert target["scope_type"] == "source"
+    assert target["scope_key"] == "youtube-openai"
+    assert target["actual_value"] == 2
+
+
 def test_admin_targets_reject_unsupported_scope(
     admin_client: TestClient,
 ) -> None:

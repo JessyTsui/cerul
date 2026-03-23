@@ -34,10 +34,12 @@ class DashboardDb:
         status_filter: object = None,
         track_filter: object = None,
     ) -> list[dict[str, object]]:
-        items = [job for job in self.jobs if not self._is_cancelled(job)]
+        items = self.jobs
 
         if isinstance(status_filter, str):
             items = [job for job in items if job["status"] == status_filter]
+            if status_filter == "failed":
+                items = [job for job in items if not self._is_cancelled(job)]
 
         if isinstance(track_filter, str):
             items = [job for job in items if job["track"] == track_filter]
@@ -54,14 +56,19 @@ class DashboardDb:
         raise AssertionError(f"Expected datetime, received {value!r}")
 
     def _job_stats(self) -> dict[str, int]:
-        visible_jobs = [job for job in self.jobs if not self._is_cancelled(job)]
+        visible_jobs = list(self.jobs)
+        genuine_failed_jobs = [
+            job
+            for job in self.jobs
+            if job["status"] == "failed" and not self._is_cancelled(job)
+        ]
         return {
             "total": len(visible_jobs),
             "pending": sum(1 for job in visible_jobs if job["status"] == "pending"),
             "running": sum(1 for job in visible_jobs if job["status"] == "running"),
             "retrying": sum(1 for job in visible_jobs if job["status"] == "retrying"),
             "completed": sum(1 for job in visible_jobs if job["status"] == "completed"),
-            "failed": sum(1 for job in visible_jobs if job["status"] == "failed"),
+            "failed": len(genuine_failed_jobs),
             "broll": sum(1 for job in visible_jobs if job["track"] == "broll"),
             "knowledge": sum(1 for job in visible_jobs if job["track"] == "knowledge"),
         }
@@ -739,7 +746,7 @@ def test_job_telemetry_excludes_cancelled_failed_jobs(client: TestClient) -> Non
 
     assert stats_response.status_code == 200
     assert stats_response.json()["failed"] == 1
-    assert stats_response.json()["total"] == 1
+    assert stats_response.json()["total"] == 2
 
 
 @pytest.mark.parametrize(
