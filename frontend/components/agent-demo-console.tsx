@@ -41,9 +41,12 @@ export function AgentDemoConsole() {
   -H "Content-Type: application/json" \\
   -d '{
     "query": "Sam Altman views on AI video generation tools",
-    "search_type": "knowledge",
     "max_results": 3,
-    "include_answer": true
+    "include_answer": true,
+    "filters": {
+      "speaker": "Sam Altman",
+      "source": "youtube"
+    }
   }'`}</code>
               </pre>
             </div>

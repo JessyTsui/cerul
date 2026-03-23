@@ -10,13 +10,15 @@ class StrictModel(BaseModel):
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
 
 
-class BrollFilters(StrictModel):
+class UnifiedFilters(StrictModel):
+    speaker: str | None = None
+    published_after: date | None = None
     min_duration: int | None = Field(default=None, ge=0)
     max_duration: int | None = Field(default=None, ge=0)
-    source: Literal["pexels", "pixabay"] | None = None
+    source: str | None = None
 
     @model_validator(mode="after")
-    def validate_range(self) -> "BrollFilters":
+    def validate_range(self) -> "UnifiedFilters":
         if (
             self.min_duration is not None
             and self.max_duration is not None
@@ -26,17 +28,35 @@ class BrollFilters(StrictModel):
         return self
 
 
-class KnowledgeFilters(StrictModel):
-    speaker: str | None = None
-    published_after: date | None = None
+class BrollFilters(UnifiedFilters):
+    pass
+
+
+class KnowledgeFilters(UnifiedFilters):
+    pass
+
+
+class SearchImageInput(StrictModel):
+    url: AnyHttpUrl | None = None
+    base64: str | None = None
+
+    @model_validator(mode="after")
+    def validate_single_source(self) -> "SearchImageInput":
+        if self.url is not None and self.base64 is not None:
+            raise ValueError("Provide either 'url' or 'base64', not both.")
+        if self.url is None and self.base64 is None:
+            raise ValueError("Provide 'url' or 'base64'.")
+        return self
 
 
 class SearchRequest(StrictModel):
-    query: str = Field(min_length=1)
-    search_type: Literal["broll", "knowledge"]
+    query: str | None = Field(default=None, min_length=1)
+    image: SearchImageInput | None = None
     max_results: int = Field(default=10, ge=1, le=50)
+    ranking_mode: Literal["embedding", "rerank"] = "embedding"
+    include_summary: bool = False
     include_answer: bool = False
-    filters: BrollFilters | KnowledgeFilters | None = None
+    filters: UnifiedFilters | None = None
 
     @model_validator(mode="before")
     @classmethod
@@ -45,63 +65,57 @@ class SearchRequest(StrictModel):
             return values
 
         filters = values.get("filters")
-        search_type = values.get("search_type")
         if filters is None or not isinstance(filters, dict):
             return values
 
         updated_values = dict(values)
-        if search_type == "broll":
-            updated_values["filters"] = BrollFilters.model_validate(filters)
-        elif search_type == "knowledge":
-            updated_values["filters"] = KnowledgeFilters.model_validate(filters)
+        updated_values["filters"] = UnifiedFilters.model_validate(filters)
         return updated_values
 
     @model_validator(mode="after")
     def validate_filters(self) -> "SearchRequest":
-        if not self.query.strip():
-            raise ValueError("query must not be empty")
-
-        if self.search_type == "broll":
-            if self.include_answer:
-                raise ValueError("include_answer is only supported for knowledge searches")
-            if self.filters is not None and not isinstance(self.filters, BrollFilters):
-                raise ValueError("broll searches only accept BrollFilters")
-        else:
-            if self.filters is not None and not isinstance(self.filters, KnowledgeFilters):
-                raise ValueError("knowledge searches only accept KnowledgeFilters")
-
+        normalized_query = (self.query or "").strip()
+        if not normalized_query and self.image is None:
+            raise ValueError("At least one of 'query' or 'image' must be provided.")
         return self
 
 
 class SearchResult(StrictModel):
     id: str
     score: float = Field(ge=0.0, le=1.0)
+    rerank_score: float | None = Field(default=None, ge=0.0, le=1.0)
+    url: AnyHttpUrl
     title: str
-    description: str
-    video_url: AnyHttpUrl
-    thumbnail_url: AnyHttpUrl
+    snippet: str
+    thumbnail_url: AnyHttpUrl | None = None
+    keyframe_url: AnyHttpUrl | None = None
     duration: int = Field(ge=0)
     source: str
-    license: str
-
-
-class KnowledgeResult(SearchResult):
-    timestamp_start: float = Field(ge=0.0)
-    timestamp_end: float = Field(ge=0.0)
-    answer: str | None = None
+    speaker: str | None = None
+    timestamp_start: float | None = Field(default=None, ge=0.0)
+    timestamp_end: float | None = Field(default=None, ge=0.0)
+    unit_type: Literal["summary", "speech", "visual"]
 
     @model_validator(mode="after")
-    def validate_timestamps(self) -> "KnowledgeResult":
-        if self.timestamp_end < self.timestamp_start:
+    def validate_timestamps(self) -> "SearchResult":
+        if (
+            self.timestamp_start is not None
+            and self.timestamp_end is not None
+            and self.timestamp_end < self.timestamp_start
+        ):
             raise ValueError("timestamp_end must be greater than or equal to timestamp_start")
         return self
 
 
 class SearchResponse(StrictModel):
-    results: list[SearchResult | KnowledgeResult]
+    results: list[SearchResult]
+    answer: str | None = None
     credits_used: int = Field(ge=0)
     credits_remaining: int = Field(ge=0)
     request_id: str = Field(pattern=r"^req_[a-f0-9]{24}$")
+
+
+KnowledgeResult = SearchResult
 
 
 class UsageResponse(StrictModel):

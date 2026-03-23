@@ -2,14 +2,18 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import UTC, date, datetime, time, timedelta
+import json
 from typing import Any
 
 from .models import (
     AdminActiveUser,
     AdminContentSummaryResponse,
+    AdminDeleteVideoResponse,
     AdminFailedJob,
     AdminFailedStep,
     AdminIngestionMetrics,
+    AdminIndexedVideo,
+    AdminIndexedVideosResponse,
     AdminIngestionSummaryResponse,
     AdminInventoryMetrics,
     AdminJobStatusCounts,
@@ -94,6 +98,331 @@ class TimeWindow:
 
 def _utc_now() -> datetime:
     return datetime.now(UTC)
+
+
+def _coerce_json_value(value: Any) -> Any:
+    if isinstance(value, str):
+        try:
+            return json.loads(value)
+        except json.JSONDecodeError:
+            return value
+    return value
+
+
+def _extract_step_logs(artifacts: Any) -> list[dict[str, Any]]:
+    payload = _coerce_json_value(artifacts)
+    if not isinstance(payload, dict):
+        return []
+    raw_logs = payload.get("logs")
+    if not isinstance(raw_logs, list):
+        return []
+
+    normalized: list[dict[str, Any]] = []
+    for item in raw_logs:
+        if not isinstance(item, dict):
+            continue
+        message = str(item.get("message") or "").strip()
+        if not message:
+            continue
+        normalized.append(
+            {
+                "at": item.get("at"),
+                "level": str(item.get("level") or "info"),
+                "message": message,
+                "details": item.get("details") if isinstance(item.get("details"), dict) else None,
+            }
+        )
+    return normalized
+
+
+def _extract_step_guidance(artifacts: Any) -> str | None:
+    payload = _coerce_json_value(artifacts)
+    if not isinstance(payload, dict):
+        return None
+    guidance = payload.get("guidance")
+    if guidance is None:
+        return None
+    cleaned = str(guidance).strip()
+    return cleaned or None
+
+
+def _step_duration_ms(
+    *,
+    started_at: datetime | None,
+    completed_at: datetime | None,
+    updated_at: datetime | None,
+    reference_now: datetime,
+) -> int | None:
+    if started_at is None:
+        return None
+    end = completed_at or updated_at or reference_now
+    duration = end - started_at
+    return max(int(duration.total_seconds() * 1000), 0)
+
+
+def _job_duration_ms(
+    *,
+    started_at: datetime | None,
+    created_at: datetime | None,
+    completed_at: datetime | None,
+    updated_at: datetime | None,
+    reference_now: datetime,
+) -> int | None:
+    start = started_at or created_at
+    if start is None:
+        return None
+    end = completed_at or updated_at or reference_now
+    duration = end - start
+    return max(int(duration.total_seconds() * 1000), 0)
+
+
+async def retry_job(db: Any, job_id: str) -> dict[str, Any] | None:
+    row = await db.fetchrow(
+        """
+        UPDATE processing_jobs
+        SET status = 'pending',
+            attempts = 0,
+            error_message = NULL,
+            locked_by = NULL,
+            locked_at = NULL,
+            next_retry_at = NULL,
+            updated_at = NOW()
+        WHERE id = $1::uuid AND status = 'failed'
+        RETURNING id
+        """,
+        job_id,
+    )
+    return dict(row) if row else None
+
+
+async def kill_job(db: Any, job_id: str) -> dict[str, Any] | None:
+    row = await db.fetchrow(
+        """
+        DELETE FROM processing_jobs
+        WHERE id = $1::uuid AND status = 'failed'
+        RETURNING id
+        """,
+        job_id,
+    )
+    return dict(row) if row else None
+
+
+async def fetch_indexed_videos(
+    db: Any,
+    *,
+    query: str | None = None,
+    limit: int = 10,
+    offset: int = 0,
+) -> AdminIndexedVideosResponse:
+    normalized_query = (query or "").strip()
+    safe_limit = max(1, min(int(limit), 100))
+    safe_offset = max(int(offset), 0)
+
+    conditions: list[str] = []
+    params: list[Any] = []
+    if normalized_query:
+        params.append(f"%{normalized_query}%")
+        search_param = f"${len(params)}"
+        conditions.append(
+            "("
+            f"v.title ILIKE {search_param} "
+            f"OR COALESCE(v.source_url, '') ILIKE {search_param} "
+            f"OR COALESCE(v.video_url, '') ILIKE {search_param} "
+            f"OR v.source_video_id ILIKE {search_param}"
+            ")"
+        )
+
+    where_clause = f"WHERE {' AND '.join(conditions)}" if conditions else ""
+
+    total = _as_int(
+        await db.fetchval(
+            f"""
+            SELECT COUNT(*)
+            FROM videos AS v
+            {where_clause}
+            """,
+            *params,
+        )
+    )
+
+    params.extend([safe_limit, safe_offset])
+    rows = await db.fetch(
+        f"""
+        SELECT
+            v.id::text AS video_id,
+            v.source,
+            v.source_video_id,
+            v.title,
+            v.source_url,
+            v.video_url,
+            v.speaker,
+            v.created_at,
+            v.updated_at,
+            COALESCE(ru_counts.units_created, 0) AS units_created,
+            last_job.status AS last_job_status,
+            COALESCE(last_job.updated_at, last_job.completed_at, last_job.created_at) AS last_job_at
+        FROM videos AS v
+        LEFT JOIN LATERAL (
+            SELECT COUNT(*)::int AS units_created
+            FROM retrieval_units
+            WHERE video_id = v.id
+        ) AS ru_counts ON TRUE
+        LEFT JOIN LATERAL (
+            SELECT status, updated_at, completed_at, created_at
+            FROM processing_jobs
+            WHERE input_payload->>'video_id' = v.id::text
+            ORDER BY created_at DESC
+            LIMIT 1
+        ) AS last_job ON TRUE
+        {where_clause}
+        ORDER BY
+            COALESCE(last_job.updated_at, last_job.completed_at, v.updated_at, v.created_at) DESC,
+            v.created_at DESC
+        LIMIT ${len(params) - 1}
+        OFFSET ${len(params)}
+        """,
+        *params,
+    )
+
+    return AdminIndexedVideosResponse(
+        generated_at=_utc_now(),
+        videos=[
+            AdminIndexedVideo(
+                video_id=str(row["video_id"]),
+                source=str(row["source"]),
+                source_video_id=str(row["source_video_id"]),
+                title=str(row["title"]),
+                source_url=str(row["source_url"]) if row.get("source_url") else None,
+                video_url=str(row["video_url"]) if row.get("video_url") else None,
+                speaker=str(row["speaker"]) if row.get("speaker") else None,
+                created_at=row["created_at"],
+                updated_at=row["updated_at"],
+                units_created=_as_int(row.get("units_created")),
+                last_job_status=str(row["last_job_status"]) if row.get("last_job_status") else None,
+                last_job_at=row.get("last_job_at"),
+            )
+            for row in rows
+        ],
+        total=total,
+        limit=safe_limit,
+        offset=safe_offset,
+        query=normalized_query or None,
+    )
+
+
+async def delete_indexed_video_data(
+    db: Any,
+    *,
+    video_id: str,
+) -> AdminDeleteVideoResponse | None:
+    async with db.transaction():
+        video_row = await db.fetchrow(
+            """
+            SELECT id::text AS video_id, title
+            FROM videos
+            WHERE id = $1::uuid
+            """,
+            video_id,
+        )
+        if video_row is None:
+            return None
+
+        units_deleted = _as_int(
+            await db.fetchval(
+                """
+                SELECT COUNT(*)
+                FROM retrieval_units
+                WHERE video_id = $1::uuid
+                """,
+                video_id,
+            )
+        )
+        processing_jobs_deleted = _as_int(
+            await db.fetchval(
+                """
+                SELECT COUNT(*)
+                FROM processing_jobs
+                WHERE input_payload->>'video_id' = $1::text
+                """,
+                video_id,
+            )
+        )
+
+        await db.execute(
+            """
+            DELETE FROM processing_jobs
+            WHERE input_payload->>'video_id' = $1::text
+            """,
+            video_id,
+        )
+        await db.execute(
+            """
+            DELETE FROM videos
+            WHERE id = $1::uuid
+            """,
+            video_id,
+        )
+
+    return AdminDeleteVideoResponse(
+        ok=True,
+        video_id=str(video_row["video_id"]),
+        title=str(video_row["title"]),
+        units_deleted=units_deleted,
+        processing_jobs_deleted=processing_jobs_deleted,
+    )
+
+
+async def _fetch_worker_steps(
+    db: Any,
+    *,
+    job_ids: list[str],
+    reference_now: datetime,
+) -> dict[str, list[AdminWorkerStep]]:
+    if not job_ids:
+        return {}
+
+    step_rows = await db.fetch(
+        """
+        SELECT
+            job_id,
+            step_name,
+            status,
+            artifacts,
+            started_at,
+            completed_at,
+            updated_at,
+            error_message
+        FROM processing_job_steps
+        WHERE job_id = ANY($1::uuid[])
+        ORDER BY created_at
+        """,
+        job_ids,
+    )
+
+    steps_by_job: dict[str, list[AdminWorkerStep]] = {}
+    for step in step_rows:
+        jid = str(step["job_id"])
+        artifacts = _coerce_json_value(step.get("artifacts")) or {}
+        steps_by_job.setdefault(jid, []).append(
+            AdminWorkerStep(
+                step_name=str(step["step_name"]),
+                status=str(step["status"]),
+                artifacts=artifacts,
+                started_at=step.get("started_at"),
+                completed_at=step.get("completed_at"),
+                updated_at=step.get("updated_at"),
+                duration_ms=_step_duration_ms(
+                    started_at=step.get("started_at"),
+                    completed_at=step.get("completed_at"),
+                    updated_at=step.get("updated_at"),
+                    reference_now=reference_now,
+                ),
+                guidance=_extract_step_guidance(artifacts),
+                logs=_extract_step_logs(artifacts),
+                error_message=str(step["error_message"]) if step.get("error_message") else None,
+            )
+        )
+    return steps_by_job
 
 
 def resolve_time_window(range_key: str) -> TimeWindow:
@@ -474,9 +803,10 @@ async def _fetch_target_actual(
                 await db.fetchval(
                     """
                     SELECT COUNT(*)
-                    FROM broll_assets
+                    FROM videos
                     WHERE created_at >= $1
                       AND created_at < $2
+                      AND source <> 'youtube'
                     """,
                     window.current_start,
                     window.current_end,
@@ -487,7 +817,7 @@ async def _fetch_target_actual(
                 await db.fetchval(
                     """
                     SELECT COUNT(*)
-                    FROM broll_assets
+                    FROM videos
                     WHERE created_at >= $1
                       AND created_at < $2
                       AND LOWER(source) = $3
@@ -505,9 +835,10 @@ async def _fetch_target_actual(
                 await db.fetchval(
                     """
                     SELECT COUNT(*)
-                    FROM knowledge_videos
+                    FROM videos
                     WHERE created_at >= $1
                       AND created_at < $2
+                      AND source = 'youtube'
                     """,
                     window.current_start,
                     window.current_end,
@@ -518,7 +849,7 @@ async def _fetch_target_actual(
                 await db.fetchval(
                     """
                     SELECT COUNT(*)
-                    FROM knowledge_videos
+                    FROM videos
                     WHERE created_at >= $1
                       AND created_at < $2
                       AND LOWER(source) = $3
@@ -536,9 +867,10 @@ async def _fetch_target_actual(
                 await db.fetchval(
                     """
                     SELECT COUNT(*)
-                    FROM knowledge_segments
+                    FROM retrieval_units
                     WHERE created_at >= $1
                       AND created_at < $2
+                      AND unit_type = 'speech'
                     """,
                     window.current_start,
                     window.current_end,
@@ -549,12 +881,13 @@ async def _fetch_target_actual(
                 await db.fetchval(
                     """
                     SELECT COUNT(*)
-                    FROM knowledge_segments AS ks
-                    JOIN knowledge_videos AS kv
-                      ON kv.id = ks.video_id
-                    WHERE ks.created_at >= $1
-                      AND ks.created_at < $2
-                      AND LOWER(kv.source) = $3
+                    FROM retrieval_units AS ru
+                    JOIN videos AS v
+                      ON v.id = ru.video_id
+                    WHERE ru.created_at >= $1
+                      AND ru.created_at < $2
+                      AND ru.unit_type = 'speech'
+                      AND LOWER(v.source) = $3
                     """,
                     window.current_start,
                     window.current_end,
@@ -645,10 +978,10 @@ async def _fetch_summary_counts(
             (SELECT COUNT(*) FROM query_logs WHERE created_at >= $3 AND created_at < $4 AND result_count = 0) AS zero_results_previous,
             (SELECT COUNT(*) FROM query_logs WHERE created_at >= $1 AND created_at < $2) AS queries_current,
             (SELECT COUNT(*) FROM query_logs WHERE created_at >= $3 AND created_at < $4) AS queries_previous,
-            (SELECT COUNT(*) FROM broll_assets) AS indexed_assets_current,
-            (SELECT COUNT(*) FROM broll_assets WHERE created_at < $3) AS indexed_assets_previous,
-            (SELECT COUNT(*) FROM knowledge_segments) AS indexed_segments_current,
-            (SELECT COUNT(*) FROM knowledge_segments WHERE created_at < $3) AS indexed_segments_previous,
+            (SELECT COUNT(*) FROM videos WHERE source <> 'youtube') AS indexed_assets_current,
+            (SELECT COUNT(*) FROM videos WHERE source <> 'youtube' AND created_at < $3) AS indexed_assets_previous,
+            (SELECT COUNT(*) FROM retrieval_units WHERE unit_type = 'speech') AS indexed_segments_current,
+            (SELECT COUNT(*) FROM retrieval_units WHERE unit_type = 'speech' AND created_at < $3) AS indexed_segments_previous,
             (SELECT COUNT(*) FROM processing_jobs WHERE status IN ('pending', 'running', 'retrying')) AS pending_jobs_current,
             (SELECT COUNT(*) FROM processing_jobs
               WHERE status IN ('pending', 'running', 'retrying')
@@ -697,23 +1030,26 @@ async def _fetch_daily_series(
         ),
         broll_growth AS (
             SELECT DATE(created_at) AS bucket_date, COUNT(*) AS additions
-            FROM broll_assets
+            FROM videos
             WHERE created_at >= $3
               AND created_at < $4
+              AND source <> 'youtube'
             GROUP BY DATE(created_at)
         ),
         knowledge_video_growth AS (
             SELECT DATE(created_at) AS bucket_date, COUNT(*) AS additions
-            FROM knowledge_videos
+            FROM videos
             WHERE created_at >= $3
               AND created_at < $4
+              AND source = 'youtube'
             GROUP BY DATE(created_at)
         ),
         knowledge_segment_growth AS (
             SELECT DATE(created_at) AS bucket_date, COUNT(*) AS additions
-            FROM knowledge_segments
+            FROM retrieval_units
             WHERE created_at >= $3
               AND created_at < $4
+              AND unit_type = 'speech'
             GROUP BY DATE(created_at)
         ),
         job_stats AS (
@@ -1125,18 +1461,6 @@ async def fetch_requests_summary(
         window.previous_start,
         window.previous_end,
     )
-    search_type_rows = await db.fetch(
-        """
-        SELECT search_type AS key, search_type AS label, COUNT(*) AS count
-        FROM usage_events
-        WHERE occurred_at >= $1
-          AND occurred_at < $2
-        GROUP BY search_type
-        ORDER BY count DESC, search_type ASC
-        """,
-        window.current_start,
-        window.current_end,
-    )
     top_query_rows = await db.fetch(
         """
         SELECT
@@ -1239,14 +1563,6 @@ async def fetch_requests_summary(
                 ),
             ),
         ),
-        search_type_mix=[
-            AdminNamedCount(
-                key=str(row["key"]),
-                label=str(row["label"]).title(),
-                count=_as_int(row["count"]),
-            )
-            for row in search_type_rows
-        ],
         daily_series=[
             AdminSummaryPoint(
                 date=row["date"],
@@ -1290,20 +1606,20 @@ async def fetch_content_summary(
     counts_row = await db.fetchrow(
         """
         SELECT
-            (SELECT COUNT(*) FROM broll_assets) AS broll_assets_total_current,
-            (SELECT COUNT(*) FROM broll_assets WHERE created_at < $3) AS broll_assets_total_previous,
-            (SELECT COUNT(*) FROM knowledge_videos) AS knowledge_videos_total_current,
-            (SELECT COUNT(*) FROM knowledge_videos WHERE created_at < $3) AS knowledge_videos_total_previous,
-            (SELECT COUNT(*) FROM knowledge_segments) AS knowledge_segments_total_current,
-            (SELECT COUNT(*) FROM knowledge_segments WHERE created_at < $3) AS knowledge_segments_total_previous,
+            (SELECT COUNT(*) FROM videos WHERE source <> 'youtube') AS broll_assets_total_current,
+            (SELECT COUNT(*) FROM videos WHERE source <> 'youtube' AND created_at < $3) AS broll_assets_total_previous,
+            (SELECT COUNT(*) FROM videos WHERE source = 'youtube') AS knowledge_videos_total_current,
+            (SELECT COUNT(*) FROM videos WHERE source = 'youtube' AND created_at < $3) AS knowledge_videos_total_previous,
+            (SELECT COUNT(*) FROM retrieval_units WHERE unit_type = 'speech') AS knowledge_segments_total_current,
+            (SELECT COUNT(*) FROM retrieval_units WHERE unit_type = 'speech' AND created_at < $3) AS knowledge_segments_total_previous,
             (SELECT COUNT(*) FROM content_sources WHERE is_active = TRUE) AS active_sources_total_current,
             (SELECT COUNT(*) FROM content_sources WHERE is_active = TRUE AND created_at < $3) AS active_sources_total_previous,
-            (SELECT COUNT(*) FROM broll_assets WHERE created_at >= $1 AND created_at < $2) AS broll_assets_added_current,
-            (SELECT COUNT(*) FROM broll_assets WHERE created_at >= $3 AND created_at < $4) AS broll_assets_added_previous,
-            (SELECT COUNT(*) FROM knowledge_videos WHERE created_at >= $1 AND created_at < $2) AS knowledge_videos_added_current,
-            (SELECT COUNT(*) FROM knowledge_videos WHERE created_at >= $3 AND created_at < $4) AS knowledge_videos_added_previous,
-            (SELECT COUNT(*) FROM knowledge_segments WHERE created_at >= $1 AND created_at < $2) AS knowledge_segments_added_current,
-            (SELECT COUNT(*) FROM knowledge_segments WHERE created_at >= $3 AND created_at < $4) AS knowledge_segments_added_previous
+            (SELECT COUNT(*) FROM videos WHERE created_at >= $1 AND created_at < $2 AND source <> 'youtube') AS broll_assets_added_current,
+            (SELECT COUNT(*) FROM videos WHERE created_at >= $3 AND created_at < $4 AND source <> 'youtube') AS broll_assets_added_previous,
+            (SELECT COUNT(*) FROM videos WHERE created_at >= $1 AND created_at < $2 AND source = 'youtube') AS knowledge_videos_added_current,
+            (SELECT COUNT(*) FROM videos WHERE created_at >= $3 AND created_at < $4 AND source = 'youtube') AS knowledge_videos_added_previous,
+            (SELECT COUNT(*) FROM retrieval_units WHERE created_at >= $1 AND created_at < $2 AND unit_type = 'speech') AS knowledge_segments_added_current,
+            (SELECT COUNT(*) FROM retrieval_units WHERE created_at >= $3 AND created_at < $4 AND unit_type = 'speech') AS knowledge_segments_added_previous
         """,
         window.current_start,
         window.current_end,
@@ -1315,15 +1631,17 @@ async def fetch_content_summary(
         SELECT track, source_key, SUM(additions) AS additions
         FROM (
             SELECT 'broll'::text AS track, source AS source_key, COUNT(*) AS additions
-            FROM broll_assets
+            FROM videos
             WHERE created_at >= $1
               AND created_at < $2
+              AND source <> 'youtube'
             GROUP BY source
             UNION ALL
             SELECT 'knowledge'::text AS track, source AS source_key, COUNT(*) AS additions
-            FROM knowledge_videos
+            FROM videos
             WHERE created_at >= $1
               AND created_at < $2
+              AND source = 'youtube'
             GROUP BY source
         ) AS additions
         GROUP BY track, source_key
@@ -1694,7 +2012,12 @@ async def fetch_targets_summary(
     )
 
 
-async def fetch_worker_live(db: Any) -> AdminWorkerLiveResponse:
+async def fetch_worker_live(
+    db: Any,
+    *,
+    failed_limit: int = 10,
+    failed_offset: int = 0,
+) -> AdminWorkerLiveResponse:
     """Return a real-time snapshot of the worker queue and active jobs."""
 
     # Queue counts across all time
@@ -1719,63 +2042,111 @@ async def fetch_worker_live(db: Any) -> AdminWorkerLiveResponse:
     # Active jobs: running first, then pending, capped at 20
     active_rows = await db.fetch("""
         SELECT
-            id,
-            track,
-            status,
+            pj.id,
+            pj.track,
+            pj.status,
+            input_payload->>'source'                            AS source,
             input_payload->>'video_id'                          AS video_id,
             COALESCE(
+                v.title,
                 input_payload->'source_metadata'->>'title',
                 input_payload->>'title',
                 input_payload->>'video_id'
             )                                                   AS title,
-            started_at,
-            created_at
-        FROM processing_jobs
-        WHERE status IN ('running', 'retrying', 'pending')
+            pj.attempts,
+            pj.max_attempts,
+            pj.error_message,
+            pj.started_at,
+            pj.created_at,
+            pj.updated_at
+        FROM processing_jobs AS pj
+        LEFT JOIN videos AS v
+            ON v.id::text = pj.input_payload->>'video_id'
+        WHERE pj.status IN ('running', 'retrying', 'pending')
         ORDER BY
-            CASE status
+            CASE pj.status
                 WHEN 'running' THEN 0
                 WHEN 'retrying' THEN 1
                 ELSE 2
             END,
-            started_at NULLS LAST,
-            created_at
+            pj.started_at NULLS LAST,
+            pj.created_at
         LIMIT 20
     """)
 
-    # Steps for active jobs
-    active_job_ids = [str(row["id"]) for row in active_rows]
-    step_rows: list[Any] = []
-    if active_job_ids:
-        step_rows = await db.fetch("""
-            SELECT job_id, step_name, status, started_at, completed_at, error_message
-            FROM processing_job_steps
-            WHERE job_id = ANY($1::uuid[])
-            ORDER BY created_at
-        """, active_job_ids)
+    generated_at = _utc_now()
 
-    steps_by_job: dict[str, list[AdminWorkerStep]] = {}
-    for step in step_rows:
-        jid = str(step["job_id"])
-        steps_by_job.setdefault(jid, []).append(
-            AdminWorkerStep(
-                step_name=str(step["step_name"]),
-                status=str(step["status"]),
-                started_at=step.get("started_at"),
-                completed_at=step.get("completed_at"),
-                error_message=str(step["error_message"]) if step.get("error_message") else None,
-            )
+    active_job_ids = [str(row["id"]) for row in active_rows]
+    failed_jobs_total = _as_int(
+        await db.fetchval(
+            """
+            SELECT COUNT(*)
+            FROM processing_jobs
+            WHERE status = 'failed'
+            """
         )
+    )
+
+    failed_rows = await db.fetch(
+        """
+        SELECT
+            pj.id,
+            pj.track,
+            pj.status,
+            input_payload->>'source'                            AS source,
+            input_payload->>'video_id'                          AS video_id,
+            COALESCE(
+                v.title,
+                input_payload->'source_metadata'->>'title',
+                input_payload->>'title',
+                input_payload->>'video_id'
+            )                                                   AS title,
+            pj.attempts,
+            pj.max_attempts,
+            pj.error_message,
+            pj.started_at,
+            pj.completed_at,
+            pj.created_at,
+            pj.updated_at
+        FROM processing_jobs AS pj
+        LEFT JOIN videos AS v
+            ON v.id::text = pj.input_payload->>'video_id'
+        WHERE pj.status = 'failed'
+        ORDER BY pj.updated_at DESC
+        LIMIT $1
+        OFFSET $2
+        """,
+        failed_limit,
+        failed_offset,
+    )
+
+    steps_by_job = await _fetch_worker_steps(
+        db,
+        job_ids=active_job_ids + [str(row["id"]) for row in failed_rows],
+        reference_now=generated_at,
+    )
 
     active_jobs = [
         AdminWorkerJob(
             job_id=str(row["id"]),
             track=str(row["track"]),
             status=str(row["status"]),
+            source=str(row["source"]) if row.get("source") else None,
             video_id=str(row["video_id"]) if row.get("video_id") else None,
             title=str(row["title"]) if row.get("title") else None,
             started_at=row.get("started_at"),
             created_at=row["created_at"],
+            last_activity_at=row.get("updated_at"),
+            attempts=_as_int(row.get("attempts")),
+            max_attempts=_as_int(row.get("max_attempts")),
+            total_duration_ms=_job_duration_ms(
+                started_at=row.get("started_at"),
+                created_at=row.get("created_at"),
+                completed_at=row.get("completed_at"),
+                updated_at=row.get("updated_at"),
+                reference_now=generated_at,
+            ),
+            error_message=str(row["error_message"]) if row.get("error_message") else None,
             steps=steps_by_job.get(str(row["id"]), []),
         )
         for row in active_rows
@@ -1787,19 +2158,24 @@ async def fetch_worker_live(db: Any) -> AdminWorkerLiveResponse:
             pj.id,
             pj.input_payload->>'video_id'                          AS video_id,
             COALESCE(
+                v.title,
                 pj.input_payload->'source_metadata'->>'title',
                 pj.input_payload->>'title',
                 pj.input_payload->>'video_id'
             )                                                       AS title,
             pj.completed_at,
-            COUNT(ks.id)                                            AS segment_count
+            pj.started_at,
+            pj.created_at,
+            pj.updated_at,
+            COUNT(ru.id)                                            AS segment_count
         FROM processing_jobs pj
-        LEFT JOIN knowledge_videos kv
-            ON kv.source_video_id = pj.input_payload->>'video_id'
-            AND kv.source = 'youtube'
-        LEFT JOIN knowledge_segments ks ON ks.video_id = kv.id
+        LEFT JOIN videos v
+            ON v.id::text = pj.input_payload->>'video_id'
+        LEFT JOIN retrieval_units ru
+            ON ru.video_id = v.id
+            AND ru.unit_type = 'speech'
         WHERE pj.status = 'completed'
-        GROUP BY pj.id, pj.input_payload, pj.completed_at
+        GROUP BY pj.id, pj.input_payload, pj.completed_at, v.title
         ORDER BY pj.completed_at DESC NULLS LAST
         LIMIT 8
     """)
@@ -1811,13 +2187,50 @@ async def fetch_worker_live(db: Any) -> AdminWorkerLiveResponse:
             title=str(row["title"]) if row.get("title") else None,
             segment_count=_as_int(row["segment_count"]),
             completed_at=row.get("completed_at"),
+            total_duration_ms=_job_duration_ms(
+                started_at=row.get("started_at"),
+                created_at=row.get("created_at"),
+                completed_at=row.get("completed_at"),
+                updated_at=row.get("updated_at"),
+                reference_now=generated_at,
+            ),
         )
         for row in completed_rows
     ]
 
+    failed_jobs = [
+        AdminWorkerJob(
+            job_id=str(row["id"]),
+            track=str(row["track"]),
+            status=str(row["status"]),
+            source=str(row["source"]) if row.get("source") else None,
+            video_id=str(row["video_id"]) if row.get("video_id") else None,
+            title=str(row["title"]) if row.get("title") else None,
+            started_at=row.get("started_at"),
+            created_at=row["created_at"],
+            last_activity_at=row.get("updated_at"),
+            attempts=_as_int(row.get("attempts")),
+            max_attempts=_as_int(row.get("max_attempts")),
+            total_duration_ms=_job_duration_ms(
+                started_at=row.get("started_at"),
+                created_at=row.get("created_at"),
+                completed_at=row.get("completed_at"),
+                updated_at=row.get("updated_at"),
+                reference_now=generated_at,
+            ),
+            error_message=str(row["error_message"]) if row.get("error_message") else None,
+            steps=steps_by_job.get(str(row["id"]), []),
+        )
+        for row in failed_rows
+    ]
+
     return AdminWorkerLiveResponse(
-        generated_at=_utc_now(),
+        generated_at=generated_at,
         queue=queue,
         active_jobs=active_jobs,
         recent_completed=recent_completed,
+        failed_jobs=failed_jobs,
+        failed_jobs_total=failed_jobs_total,
+        failed_jobs_limit=failed_limit,
+        failed_jobs_offset=failed_offset,
     )

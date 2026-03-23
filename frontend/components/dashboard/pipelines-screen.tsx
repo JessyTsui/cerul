@@ -19,6 +19,7 @@ import {
   DashboardState,
 } from "./dashboard-state";
 import { useJobList, useJobStats } from "./use-jobs";
+import { SceneRouteSummary } from "@/components/admin/scene-route-summary";
 
 type JobSort = "created_desc" | "created_asc" | "duration_desc" | "duration_asc" | "status";
 type StatusFilter = JobStatus | "all";
@@ -39,6 +40,7 @@ const TRACK_OPTIONS: Array<{ label: string; value: TrackFilter }> = [
   { label: "All", value: "all" },
   { label: "B-roll", value: "broll" },
   { label: "Knowledge", value: "knowledge" },
+  { label: "Unified", value: "unified" },
 ];
 
 const SORT_OPTIONS: Array<{ label: string; value: JobSort }> = [
@@ -116,7 +118,15 @@ function formatDateTime(value: string | null | undefined, fallback: string): str
 }
 
 function getTrackLabel(track: JobTrack): string {
-  return track === "broll" ? "B-roll" : "Knowledge";
+  if (track === "broll") {
+    return "B-roll";
+  }
+
+  if (track === "knowledge") {
+    return "Knowledge";
+  }
+
+  return "Unified";
 }
 
 function getStatusLabel(status: JobStatus): string {
@@ -147,7 +157,17 @@ function getStatusDotClass(status: JobStatus): string {
   return "bg-amber-300 shadow-[0_0_16px_rgba(253,224,71,0.4)]";
 }
 
-function getStepToken(stepStatus: "completed" | "failed" | "skipped"): string {
+function getStepToken(
+  stepStatus: "pending" | "running" | "completed" | "failed" | "skipped",
+): string {
+  if (stepStatus === "running") {
+    return "RN";
+  }
+
+  if (stepStatus === "pending") {
+    return "PD";
+  }
+
   if (stepStatus === "completed") {
     return "OK";
   }
@@ -159,7 +179,17 @@ function getStepToken(stepStatus: "completed" | "failed" | "skipped"): string {
   return "SK";
 }
 
-function getStepTokenClasses(stepStatus: "completed" | "failed" | "skipped"): string {
+function getStepTokenClasses(
+  stepStatus: "pending" | "running" | "completed" | "failed" | "skipped",
+): string {
+  if (stepStatus === "running") {
+    return "border-blue-500/30 bg-blue-500/15 text-blue-200";
+  }
+
+  if (stepStatus === "pending") {
+    return "border-slate-700/40 bg-slate-700/20 text-slate-300";
+  }
+
   if (stepStatus === "completed") {
     return "border-emerald-500/30 bg-emerald-500/15 text-emerald-200";
   }
@@ -183,7 +213,31 @@ function summarizeArtifacts(artifacts: unknown): string {
   }
 
   if (isPlainObject(artifacts)) {
-    const entries = Object.entries(artifacts);
+    const entries = Object.entries(artifacts).filter(([key]) => {
+      return ![
+        "logs",
+        "guidance",
+        "duration_ms",
+        "timeout_seconds",
+        "current_route",
+        "analysis_route",
+        "route_counts",
+        "annotation_frame_count",
+        "total_annotation_frame_count",
+        "extraction_time_ms",
+        "dedup_time_ms",
+        "filter_time_ms",
+        "ocr_time_ms",
+        "prepare_time_ms",
+        "annotation_time_ms",
+        "total_extraction_time_ms",
+        "total_dedup_time_ms",
+        "total_filter_time_ms",
+        "total_ocr_time_ms",
+        "total_prepare_time_ms",
+        "total_annotation_time_ms",
+      ].includes(key);
+    });
 
     if (entries.length === 0) {
       return "No artifacts recorded.";
@@ -200,6 +254,27 @@ function summarizeArtifacts(artifacts: unknown): string {
   }
 
   return String(artifacts);
+}
+
+function formatStepDuration(
+  step: Pick<DashboardJobDetail["steps"][number], "durationMs" | "startedAt" | "completedAt" | "updatedAt" | "status">,
+): string {
+  if (typeof step.durationMs === "number" && Number.isFinite(step.durationMs)) {
+    const totalSeconds = Math.max(1, Math.round(step.durationMs / 1000));
+    const minutes = Math.floor(totalSeconds / 60);
+    const seconds = totalSeconds % 60;
+    return minutes > 0 ? `${minutes}m ${seconds}s` : `${seconds}s`;
+  }
+
+  const start = toDate(step.startedAt);
+  const end = toDate(step.completedAt) ?? toDate(step.updatedAt);
+  if (!start || !end) {
+    return "Not recorded";
+  }
+  const totalSeconds = Math.max(1, Math.round((end.getTime() - start.getTime()) / 1000));
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  return minutes > 0 ? `${minutes}m ${seconds}s` : `${seconds}s`;
 }
 
 function getPayloadSummary(payload: unknown): string {
@@ -297,7 +372,7 @@ function StatOverview({
             </h2>
             <p className="mt-4 text-base leading-8 text-[var(--foreground-secondary)]">
               This panel is the admin-facing stream for worker health. Use it to spot retry
-              pressure early, compare track mix, and decide which jobs need a deeper forensic read.
+              pressure early, compare pipeline mix, and decide which jobs need a deeper forensic read.
             </p>
           </div>
           <span className="label label-brand">Live ledger</span>
@@ -327,10 +402,10 @@ function StatOverview({
             <div className="flex items-center justify-between gap-3">
               <div>
                 <p className="font-mono text-[11px] uppercase tracking-[0.16em] text-[var(--foreground-tertiary)]">
-                  Track mix
+                  Pipeline mix
                 </p>
                 <h3 className="mt-2 text-2xl font-semibold text-white">
-                  B-roll versus knowledge load
+                  B-roll, knowledge, and unified load
                 </h3>
               </div>
               <span className="badge badge-success">Stable</span>
@@ -350,6 +425,13 @@ function StatOverview({
                   share: getTrackShare(stats.tracks.knowledge, stats.total),
                   tone: "label-brand",
                   fill: "from-[var(--brand)] to-[var(--brand-deep)]",
+                },
+                {
+                  label: "Unified",
+                  value: stats.tracks.unified,
+                  share: getTrackShare(stats.tracks.unified, stats.total),
+                  tone: "label",
+                  fill: "from-slate-400 to-slate-200",
                 },
               ].map((track) => (
                 <div key={track.label}>
@@ -438,7 +520,7 @@ function StatOverview({
             {formatNumber(stats.total)}
           </p>
           <p className="mt-2 text-sm leading-6 text-[var(--foreground-secondary)]">
-            All jobs written into the processing ledger, across both tracks and all current states.
+            All jobs written into the processing ledger, across every pipeline and current state.
           </p>
         </article>
 
@@ -491,7 +573,7 @@ function ExpandedJobDetail({
                 value: detail.id,
               },
               {
-                label: "Track",
+                label: "Pipeline",
                 value: getTrackLabel(detail.track),
               },
               {
@@ -604,11 +686,56 @@ function ExpandedJobDetail({
                         {formatDateTime(step.completedAt, "Not completed")}
                       </p>
                     </div>
+                    <div className="rounded-[14px] border border-[var(--border)] bg-[var(--surface)] px-3 py-3">
+                      <p className="font-mono text-[11px] uppercase tracking-[0.16em] text-[var(--foreground-tertiary)]">
+                        Duration
+                      </p>
+                      <p className="mt-2 font-mono text-xs text-white">
+                        {formatStepDuration(step)}
+                      </p>
+                    </div>
+                    <div className="rounded-[14px] border border-[var(--border)] bg-[var(--surface)] px-3 py-3">
+                      <p className="font-mono text-[11px] uppercase tracking-[0.16em] text-[var(--foreground-tertiary)]">
+                        Guidance
+                      </p>
+                      <p className="mt-2 text-xs leading-5 text-white">
+                        {step.guidance ?? "No guidance recorded"}
+                      </p>
+                    </div>
                   </div>
+
+                  <SceneRouteSummary artifacts={step.artifacts} status={step.status} variant="detail" />
 
                   {step.errorMessage ? (
                     <div className="mt-4 rounded-[14px] border border-rose-500/30 bg-rose-500/10 px-3 py-3 text-sm leading-6 text-rose-100">
                       {step.errorMessage}
+                    </div>
+                  ) : null}
+
+                  {step.logs.length ? (
+                    <div className="mt-4 rounded-[14px] border border-[var(--border)] bg-[var(--surface)] px-3 py-3">
+                      <p className="font-mono text-[11px] uppercase tracking-[0.16em] text-[var(--foreground-tertiary)]">
+                        Step logs
+                      </p>
+                      <div className="mt-3 space-y-2">
+                        {step.logs.map((entry, index) => (
+                          <div
+                            key={`${entry.at ?? "log"}-${index}`}
+                            className="rounded-[12px] bg-[var(--surface-elevated)] px-3 py-2"
+                          >
+                            <p className="font-mono text-[10px] uppercase tracking-[0.14em] text-[var(--foreground-tertiary)]">
+                              {(entry.level || "info").toUpperCase()} •{" "}
+                              {formatDateTime(entry.at, "No timestamp")}
+                            </p>
+                            <p className="mt-1 text-sm leading-6 text-white">{entry.message}</p>
+                            {entry.details ? (
+                              <p className="mt-1 break-all font-mono text-[11px] text-[var(--foreground-secondary)]">
+                                {summarizeArtifacts(entry.details)}
+                              </p>
+                            ) : null}
+                          </div>
+                        ))}
+                      </div>
                     </div>
                   ) : null}
                 </div>
@@ -824,8 +951,16 @@ export function DashboardPipelinesScreen() {
                           ? "All statuses"
                           : getStatusLabel(statusFilter)}
                       </span>
-                      <span className={`label ${trackFilter === "broll" ? "label-accent" : ""}`}>
-                        {trackFilter === "all" ? "Both tracks" : getTrackLabel(trackFilter)}
+                      <span
+                        className={`label ${
+                          trackFilter === "broll"
+                            ? "label-accent"
+                            : trackFilter === "knowledge"
+                              ? "label-brand"
+                              : ""
+                        }`}
+                      >
+                        {trackFilter === "all" ? "All pipelines" : getTrackLabel(trackFilter)}
                       </span>
                       <span className="label">
                         {formatNumber(listData.totalCount)} total
@@ -865,7 +1000,7 @@ export function DashboardPipelinesScreen() {
 
                     <label className="rounded-[20px] border border-[var(--border)] bg-[var(--surface)] px-4 py-3">
                       <span className="font-mono text-[11px] uppercase tracking-[0.16em] text-[var(--foreground-tertiary)]">
-                        Track
+                        Pipeline
                       </span>
                       <select
                         className="mt-2 w-full rounded-[14px] border border-[var(--border)] bg-[var(--surface-elevated)] px-3 py-2 text-sm text-white outline-none transition focus:border-[var(--border-brand)]"
@@ -934,7 +1069,7 @@ export function DashboardPipelinesScreen() {
                           Clear filters
                         </button>
                       }
-                      description="No jobs match the current status and track filters. Clear the controls to return to the full recent job stream."
+                      description="No jobs match the current status and pipeline filters. Clear the controls to return to the full recent job stream."
                       title="No matching jobs"
                     />
                   </div>
@@ -987,7 +1122,11 @@ export function DashboardPipelinesScreen() {
                                       </span>
                                       <span
                                         className={`label ${
-                                          job.track === "broll" ? "label-accent" : "label-brand"
+                                          job.track === "broll"
+                                            ? "label-accent"
+                                            : job.track === "knowledge"
+                                              ? "label-brand"
+                                              : ""
                                         }`}
                                       >
                                         {getTrackLabel(job.track)}

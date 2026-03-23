@@ -1,16 +1,16 @@
 # Cerul API Reference
 
-Video understanding search API for AI agents. Search what is shown in videos, not just what is said.
+Video understanding search API for AI agents. Index any video, then search what was said and shown through one public retrieval surface.
 
 ## Base URL
 
-```
+```text
 https://api.cerul.ai
 ```
 
 ## Authentication
 
-All API requests must include your API key in the Authorization header using the Bearer token format:
+All authenticated API requests use Bearer API keys.
 
 ```bash
 curl "https://api.cerul.ai/v1/search" \
@@ -18,7 +18,7 @@ curl "https://api.cerul.ai/v1/search" \
   -H "Content-Type: application/json"
 ```
 
-Get your API key from the [Cerul Dashboard](https://cerul.ai/dashboard).
+Get your key from the [Cerul Dashboard](https://cerul.ai/dashboard).
 
 ---
 
@@ -26,7 +26,7 @@ Get your API key from the [Cerul Dashboard](https://cerul.ai/dashboard).
 
 ### POST /v1/search
 
-Search for video content using semantic queries. Returns matching videos with direct URLs.
+Search across unified retrieval units. Cerul automatically blends summary, speech, and visual matches. There is no `search_type` field.
 
 #### Request
 
@@ -35,12 +35,15 @@ curl "https://api.cerul.ai/v1/search" \
   -H "Authorization: Bearer YOUR_CERUL_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{
-    "query": "cinematic drone shot of coastal highway at sunset",
-    "search_type": "broll",
+    "query": "Sam Altman views on AI video generation tools",
     "max_results": 5,
+    "include_answer": true,
     "filters": {
-      "min_duration": 5,
-      "max_duration": 30
+      "speaker": "Sam Altman",
+      "published_after": "2024-01-01",
+      "min_duration": 60,
+      "max_duration": 7200,
+      "source": "youtube"
     }
   }'
 ```
@@ -49,28 +52,20 @@ curl "https://api.cerul.ai/v1/search" \
 
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
-| `query` | string | Yes | Search query describing the video content you want |
-| `search_type` | string | Yes | Either `"broll"` (stock footage) or `"knowledge"` (educational content) |
+| `query` | string | Yes | Natural-language query describing what you want to find |
 | `max_results` | integer | No | Number of results to return (1-50, default: 10) |
-| `include_answer` | boolean | No | Include AI-generated summary for knowledge searches |
-| `filters` | object | No | Additional filters based on search type |
+| `include_answer` | boolean | No | Include a synthesized grounded answer |
+| `filters` | object | No | Optional unified filters |
 
-#### B-roll Filters
-
-```json
-{
-  "min_duration": 5,        // Minimum video length in seconds
-  "max_duration": 60,       // Maximum video length in seconds
-  "source": "pexels"        // Filter by source (pexels, pixabay)
-}
-```
-
-#### Knowledge Filters
+#### Filters
 
 ```json
 {
-  "speaker": "Sam Altman",       // Filter by speaker name
-  "published_after": "2023-01-01" // Filter by publication date
+  "speaker": "Sam Altman",
+  "published_after": "2024-01-01",
+  "min_duration": 60,
+  "max_duration": 3600,
+  "source": "youtube"
 }
 ```
 
@@ -80,20 +75,25 @@ curl "https://api.cerul.ai/v1/search" \
 {
   "results": [
     {
-      "id": "pexels_28192743",
-      "score": 0.94,
-      "title": "Aerial drone shot of coastal highway",
-      "description": "Cinematic 4K drone footage of winding coastal road at golden hour with ocean views",
-      "video_url": "https://videos.pexels.com/video-files/28192743/aerial-coastal-drone.mp4",
-      "thumbnail_url": "https://images.pexels.com/photos/28192743/pexels-photo-28192743.jpeg",
-      "duration": 18,
-      "source": "pexels",
-      "license": "pexels-license"
+      "id": "unit_abc123",
+      "score": 0.92,
+      "url": "https://cerul.ai/v/a8f3k2x",
+      "title": "Sam Altman on AGI Timeline - Lex Fridman Podcast",
+      "snippet": "I think AGI is coming sooner than most people expect, probably within the next few years...",
+      "thumbnail_url": "https://i.ytimg.com/vi/abc/hqdefault.jpg",
+      "keyframe_url": "https://cdn.cerul.ai/frames/vid_abc/f023.jpg",
+      "duration": 7200,
+      "source": "youtube",
+      "speaker": "Sam Altman",
+      "timestamp_start": 1823.5,
+      "timestamp_end": 1945.2,
+      "unit_type": "speech"
     }
   ],
-  "credits_used": 1,
-  "credits_remaining": 999,
-  "request_id": "req_abc123xyz"
+  "answer": "Sam Altman has consistently said AGI could arrive within the next few years, while framing progress in concrete product terms.",
+  "credits_used": 2,
+  "credits_remaining": 998,
+  "request_id": "req_abc123def456"
 }
 ```
 
@@ -101,23 +101,127 @@ curl "https://api.cerul.ai/v1/search" \
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `id` | string | Unique identifier for the result |
-| `score` | float | Relevance score (0.0-1.0) |
-| `title` | string | Video title |
-| `description` | string | Video description |
-| `video_url` | string | **Direct URL to the MP4 file** (valid for 24 hours) |
-| `thumbnail_url` | string | URL to preview image |
-| `duration` | integer | Video length in seconds |
-| `source` | string | Content source (pexels, pixabay, youtube) |
-| `license` | string | License type for usage rights |
+| `results[].id` | string | Retrieval unit identifier |
+| `results[].score` | float | Relevance score |
+| `results[].url` | string | Cerul tracking URL that redirects to the source video |
+| `results[].title` | string | Video title |
+| `results[].snippet` | string | Snippet derived from transcript or visual evidence |
+| `results[].thumbnail_url` | string | Video thumbnail |
+| `results[].keyframe_url` | string or null | Keyframe image when available |
+| `results[].duration` | integer | Video duration in seconds |
+| `results[].source` | string | Source platform (`youtube`, `pexels`, `pixabay`, `upload`) |
+| `results[].speaker` | string or null | Speaker name when available |
+| `results[].timestamp_start` | float or null | Start timestamp in seconds |
+| `results[].timestamp_end` | float or null | End timestamp in seconds |
+| `results[].unit_type` | string | One of `summary`, `speech`, `visual` |
+| `answer` | string or null | Optional synthesized answer when `include_answer=true` |
 
-**Knowledge-specific fields:**
+---
 
-| Field | Type | Description |
-|-------|------|-------------|
-| `timestamp_start` | float | Start time in seconds (for knowledge) |
-| `timestamp_end` | float | End time in seconds (for knowledge) |
-| `answer` | string | AI-generated summary (if `include_answer: true`) |
+## Index API
+
+### POST /v1/index
+
+Submit a video URL for indexing. Indexing is free and requires an API key.
+
+```bash
+curl "https://api.cerul.ai/v1/index" \
+  -H "Authorization: Bearer YOUR_CERUL_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "url": "https://www.youtube.com/watch?v=abc123",
+    "force": false
+  }'
+```
+
+#### Request Parameters
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `url` | string | Yes | Video URL to index |
+| `force` | boolean | No | Re-index even if the video already exists |
+
+Supported URLs:
+
+- YouTube (`youtube.com/watch`, `youtu.be`, `youtube.com/shorts`)
+- Pexels video pages
+- Pixabay video pages
+- Direct `.mp4`, `.webm`, `.mov`, `.m4v` URLs
+
+#### Response
+
+```json
+{
+  "video_id": "uuid-xxx",
+  "status": "processing",
+  "request_id": "req_xxx"
+}
+```
+
+### GET /v1/index/{video_id}
+
+Check indexing status for one video.
+
+```json
+{
+  "video_id": "uuid-xxx",
+  "status": "completed",
+  "title": "Sam Altman on AGI",
+  "duration": 7200,
+  "units_created": 28,
+  "created_at": "2026-03-21T10:00:00Z",
+  "completed_at": "2026-03-21T10:03:45Z"
+}
+```
+
+### GET /v1/index
+
+List videos indexed by the current API key owner.
+
+```bash
+curl "https://api.cerul.ai/v1/index?page=1&per_page=20" \
+  -H "Authorization: Bearer YOUR_CERUL_API_KEY"
+```
+
+```json
+{
+  "videos": [
+    {
+      "video_id": "uuid-xxx",
+      "title": "Sam Altman on AGI",
+      "status": "completed",
+      "units_created": 28,
+      "created_at": "2026-03-21T10:00:00Z",
+      "completed_at": "2026-03-21T10:03:45Z"
+    }
+  ],
+  "total": 1,
+  "page": 1,
+  "per_page": 20
+}
+```
+
+### DELETE /v1/index/{video_id}
+
+Delete the current user's access to an indexed video.
+
+```json
+{
+  "deleted": true
+}
+```
+
+---
+
+## Tracking URLs
+
+Cerul search results return `results[].url` in the form `https://cerul.ai/v/{short_id}`.
+
+- `GET /v/{short_id}` records a redirect event and immediately 302s to the source video
+- `GET /v/{short_id}/detail` renders a Cerul detail page and records a page-view event
+- `GET /v/{short_id}/go` records an outbound click and 302s to the source video
+
+Tracking endpoints are public and do not require API keys.
 
 ---
 
@@ -127,14 +231,10 @@ curl "https://api.cerul.ai/v1/search" \
 
 Check your current credit balance and usage statistics.
 
-#### Request
-
 ```bash
 curl "https://api.cerul.ai/v1/usage" \
   -H "Authorization: Bearer YOUR_CERUL_API_KEY"
 ```
-
-#### Response
 
 ```json
 {
@@ -151,90 +251,96 @@ curl "https://api.cerul.ai/v1/usage" \
 
 ---
 
+## Pricing
+
+| Operation | Credits |
+|-----------|---------|
+| `POST /v1/index` | Free |
+| `GET /v1/index` | Free |
+| `GET /v1/index/{video_id}` | Free |
+| `DELETE /v1/index/{video_id}` | Free |
+| `POST /v1/search` | 1 |
+| `POST /v1/search` + `include_answer=true` | 2 |
+
+---
+
 ## Code Examples
 
 ### Python
 
 ```python
 import requests
+import time
 
 API_KEY = "YOUR_CERUL_API_KEY"
 BASE_URL = "https://api.cerul.ai"
+headers = {
+    "Authorization": f"Bearer {API_KEY}",
+    "Content-Type": "application/json",
+}
 
-# Search for b-roll footage
-response = requests.post(
-    f"{BASE_URL}/v1/search",
-    headers={
-        "Authorization": f"Bearer {API_KEY}",
-        "Content-Type": "application/json"
-    },
-    json={
-        "query": "business handshake in modern office",
-        "search_type": "broll",
-        "max_results": 5
-    }
+submit = requests.post(
+    f"{BASE_URL}/v1/index",
+    headers=headers,
+    json={"url": "https://www.youtube.com/watch?v=abc123"},
+    timeout=30,
 )
+submit.raise_for_status()
+video_id = submit.json()["video_id"]
 
-data = response.json()
+while True:
+    status = requests.get(
+        f"{BASE_URL}/v1/index/{video_id}",
+        headers=headers,
+        timeout=30,
+    )
+    status.raise_for_status()
+    payload = status.json()
+    if payload["status"] in {"completed", "failed"}:
+        break
+    time.sleep(10)
 
-# Get the first video URL
-if data["results"]:
-    video_url = data["results"][0]["video_url"]
-    print(f"Video URL: {video_url}")
+search = requests.post(
+    f"{BASE_URL}/v1/search",
+    headers=headers,
+    json={
+        "query": "what did they say about AGI",
+        "max_results": 5,
+        "include_answer": True,
+    },
+    timeout=30,
+)
+search.raise_for_status()
+print(search.json())
 ```
 
-### JavaScript/Node.js
+### JavaScript / Node.js
 
 ```javascript
-const API_KEY = 'YOUR_CERUL_API_KEY';
-const BASE_URL = 'https://api.cerul.ai';
+const API_KEY = process.env.CERUL_API_KEY;
+const BASE_URL = "https://api.cerul.ai";
 
-async function searchVideos(query, searchType = 'broll') {
+async function searchVideos(query) {
   const response = await fetch(`${BASE_URL}/v1/search`, {
-    method: 'POST',
+    method: "POST",
     headers: {
-      'Authorization': `Bearer ${API_KEY}`,
-      'Content-Type': 'application/json'
+      Authorization: `Bearer ${API_KEY}`,
+      "Content-Type": "application/json",
     },
     body: JSON.stringify({
       query,
-      search_type: searchType,
-      max_results: 5
-    })
+      max_results: 5,
+      include_answer: true,
+    }),
   });
+
+  if (!response.ok) {
+    throw new Error(`Cerul request failed: ${response.status}`);
+  }
 
   const data = await response.json();
   return data.results;
 }
-
-// Usage
-searchVideos('cinematic drone shot', 'broll')
-  .then(results => {
-    results.forEach(video => {
-      console.log(`${video.title}: ${video.video_url}`);
-    });
-  });
-```
-
-### Using with OpenAI SDK
-
-```python
-from openai import OpenAI
-
-client = OpenAI(
-    base_url="https://api.cerul.ai/v1",
-    api_key="YOUR_CERUL_API_KEY"
-)
-
-response = client.chat.completions.create(
-    model="cerul-broll",
-    messages=[{
-        "role": "user",
-        "content": "cinematic drone shot of coastal highway"
-    }]
-)
-
-print(response.choices[0].message.content)
 ```
 
 ---
@@ -246,10 +352,12 @@ The API uses standard HTTP status codes:
 | Status | Description |
 |--------|-------------|
 | `200 OK` | Request successful |
-| `400 Bad Request` | Invalid request parameters |
+| `202 Accepted` | Index request accepted and queued |
 | `401 Unauthorized` | Missing or invalid API key |
+| `404 Not Found` | Requested indexed video or tracking link does not exist |
+| `422 Unprocessable Entity` | Invalid request payload or unsupported URL format |
 | `429 Too Many Requests` | Rate limit exceeded |
-| `500 Internal Server Error` | Server error (rare) |
+| `500 Internal Server Error` | Unexpected server error |
 
 Error response format:
 
@@ -257,58 +365,7 @@ Error response format:
 {
   "error": {
     "code": "invalid_request",
-    "message": "Missing required field: query"
+    "message": "Unsupported URL format"
   }
 }
 ```
-
----
-
-## Rate Limits
-
-| Tier | Requests/second | Monthly Credits |
-|------|-----------------|-----------------|
-| Free | 1 | 1,000 |
-| Builder ($20/mo) | 10 | 10,000 |
-| Enterprise | Custom | Custom |
-
-Rate limit headers are included in all responses:
-
-```
-X-RateLimit-Limit: 10
-X-RateLimit-Remaining: 9
-X-RateLimit-Reset: 1709856000
-```
-
----
-
-## Pricing
-
-### Free Tier
-- **$0/month**
-- 1,000 credits
-- 1 request/second
-- Community support
-
-### Builder Tier
-- **$20/month**
-- 10,000 credits
-- 10 requests/second
-- Priority support
-- Usage analytics
-
-### Enterprise
-- Custom pricing
-- Unlimited credits
-- Custom rate limits
-- SLA guarantee
-- Dedicated support
-
----
-
-## Support
-
-- Documentation: https://cerul.ai/docs
-- Dashboard: https://cerul.ai/dashboard
-- GitHub: https://github.com/JessyTsui/cerul
-- Email: team@cerul.ai

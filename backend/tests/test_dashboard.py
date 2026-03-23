@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Any, cast
 from uuid import uuid4
 
@@ -491,9 +491,9 @@ def test_job_detail_returns_steps(client: TestClient) -> None:
             "status": "completed",
             "artifacts": {"transcript_language": "en"},
             "error_message": None,
-            "started_at": now.replace(minute=max(now.minute - 1, 0)),
-            "completed_at": now.replace(minute=max(now.minute - 1, 0)),
-            "updated_at": now.replace(minute=max(now.minute - 1, 0)),
+            "started_at": now - timedelta(minutes=1),
+            "completed_at": now - timedelta(minutes=1),
+            "updated_at": now - timedelta(minutes=1),
         },
     ]
 
@@ -675,6 +675,7 @@ def test_job_stats_returns_status_and_track_counts(client: TestClient) -> None:
         "tracks": {
             "broll": 2,
             "knowledge": 3,
+            "unified": 0,
         },
     }
 

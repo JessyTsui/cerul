@@ -1,4 +1,5 @@
 from pathlib import Path
+from collections.abc import Sequence
 from typing import Protocol, runtime_checkable
 
 
@@ -19,6 +20,22 @@ class EmbeddingBackend(Protocol):
         Defaults to embed_text() for backends that do not distinguish task types.
         """
         return self.embed_text(text)
+
+    def embed_multimodal(
+        self,
+        text: str,
+        *,
+        image_paths: Sequence[str | Path] | None = None,
+    ) -> list[float]:
+        ...
+
+    def embed_query_with_image(
+        self,
+        text: str | None = None,
+        *,
+        image_path: str | Path | None = None,
+    ) -> list[float]:
+        ...
 
     def embed_image(self, image_path: str | Path) -> list[float]:
         ...

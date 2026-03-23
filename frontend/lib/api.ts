@@ -71,8 +71,8 @@ type BillingLinkWire = {
 };
 
 type JobStatusWire = "pending" | "running" | "retrying" | "completed" | "failed";
-type JobTrackWire = "broll" | "knowledge";
-type JobStepStatusWire = "completed" | "failed" | "skipped";
+type JobTrackWire = "broll" | "knowledge" | "unified";
+type JobStepStatusWire = "pending" | "running" | "completed" | "failed" | "skipped";
 
 type JobSummaryWire = {
   id: string;
@@ -104,6 +104,14 @@ type JobStepDetailWire = {
   started_at?: string | null;
   completed_at?: string | null;
   updated_at: string;
+  duration_ms?: number | null;
+  guidance?: string | null;
+  logs?: Array<{
+    at?: string | null;
+    level?: string | null;
+    message?: string | null;
+    details?: unknown;
+  }>;
 };
 
 type JobDetailWire = JobSummaryWire & {
@@ -118,6 +126,7 @@ type JobDetailWire = JobSummaryWire & {
 type JobStatsTrackWire = {
   broll?: number;
   knowledge?: number;
+  unified?: number;
 };
 
 type JobStatsWire = {
@@ -209,6 +218,14 @@ export type DashboardJobStep = {
   startedAt: string | null;
   completedAt: string | null;
   updatedAt: string;
+  durationMs: number | null;
+  guidance: string | null;
+  logs: Array<{
+    at: string | null;
+    level: string;
+    message: string;
+    details: Record<string, unknown> | null;
+  }>;
 };
 
 export type DashboardJobDetail = DashboardJobSummary & {
@@ -235,6 +252,7 @@ export type DashboardJobStats = {
   tracks: {
     broll: number;
     knowledge: number;
+    unified: number;
   };
 };
 
@@ -381,11 +399,17 @@ function isJobStatus(value: unknown): value is JobStatus {
 }
 
 function isJobTrack(value: unknown): value is JobTrack {
-  return value === "broll" || value === "knowledge";
+  return value === "broll" || value === "knowledge" || value === "unified";
 }
 
 function isJobStepStatus(value: unknown): value is JobStepStatus {
-  return value === "completed" || value === "failed" || value === "skipped";
+  return (
+    value === "pending" ||
+    value === "running" ||
+    value === "completed" ||
+    value === "failed" ||
+    value === "skipped"
+  );
 }
 
 function isJobSummaryWire(value: unknown): value is JobSummaryWire {
@@ -644,6 +668,26 @@ function normalizeJobStep(input: JobStepDetailWire): DashboardJobStep {
     startedAt: input.started_at ?? null,
     completedAt: input.completed_at ?? null,
     updatedAt: input.updated_at,
+    durationMs:
+      typeof input.duration_ms === "number" && Number.isFinite(input.duration_ms)
+        ? input.duration_ms
+        : null,
+    guidance: typeof input.guidance === "string" ? input.guidance : null,
+    logs: Array.isArray(input.logs)
+      ? input.logs
+          .map((entry) => {
+            if (!isPlainObject(entry) || typeof entry.message !== "string") {
+              return null;
+            }
+            return {
+              at: typeof entry.at === "string" ? entry.at : null,
+              level: typeof entry.level === "string" ? entry.level : "info",
+              message: entry.message,
+              details: isPlainObject(entry.details) ? entry.details : null,
+            };
+          })
+          .filter((entry): entry is NonNullable<typeof entry> => entry !== null)
+      : [],
   };
 }
 
@@ -704,6 +748,9 @@ function normalizeJobStats(payload: unknown): DashboardJobStats {
       broll: isFiniteNumber(payload.tracks.broll) ? payload.tracks.broll : 0,
       knowledge: isFiniteNumber(payload.tracks.knowledge)
         ? payload.tracks.knowledge
+        : 0,
+      unified: isFiniteNumber(payload.tracks.unified)
+        ? payload.tracks.unified
         : 0,
     },
   };

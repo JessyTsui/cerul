@@ -52,6 +52,29 @@ class GeminiEmbeddingBackend(EmbeddingBackend):
             raise ValueError("text must not be empty.")
         return self._embed_content(text, task_type=TASK_RETRIEVAL_QUERY)
 
+    def embed_query_with_image(
+        self,
+        text: str | None = None,
+        *,
+        image_path: str | Path | None = None,
+    ) -> list[float]:
+        contents: list[Any] = []
+        if text is not None and text.strip():
+            contents.append(self._build_text_part(text.strip()))
+        if image_path is not None:
+            resolved_path = Path(image_path)
+            if not resolved_path.exists():
+                raise FileNotFoundError(f"{resolved_path} does not exist.")
+            contents.append(
+                self._build_media_part_from_path(
+                    resolved_path,
+                    expected_mime_prefix="image/",
+                )
+            )
+        if not contents:
+            raise ValueError("At least text or image_path must be provided.")
+        return self._embed_content(contents, task_type=TASK_RETRIEVAL_QUERY)
+
     def embed_image(self, image_path: str | Path) -> list[float]:
         return self._embed_file(image_path, expected_mime_prefix="image/")
 

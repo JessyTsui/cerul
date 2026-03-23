@@ -11,11 +11,12 @@ class InsufficientCreditsError(RuntimeError):
     """Raised when a request would exceed the current monthly credit limit."""
 
 
-def calculate_credit_cost(search_type: str, include_answer: bool) -> int:
-    if search_type == "broll":
-        return 1
-    if search_type == "knowledge":
-        return 3 if include_answer else 2
+def calculate_credit_cost(search_type: str | None, include_answer: bool) -> int:
+    normalized_search_type = (search_type or "unified").strip().lower()
+    if normalized_search_type in {"broll", "unified"}:
+        return 2 if include_answer else 1
+    if normalized_search_type == "knowledge":
+        return 2 if include_answer else 1
     raise ValueError(f"Unsupported search_type: {search_type}")
 
 

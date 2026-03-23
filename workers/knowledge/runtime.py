@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import asyncio
+import hashlib
+import inspect
 import json
 import logging
 import mimetypes
@@ -8,8 +10,10 @@ import os
 import re
 import shutil
 import subprocess
-from collections import Counter
-from collections.abc import Mapping, Sequence
+import threading
+import time
+from collections import Counter, OrderedDict
+from collections.abc import Awaitable, Callable, Mapping, Sequence
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Protocol
@@ -17,8 +21,10 @@ from urllib.parse import urlparse
 
 import httpx
 
+from backend.app.config import get_settings
+
 DEFAULT_OPENAI_BASE_URL = "https://api.openai.com/v1"
-DEFAULT_OPENAI_TRANSCRIBE_MODEL = "gpt-4o-transcribe"
+DEFAULT_TRANSCRIPTION_MODEL = "whisper-1"
 DEFAULT_OPENAI_UPLOAD_LIMIT_BYTES = 25 * 1024 * 1024
 DEFAULT_WHISPER_TARGET_CHUNK_SECONDS = 600.0
 DEFAULT_WHISPER_MIN_CHUNK_SECONDS = 240.0
@@ -27,7 +33,17 @@ DEFAULT_WHISPER_MAX_CONCURRENCY = 3
 DEFAULT_FRAME_SCENE_THRESHOLD = 0.25
 DEFAULT_FRAME_SCALE = "640:360"
 DEFAULT_FRAME_HASH_DISTANCE = 8
-DEFAULT_MAX_INFORMATIVE_FRAMES = 4
+DEFAULT_MAX_INFORMATIVE_FRAMES = 2
+DEFAULT_MAX_ANNOTATED_FRAMES_PER_SCENE = 1
+DEFAULT_MAX_ANNOTATED_FRAMES_PER_VIDEO = 20
+DEFAULT_SHORT_VIDEO_ANNOTATE_BIAS_SECONDS = 180.0
+DEFAULT_TEXT_REGION_MIN_COUNT = 8
+DEFAULT_TEXT_REGION_MIN_AREA_RATIO = 0.02
+DEFAULT_FRAME_ANNOTATION_TIMEOUT_SECONDS = 45.0
+DEFAULT_FRAME_ANNOTATION_CONCURRENCY = 5
+DEFAULT_FRAME_ANNOTATION_CACHE_SIZE = 2048
+DEFAULT_FRAME_PREPARE_CONCURRENCY = 4
+DEFAULT_FRAME_EXTRACTION_CACHE_SIZE = 512
 DEFAULT_GEMINI_FLASH_MODEL = "gemini-3.1-flash-image-preview"
 
 FRAME_ANNOTATION_PROMPT = """
@@ -43,10 +59,23 @@ Return JSON only with this exact schema:
 
 logger = logging.getLogger(__name__)
 
+_FRAME_ANNOTATION_CACHE: "OrderedDict[str, dict[str, Any]]" = OrderedDict()
+_FRAME_ANNOTATION_CACHE_LOCK = threading.Lock()
+_FRAME_EXTRACTION_CACHE: "OrderedDict[str, list[tuple[str, bytes]]]" = OrderedDict()
+_FRAME_EXTRACTION_CACHE_LOCK = threading.Lock()
+
 
 def _resolve_ytdlp_proxy(proxy_url: str | None = None) -> str | None:
     candidate = (proxy_url or os.getenv("YTDLP_PROXY") or "").strip()
     return candidate or None
+
+
+def _first_env(*names: str) -> str:
+    for name in names:
+        value = os.getenv(name, "").strip()
+        if value:
+            return value
+    return ""
 
 
 class KnowledgeMetadataClient(Protocol):
@@ -102,6 +131,7 @@ class KnowledgeFrameAnalyzer(Protocol):
         scene: Mapping[str, Any],
         transcript_segments: Sequence[Mapping[str, Any]],
         video_metadata: Mapping[str, Any],
+        log_event: Callable[[str, Mapping[str, Any] | None], Awaitable[None] | None] | None = None,
     ) -> Mapping[str, Any]:
         ...
 
@@ -132,9 +162,11 @@ class OpenAICompatibleTranscriber:
         self,
         *,
         api_key: str | None = None,
-        base_url: str = DEFAULT_OPENAI_BASE_URL,
+        base_url: str | None = None,
         model_name: str | None = None,
-        timeout_seconds: float = 600.0,
+        timeout_seconds: float | None = None,
+        response_format: str | None = None,
+        timestamp_granularity: str | None = None,
         max_upload_bytes: int = DEFAULT_OPENAI_UPLOAD_LIMIT_BYTES,
         chunk_target_seconds: float = DEFAULT_WHISPER_TARGET_CHUNK_SECONDS,
         chunk_min_seconds: float = DEFAULT_WHISPER_MIN_CHUNK_SECONDS,
@@ -143,13 +175,53 @@ class OpenAICompatibleTranscriber:
         silence_noise_level: str = "-30dB",
         silence_duration_seconds: float = 0.5,
     ) -> None:
-        self._api_key = (api_key or os.getenv("OPENAI_API_KEY", "")).strip()
-        self._base_url = base_url.rstrip("/")
-        self._model_name = (
-            (model_name or os.getenv("OPENAI_TRANSCRIBE_MODEL", "")).strip()
-            or DEFAULT_OPENAI_TRANSCRIBE_MODEL
+        transcription_settings = get_settings().knowledge.transcription
+        self._provider = str(transcription_settings.provider).strip().lower()
+        self._api_key = (
+            api_key
+            or _first_env("ASR_API_KEY", "OPENAI_TRANSCRIBE_API_KEY", "OPENAI_API_KEY")
+        ).strip()
+        resolved_base_url = (
+            base_url
+            or _first_env("ASR_BASE_URL", "OPENAI_TRANSCRIBE_BASE_URL")
+            or str(transcription_settings.base_url)
+            or DEFAULT_OPENAI_BASE_URL
         )
-        self._timeout_seconds = timeout_seconds
+        self._base_url = resolved_base_url.rstrip("/")
+        self._model_name = (
+            (
+                model_name
+                or _first_env("ASR_MODEL", "OPENAI_TRANSCRIBE_MODEL")
+                or str(transcription_settings.model)
+            ).strip()
+            or DEFAULT_TRANSCRIPTION_MODEL
+        )
+        self._response_format = (
+            (
+                response_format
+                or _first_env("ASR_RESPONSE_FORMAT", "OPENAI_TRANSCRIBE_RESPONSE_FORMAT")
+                or str(transcription_settings.response_format)
+            ).strip()
+            or "auto"
+        ).lower()
+        self._timestamp_granularity = (
+            (
+                timestamp_granularity
+                or _first_env("ASR_TIMESTAMP_GRANULARITY", "OPENAI_TRANSCRIBE_TIMESTAMP_GRANULARITY")
+                or str(transcription_settings.timestamp_granularity)
+            ).strip()
+            or "segment"
+        ).lower()
+        resolved_timeout_seconds = (
+            timeout_seconds
+            if timeout_seconds is not None
+            else float(
+                _first_env("ASR_TIMEOUT_SECONDS", "OPENAI_TRANSCRIBE_TIMEOUT_SECONDS")
+                or transcription_settings.timeout_seconds
+                or 600.0
+            )
+        )
+        self._timeout_seconds = resolved_timeout_seconds
         self._max_upload_bytes = max_upload_bytes
         self._chunk_target_seconds = max(float(chunk_target_seconds), 60.0)
         self._chunk_min_seconds = max(
@@ -172,7 +244,9 @@ class OpenAICompatibleTranscriber:
         video_metadata: Mapping[str, Any],
     ) -> Sequence[Mapping[str, Any]]:
         if not self._api_key:
-            raise RuntimeError("OPENAI_API_KEY is required for ASR fallback.")
+            raise RuntimeError(
+                "ASR_API_KEY, OPENAI_TRANSCRIBE_API_KEY, or OPENAI_API_KEY is required for ASR fallback."
+            )
 
         resolved_video_path = Path(video_path)
         if not resolved_video_path.exists():
@@ -413,19 +487,22 @@ class OpenAICompatibleTranscriber:
         base_url = self._base_url
         api_key = self._api_key
         model_name = self._model_name
+        response_format = self._resolve_transcription_response_format()
         timeout = self._timeout_seconds
         proxy_url = os.getenv("YTDLP_PROXY") or os.getenv("HTTPS_PROXY") or os.getenv("HTTP_PROXY") or None
+        request_data = {
+            "model": model_name,
+            "response_format": response_format,
+        }
+        if response_format == "verbose_json" and self._timestamp_granularity:
+            request_data["timestamp_granularities[]"] = self._timestamp_granularity
 
         def _do_request() -> httpx.Response:
             with httpx.Client(timeout=timeout, proxy=proxy_url) as client:
                 return client.post(
                     f"{base_url}/audio/transcriptions",
                     headers={"Authorization": f"Bearer {api_key}"},
-                    data={
-                        "model": model_name,
-                        "response_format": "verbose_json",
-                        "timestamp_granularities[]": "segment",
-                    },
+                    data=request_data,
                     files={"file": (audio_path.name, file_bytes, content_type)},
                 )
 
@@ -435,6 +512,11 @@ class OpenAICompatibleTranscriber:
                 f"Whisper API error {response.status_code}: {response.text[:500]}"
             )
         return response
+
+    def _resolve_transcription_response_format(self) -> str:
+        if self._response_format != "auto":
+            return self._response_format
+        return "verbose_json"
 
 
 class YtDlpCaptionProvider:
@@ -577,11 +659,15 @@ class YtDlpVideoDownloader:
         *,
         command: str | None = None,
         proxy_url: str | None = None,
+        max_height: int | None = None,
         fallback_downloader: KnowledgeVideoDownloader | None = None,
         logger: logging.Logger | None = None,
     ) -> None:
+        download_settings = get_settings().knowledge.download
         self._command = (command or os.getenv("YTDLP_BIN") or "yt-dlp").strip() or "yt-dlp"
         self._proxy_url = _resolve_ytdlp_proxy(proxy_url)
+        resolved_max_height = max_height if max_height is not None else download_settings.max_height
+        self._max_height = max(int(resolved_max_height), 1)
         self._fallback_downloader = fallback_downloader or HttpVideoDownloader()
         self._logger = logger or logging.getLogger(__name__)
 
@@ -610,12 +696,13 @@ class YtDlpVideoDownloader:
         ]
         target_name = "_".join(part for part in target_name_parts if part) or "knowledge_video"
         output_template = output_dir / f"{target_name}.%(ext)s"
+        format_selector = self._build_format_selector()
         command = [
             self._command,
             "--no-playlist",
             "--extractor-args", "youtube:player_client=android",
             "--format",
-            "18/bestvideo[height<=720][ext=mp4]+bestaudio[ext=m4a]/bestvideo[height<=720]+bestaudio/best[height<=720]/best",
+            format_selector,
             "--output",
             str(output_template),
             source,
@@ -644,6 +731,15 @@ class YtDlpVideoDownloader:
         selected_file = max(downloaded_files, key=lambda path: path.stat().st_mtime)
         self._logger.info("Downloaded knowledge video via yt-dlp to %s", selected_file)
         return str(selected_file)
+
+    def _build_format_selector(self) -> str:
+        max_height = self._max_height
+        return (
+            f"18/bestvideo[height<={max_height}][ext=mp4]+bestaudio[ext=m4a]"
+            f"/bestvideo[height<={max_height}]+bestaudio"
+            f"/best[height<={max_height}]"
+            "/best"
+        )
 
     async def _run_command(self, command: Sequence[str]) -> subprocess.CompletedProcess[str]:
         return await asyncio.to_thread(
@@ -800,6 +896,16 @@ class HeuristicFrameAnalyzer:
         frame_scale: str = DEFAULT_FRAME_SCALE,
         hash_distance_threshold: int = DEFAULT_FRAME_HASH_DISTANCE,
         max_informative_frames: int = DEFAULT_MAX_INFORMATIVE_FRAMES,
+        max_annotated_frames_per_scene: int = DEFAULT_MAX_ANNOTATED_FRAMES_PER_SCENE,
+        max_annotated_frames_per_video: int = DEFAULT_MAX_ANNOTATED_FRAMES_PER_VIDEO,
+        short_video_annotate_bias_seconds: float = DEFAULT_SHORT_VIDEO_ANNOTATE_BIAS_SECONDS,
+        text_region_min_count: int = DEFAULT_TEXT_REGION_MIN_COUNT,
+        text_region_min_area_ratio: float = DEFAULT_TEXT_REGION_MIN_AREA_RATIO,
+        annotation_timeout_seconds: float = DEFAULT_FRAME_ANNOTATION_TIMEOUT_SECONDS,
+        annotation_concurrency: int = DEFAULT_FRAME_ANNOTATION_CONCURRENCY,
+        annotation_cache_size: int = DEFAULT_FRAME_ANNOTATION_CACHE_SIZE,
+        prepare_concurrency: int = DEFAULT_FRAME_PREPARE_CONCURRENCY,
+        extraction_cache_size: int = DEFAULT_FRAME_EXTRACTION_CACHE_SIZE,
         annotation_backend: GeminiFlashFrameAnnotator | None = None,
         logger: logging.Logger | None = None,
     ) -> None:
@@ -808,8 +914,30 @@ class HeuristicFrameAnalyzer:
         self._frame_scale = frame_scale
         self._hash_distance_threshold = hash_distance_threshold
         self._max_informative_frames = max(1, int(max_informative_frames))
+        self._max_annotated_frames_per_scene = max(1, int(max_annotated_frames_per_scene))
+        self._max_annotated_frames_per_video = max(1, int(max_annotated_frames_per_video))
+        self._short_video_annotate_bias_seconds = max(
+            float(short_video_annotate_bias_seconds),
+            0.0,
+        )
+        self._text_region_min_count = max(int(text_region_min_count), 1)
+        self._text_region_min_area_ratio = max(float(text_region_min_area_ratio), 0.0)
+        self._annotation_timeout_seconds = max(float(annotation_timeout_seconds), 0.001)
+        self._annotation_concurrency = max(int(annotation_concurrency), 1)
+        self._annotation_cache_size = max(int(annotation_cache_size), 0)
+        self._prepare_concurrency = max(int(prepare_concurrency), 1)
+        self._extraction_cache_size = max(int(extraction_cache_size), 0)
         self._annotation_backend = annotation_backend or GeminiFlashFrameAnnotator()
         self._logger = logger or logging.getLogger(__name__)
+        self._annotated_frames_used = 0
+
+    @property
+    def annotation_concurrency(self) -> int:
+        return self._annotation_concurrency
+
+    @property
+    def prepare_concurrency(self) -> int:
+        return self._prepare_concurrency
 
     async def analyze_scene(
         self,
@@ -818,7 +946,33 @@ class HeuristicFrameAnalyzer:
         scene: Mapping[str, Any],
         transcript_segments: Sequence[Mapping[str, Any]],
         video_metadata: Mapping[str, Any],
+        log_event: Callable[[str, Mapping[str, Any] | None], Awaitable[None] | None] | None = None,
     ) -> Mapping[str, Any]:
+        prepared_scene = await self.prepare_scene_analysis(
+            video_path,
+            scene=scene,
+            transcript_segments=transcript_segments,
+            video_metadata=video_metadata,
+            log_event=log_event,
+        )
+        annotation_outcome = await self.annotate_prepared_scene(
+            prepared_scene,
+            log_event=log_event,
+        )
+        return self.finalize_prepared_scene_analysis(
+            prepared_scene,
+            annotation_outcome=annotation_outcome,
+        )
+
+    async def prepare_scene_analysis(
+        self,
+        video_path: str | Path,
+        *,
+        scene: Mapping[str, Any],
+        transcript_segments: Sequence[Mapping[str, Any]],
+        video_metadata: Mapping[str, Any],
+        log_event: Callable[[str, Mapping[str, Any] | None], Awaitable[None] | None] | None = None,
+    ) -> dict[str, Any]:
         overlapping_segments = [
             segment
             for segment in normalize_transcript_segments(transcript_segments)
@@ -834,12 +988,30 @@ class HeuristicFrameAnalyzer:
         ).strip() or str(scene.get("transcript_excerpt", "")).strip()
         keywords = extract_keywords(transcript_excerpt, limit=4)
         scene_index = int(scene["scene_index"])
+        prepare_started_at = time.monotonic()
         resolved_video_path = Path(video_path)
         if not resolved_video_path.exists():
-            return self._build_fallback_analysis(
+            return self._build_prepared_scene(
                 scene_index=scene_index,
                 keywords=keywords,
-                video_metadata=video_metadata,
+                route="text_only",
+                selected_frames=[],
+                annotation_frames=[],
+                candidate_frame_count=0,
+                unique_frame_count=0,
+                informative_frame_count=0,
+                ocr_detected=False,
+                remaining_annotation_budget=self._remaining_annotation_budget(),
+                fallback_visual_summary=self._build_fallback_summary(
+                    keywords=keywords,
+                    video_metadata=video_metadata,
+                ),
+                extraction_cache_hit_count=0,
+                extraction_time_ms=0,
+                dedup_time_ms=0,
+                filter_time_ms=0,
+                ocr_time_ms=0,
+                prepare_time_ms=_elapsed_time_ms(prepare_started_at),
             )
 
         output_dir = (
@@ -847,52 +1019,215 @@ class HeuristicFrameAnalyzer:
             / f"{resolved_video_path.stem}_frames"
             / f"scene_{scene_index:04d}"
         )
-        candidate_frames = await self._extract_candidate_frames(
+        extraction_started_at = time.monotonic()
+        candidate_frames, extraction_cache_hit = await self._resolve_candidate_frames(
             resolved_video_path,
             scene=scene,
             output_dir=output_dir,
+            video_metadata=video_metadata,
+        )
+        extraction_time_ms = _elapsed_time_ms(extraction_started_at)
+        await _emit_runtime_event(
+            log_event,
+            f"Extracted {len(candidate_frames)} candidate frames for scene {scene_index}.",
+            {
+                "candidate_frame_count": len(candidate_frames),
+                "extraction_cache_hit_count": 1 if extraction_cache_hit else 0,
+                "extraction_time_ms": extraction_time_ms,
+            },
         )
         if not candidate_frames:
-            return {
-                "scene_index": scene_index,
-                "visual_summary": None,
-                "keywords": keywords,
-                "frame_paths": [],
-                "has_visual_embedding": False,
-                "visual_type": None,
-                "visual_description": None,
-                "visual_text_content": None,
-                "visual_entities": [],
-                "candidate_frame_count": 0,
-                "informative_frame_count": 0,
-            }
+            return self._build_prepared_scene(
+                scene_index=scene_index,
+                keywords=keywords,
+                route="text_only",
+                selected_frames=[],
+                annotation_frames=[],
+                candidate_frame_count=0,
+                unique_frame_count=0,
+                informative_frame_count=0,
+                ocr_detected=False,
+                remaining_annotation_budget=self._remaining_annotation_budget(),
+                extraction_cache_hit_count=1 if extraction_cache_hit else 0,
+                extraction_time_ms=extraction_time_ms,
+                dedup_time_ms=0,
+                filter_time_ms=0,
+                ocr_time_ms=0,
+                prepare_time_ms=_elapsed_time_ms(prepare_started_at),
+            )
 
+        dedup_started_at = time.monotonic()
         unique_frames = _deduplicate_frame_paths(
             candidate_frames,
             threshold=self._hash_distance_threshold,
         )
+        dedup_time_ms = _elapsed_time_ms(dedup_started_at)
+        filter_started_at = time.monotonic()
         informative_frames = [
             frame_path
             for frame_path in unique_frames
             if self._is_informative_frame(frame_path)
         ]
         selected_frames = informative_frames[: self._max_informative_frames]
+        filter_time_ms = _elapsed_time_ms(filter_started_at)
+        await _emit_runtime_event(
+            log_event,
+            f"Selected {len(selected_frames)} informative frames for scene {scene_index}.",
+            {
+                "unique_frame_count": len(unique_frames),
+                "selected_frame_count": len(selected_frames),
+                "dedup_time_ms": dedup_time_ms,
+                "filter_time_ms": filter_time_ms,
+            },
+        )
+        ocr_started_at = time.monotonic()
+        ocr_detected = any(self._frame_has_text_regions(frame_path) for frame_path in selected_frames)
+        ocr_time_ms = _elapsed_time_ms(ocr_started_at)
+        route = self._resolve_scene_route(
+            video_duration_seconds=float(video_metadata.get("duration_seconds") or 0.0),
+            unique_frame_count=len(unique_frames),
+            selected_frame_count=len(selected_frames),
+            ocr_detected=ocr_detected,
+        )
+        annotation_frames = self._select_annotation_frames(selected_frames, route=route)
+        if route == "annotate" and not annotation_frames:
+            route = "embed_only" if selected_frames else "text_only"
+        await _emit_runtime_event(
+            log_event,
+            f"Scene {scene_index} routed to {route}.",
+            {
+                "route": route,
+                "ocr_detected": ocr_detected,
+                "unique_frame_count": len(unique_frames),
+                "selected_frame_count": len(selected_frames),
+                "annotation_frame_count": len(annotation_frames),
+                "remaining_annotation_budget": self._remaining_annotation_budget(),
+                "ocr_time_ms": ocr_time_ms,
+            },
+        )
+        return self._build_prepared_scene(
+            scene_index=scene_index,
+            keywords=keywords,
+            route=route,
+            selected_frames=selected_frames,
+            annotation_frames=annotation_frames,
+            candidate_frame_count=len(candidate_frames),
+            unique_frame_count=len(unique_frames),
+            informative_frame_count=len(selected_frames),
+            ocr_detected=ocr_detected,
+            remaining_annotation_budget=self._remaining_annotation_budget(),
+            extraction_cache_hit_count=1 if extraction_cache_hit else 0,
+            extraction_time_ms=extraction_time_ms,
+            dedup_time_ms=dedup_time_ms,
+            filter_time_ms=filter_time_ms,
+            ocr_time_ms=ocr_time_ms,
+            prepare_time_ms=_elapsed_time_ms(prepare_started_at),
+        )
 
-        annotations = await self._annotate_frames(selected_frames)
-        aggregated_annotation = _aggregate_frame_annotations(annotations)
+    async def annotate_prepared_scene(
+        self,
+        prepared_scene: Mapping[str, Any],
+        *,
+        log_event: Callable[[str, Mapping[str, Any] | None], Awaitable[None] | None] | None = None,
+        semaphore: asyncio.Semaphore | None = None,
+    ) -> dict[str, Any]:
+        annotation_frames = [
+            Path(frame_path)
+            for frame_path in (prepared_scene.get("annotation_frames") or [])
+            if str(frame_path).strip()
+        ]
+        if not annotation_frames:
+            return {
+                "annotations": [],
+                "annotation_timeout_count": 0,
+                "annotation_error_count": 0,
+                "annotation_cache_hit_count": 0,
+                "annotation_time_ms": 0,
+            }
+
+        annotation_started_at = time.monotonic()
+        (
+            annotations,
+            annotation_timeout_count,
+            annotation_error_count,
+            annotation_cache_hit_count,
+        ) = await self._annotate_frames(
+            annotation_frames,
+            log_event=log_event,
+            semaphore=semaphore,
+        )
         return {
-            "scene_index": scene_index,
-            "visual_summary": aggregated_annotation["visual_description"],
-            "keywords": _merge_keywords(keywords, aggregated_annotation["visual_entities"]),
-            "frame_paths": [str(frame_path) for frame_path in selected_frames],
-            "has_visual_embedding": bool(selected_frames),
-            "visual_type": aggregated_annotation["visual_type"],
-            "visual_description": aggregated_annotation["visual_description"],
-            "visual_text_content": aggregated_annotation["visual_text_content"],
-            "visual_entities": aggregated_annotation["visual_entities"],
-            "candidate_frame_count": len(candidate_frames),
-            "informative_frame_count": len(selected_frames),
+            "annotations": annotations,
+            "annotation_timeout_count": annotation_timeout_count,
+            "annotation_error_count": annotation_error_count,
+            "annotation_cache_hit_count": annotation_cache_hit_count,
+            "annotation_time_ms": _elapsed_time_ms(annotation_started_at),
         }
+
+    def finalize_prepared_scene_analysis(
+        self,
+        prepared_scene: Mapping[str, Any],
+        *,
+        annotation_outcome: Mapping[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        annotations = list((annotation_outcome or {}).get("annotations") or [])
+        annotation_timeout_count = int(
+            (annotation_outcome or {}).get("annotation_timeout_count", 0) or 0
+        )
+        annotation_error_count = int(
+            (annotation_outcome or {}).get("annotation_error_count", 0) or 0
+        )
+        annotation_cache_hit_count = int(
+            (annotation_outcome or {}).get("annotation_cache_hit_count", 0) or 0
+        )
+        annotation_time_ms = int((annotation_outcome or {}).get("annotation_time_ms", 0) or 0)
+        aggregated_annotation = _aggregate_frame_annotations(annotations)
+        fallback_visual_summary = str(prepared_scene.get("fallback_visual_summary") or "").strip() or None
+        route = str(prepared_scene.get("route") or "text_only")
+        selected_frames = [
+            str(frame_path)
+            for frame_path in (prepared_scene.get("selected_frames") or [])
+            if str(frame_path).strip()
+        ]
+        return self._build_scene_result(
+            scene_index=int(prepared_scene["scene_index"]),
+            keywords=_merge_keywords(
+                prepared_scene.get("keywords") or [],
+                aggregated_annotation["visual_entities"],
+            ),
+            route=route,
+            frame_paths=selected_frames if route != "text_only" else [],
+            has_visual_embedding=bool(selected_frames) and route != "text_only",
+            candidate_frame_count=int(prepared_scene.get("candidate_frame_count", 0) or 0),
+            unique_frame_count=int(prepared_scene.get("unique_frame_count", 0) or 0),
+            informative_frame_count=int(prepared_scene.get("informative_frame_count", 0) or 0),
+            annotation_frame_count=len(prepared_scene.get("annotation_frames") or []),
+            extraction_cache_hit_count=int(
+                prepared_scene.get("extraction_cache_hit_count", 0) or 0
+            ),
+            annotation_timeout_count=annotation_timeout_count,
+            annotation_error_count=annotation_error_count,
+            annotation_cache_hit_count=annotation_cache_hit_count,
+            extraction_time_ms=int(prepared_scene.get("extraction_time_ms", 0) or 0),
+            dedup_time_ms=int(prepared_scene.get("dedup_time_ms", 0) or 0),
+            filter_time_ms=int(prepared_scene.get("filter_time_ms", 0) or 0),
+            ocr_time_ms=int(prepared_scene.get("ocr_time_ms", 0) or 0),
+            prepare_time_ms=int(prepared_scene.get("prepare_time_ms", 0) or 0),
+            annotation_time_ms=annotation_time_ms,
+            ocr_detected=bool(prepared_scene.get("ocr_detected", False)),
+            remaining_annotation_budget=int(
+                prepared_scene.get(
+                    "remaining_annotation_budget",
+                    self._remaining_annotation_budget(),
+                )
+                or 0
+            ),
+            visual_type=aggregated_annotation["visual_type"],
+            visual_summary=aggregated_annotation["visual_description"] or fallback_visual_summary,
+            visual_description=aggregated_annotation["visual_description"],
+            visual_text_content=aggregated_annotation["visual_text_content"],
+            visual_entities=aggregated_annotation["visual_entities"],
+        )
 
     def _build_fallback_analysis(
         self,
@@ -901,22 +1236,185 @@ class HeuristicFrameAnalyzer:
         keywords: Sequence[str],
         video_metadata: Mapping[str, Any],
     ) -> dict[str, Any]:
+        summary = self._build_fallback_summary(
+            keywords=keywords,
+            video_metadata=video_metadata,
+        )
+        return self._build_scene_result(
+            scene_index=scene_index,
+            keywords=keywords,
+            route="text_only",
+            frame_paths=[],
+            has_visual_embedding=False,
+            candidate_frame_count=0,
+            unique_frame_count=0,
+            informative_frame_count=0,
+            annotation_frame_count=0,
+            extraction_cache_hit_count=0,
+            annotation_timeout_count=0,
+            annotation_error_count=0,
+            annotation_cache_hit_count=0,
+            extraction_time_ms=0,
+            dedup_time_ms=0,
+            filter_time_ms=0,
+            ocr_time_ms=0,
+            prepare_time_ms=0,
+            annotation_time_ms=0,
+            ocr_detected=False,
+            remaining_annotation_budget=self._remaining_annotation_budget(),
+            visual_summary=summary,
+        )
+
+    def _build_fallback_summary(
+        self,
+        *,
+        keywords: Sequence[str],
+        video_metadata: Mapping[str, Any],
+    ) -> str:
         speaker = str(video_metadata.get("speaker") or "Speaker").strip()
         topic = ", ".join(keywords) if keywords else "the current discussion"
-        summary = f"{speaker} is on screen discussing {topic}."
+        return f"{speaker} is on screen discussing {topic}."
+
+    def _build_prepared_scene(
+        self,
+        *,
+        scene_index: int,
+        keywords: Sequence[str],
+        route: str,
+        selected_frames: Sequence[Path],
+        annotation_frames: Sequence[Path],
+        candidate_frame_count: int,
+        unique_frame_count: int,
+        informative_frame_count: int,
+        ocr_detected: bool,
+        remaining_annotation_budget: int,
+        extraction_cache_hit_count: int,
+        extraction_time_ms: int,
+        dedup_time_ms: int,
+        filter_time_ms: int,
+        ocr_time_ms: int,
+        prepare_time_ms: int,
+        fallback_visual_summary: str | None = None,
+    ) -> dict[str, Any]:
         return {
             "scene_index": scene_index,
-            "visual_summary": summary,
             "keywords": list(keywords),
-            "frame_paths": [],
-            "has_visual_embedding": False,
-            "visual_type": None,
-            "visual_description": None,
-            "visual_text_content": None,
-            "visual_entities": [],
-            "candidate_frame_count": 0,
-            "informative_frame_count": 0,
+            "route": route,
+            "selected_frames": [str(frame_path) for frame_path in selected_frames],
+            "annotation_frames": [str(frame_path) for frame_path in annotation_frames],
+            "candidate_frame_count": candidate_frame_count,
+            "unique_frame_count": unique_frame_count,
+            "informative_frame_count": informative_frame_count,
+            "ocr_detected": ocr_detected,
+            "remaining_annotation_budget": remaining_annotation_budget,
+            "extraction_cache_hit_count": extraction_cache_hit_count,
+            "extraction_time_ms": extraction_time_ms,
+            "dedup_time_ms": dedup_time_ms,
+            "filter_time_ms": filter_time_ms,
+            "ocr_time_ms": ocr_time_ms,
+            "prepare_time_ms": prepare_time_ms,
+            "fallback_visual_summary": fallback_visual_summary,
         }
+
+    def _build_scene_result(
+        self,
+        *,
+        scene_index: int,
+        keywords: Sequence[str],
+        route: str,
+        frame_paths: Sequence[str],
+        has_visual_embedding: bool,
+        candidate_frame_count: int,
+        unique_frame_count: int,
+        informative_frame_count: int,
+        annotation_frame_count: int,
+        extraction_cache_hit_count: int,
+        annotation_timeout_count: int,
+        annotation_error_count: int,
+        annotation_cache_hit_count: int,
+        extraction_time_ms: int,
+        dedup_time_ms: int,
+        filter_time_ms: int,
+        ocr_time_ms: int,
+        prepare_time_ms: int,
+        annotation_time_ms: int,
+        ocr_detected: bool,
+        remaining_annotation_budget: int,
+        visual_type: str | None = None,
+        visual_summary: str | None = None,
+        visual_description: str | None = None,
+        visual_text_content: str | None = None,
+        visual_entities: Sequence[str] | None = None,
+    ) -> dict[str, Any]:
+        return {
+            "scene_index": scene_index,
+            "visual_summary": visual_summary,
+            "keywords": list(keywords),
+            "frame_paths": list(frame_paths),
+            "has_visual_embedding": has_visual_embedding,
+            "visual_type": visual_type,
+            "visual_description": visual_description,
+            "visual_text_content": visual_text_content,
+            "visual_entities": list(visual_entities or []),
+            "candidate_frame_count": candidate_frame_count,
+            "unique_frame_count": unique_frame_count,
+            "informative_frame_count": informative_frame_count,
+            "annotation_frame_count": annotation_frame_count,
+            "extraction_cache_hit_count": extraction_cache_hit_count,
+            "annotation_timeout_count": annotation_timeout_count,
+            "annotation_error_count": annotation_error_count,
+            "annotation_cache_hit_count": annotation_cache_hit_count,
+            "extraction_time_ms": extraction_time_ms,
+            "dedup_time_ms": dedup_time_ms,
+            "filter_time_ms": filter_time_ms,
+            "ocr_time_ms": ocr_time_ms,
+            "prepare_time_ms": prepare_time_ms,
+            "annotation_time_ms": annotation_time_ms,
+            "analysis_route": route,
+            "ocr_detected": ocr_detected,
+            "remaining_annotation_budget": remaining_annotation_budget,
+        }
+
+    def _resolve_scene_route(
+        self,
+        *,
+        video_duration_seconds: float,
+        unique_frame_count: int,
+        selected_frame_count: int,
+        ocr_detected: bool,
+    ) -> str:
+        if unique_frame_count <= 1 or selected_frame_count <= 0:
+            return "text_only"
+        if video_duration_seconds and video_duration_seconds <= self._short_video_annotate_bias_seconds:
+            return "annotate"
+        if ocr_detected:
+            return "annotate"
+        return "embed_only"
+
+    def _select_annotation_frames(
+        self,
+        frame_paths: Sequence[Path],
+        *,
+        route: str,
+    ) -> list[Path]:
+        if route != "annotate" or not frame_paths:
+            return []
+
+        remaining_budget = self._remaining_annotation_budget()
+        if remaining_budget <= 0:
+            return []
+
+        annotation_frame_count = min(
+            len(frame_paths),
+            self._max_annotated_frames_per_scene,
+            remaining_budget,
+        )
+        selected = list(frame_paths[:annotation_frame_count])
+        self._annotated_frames_used += len(selected)
+        return selected
+
+    def _remaining_annotation_budget(self) -> int:
+        return max(self._max_annotated_frames_per_video - self._annotated_frames_used, 0)
 
     async def _extract_candidate_frames(
         self,
@@ -979,6 +1477,42 @@ class HeuristicFrameAnalyzer:
 
         return sorted(path for path in output_dir.glob("*.jpg") if path.is_file())
 
+    async def _resolve_candidate_frames(
+        self,
+        video_path: Path,
+        *,
+        scene: Mapping[str, Any],
+        output_dir: Path,
+        video_metadata: Mapping[str, Any],
+    ) -> tuple[list[Path], bool]:
+        cache_key = _compute_frame_extraction_cache_key(
+            video_path,
+            scene=scene,
+            video_metadata=video_metadata,
+            frame_scale=self._frame_scale,
+            scene_threshold=self._scene_threshold,
+        )
+        cached_frames = _get_cached_frame_extraction(cache_key)
+        if cached_frames is not None:
+            restored_frames = await asyncio.to_thread(
+                _restore_frame_extraction_cache,
+                output_dir,
+                cached_frames,
+            )
+            return restored_frames, True
+
+        candidate_frames = await self._extract_candidate_frames(
+            video_path,
+            scene=scene,
+            output_dir=output_dir,
+        )
+        _set_cached_frame_extraction(
+            cache_key,
+            candidate_frames,
+            max_size=self._extraction_cache_size,
+        )
+        return candidate_frames, False
+
     async def _run_ffmpeg_command(
         self,
         command: Sequence[str],
@@ -1032,21 +1566,180 @@ class HeuristicFrameAnalyzer:
 
         return not (skin_ratio > 0.45 and edge_ratio < 0.04)
 
-    async def _annotate_frames(self, frame_paths: Sequence[Path]) -> list[dict[str, Any]]:
-        if not frame_paths or not self._annotation_backend.available():
+    def _frame_has_text_regions(self, frame_path: Path) -> bool:
+        try:
+            import cv2
+            import numpy as np
+        except ImportError:
+            return False
+
+        image = cv2.imread(str(frame_path))
+        if image is None:
+            return False
+
+        gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+        mser = cv2.MSER_create()
+        regions, _ = mser.detectRegions(gray)
+        if len(regions) < self._text_region_min_count:
+            return False
+
+        mask = np.zeros(gray.shape, dtype=np.uint8)
+        for region in regions:
+            if len(region) < 4:
+                continue
+            hull = cv2.convexHull(region.reshape(-1, 1, 2))
+            cv2.fillConvexPoly(mask, hull, 255)
+
+        text_area_ratio = float(np.count_nonzero(mask)) / float(mask.size)
+        return text_area_ratio >= self._text_region_min_area_ratio
+
+    async def _annotate_frames(
+        self,
+        frame_paths: Sequence[Path],
+        *,
+        log_event: Callable[[str, Mapping[str, Any] | None], Awaitable[None] | None] | None = None,
+        semaphore: asyncio.Semaphore | None = None,
+    ) -> tuple[list[dict[str, Any]], int, int, int]:
+        frame_results = await self._annotate_frame_results(
+            [{"frame_path": frame_path} for frame_path in frame_paths],
+            log_event=log_event,
+            semaphore=semaphore,
+        )
+        annotations = [
+            dict(result["annotation"])
+            for result in frame_results
+            if result.get("annotation") is not None
+        ]
+        timeout_count = sum(int(result.get("timed_out", 0) or 0) for result in frame_results)
+        error_count = sum(int(result.get("failed", 0) or 0) for result in frame_results)
+        cache_hit_count = sum(int(result.get("cache_hit", 0) or 0) for result in frame_results)
+        return annotations, timeout_count, error_count, cache_hit_count
+
+    async def _annotate_frame_results(
+        self,
+        frame_entries: Sequence[Mapping[str, Any]],
+        *,
+        log_event: Callable[[str, Mapping[str, Any] | None], Awaitable[None] | None] | None = None,
+        semaphore: asyncio.Semaphore | None = None,
+    ) -> list[dict[str, Any]]:
+        if not frame_entries or not self._annotation_backend.available():
             return []
 
-        annotations: list[dict[str, Any]] = []
-        for frame_path in frame_paths:
+        shared_semaphore = semaphore or asyncio.Semaphore(self._annotation_concurrency)
+
+        async def annotate_single_frame(
+            index: int,
+            frame_entry: Mapping[str, Any],
+        ) -> dict[str, Any]:
+            frame_path = Path(str(frame_entry["frame_path"]))
+            scene_index = frame_entry.get("scene_index")
+            frame_hash = _compute_frame_annotation_cache_key(frame_path)
+            cached_annotation = _get_cached_frame_annotation(frame_hash)
+            if cached_annotation is not None:
+                await _emit_runtime_event(
+                    log_event,
+                    f"Using cached frame annotation for {frame_path.name}.",
+                    {
+                        "frame_path": str(frame_path),
+                        "frame_hash": frame_hash,
+                        "scene_index": scene_index,
+                        "cache_hit": True,
+                    },
+                )
+                return {
+                    "index": index,
+                    "scene_index": scene_index,
+                    "frame_path": str(frame_path),
+                    "annotation": cached_annotation,
+                    "timed_out": 0,
+                    "failed": 0,
+                    "cache_hit": 1,
+                }
+
             try:
-                annotations.append(await self._annotation_backend.annotate(frame_path))
+                async with shared_semaphore:
+                    await _emit_runtime_event(
+                        log_event,
+                        f"Annotating frame {frame_path.name}.",
+                        {
+                            "frame_path": str(frame_path),
+                            "frame_hash": frame_hash,
+                            "scene_index": scene_index,
+                            "timeout_seconds": self._annotation_timeout_seconds,
+                        },
+                    )
+                    annotation = await asyncio.wait_for(
+                        self._annotation_backend.annotate(frame_path),
+                        timeout=self._annotation_timeout_seconds,
+                    )
+            except asyncio.TimeoutError:
+                self._logger.warning(
+                    "Frame annotation timed out for %s after %.1fs.",
+                    frame_path,
+                    self._annotation_timeout_seconds,
+                )
+                await _emit_runtime_event(
+                    log_event,
+                    f"Frame annotation timed out for {frame_path.name}.",
+                        {
+                            "frame_path": str(frame_path),
+                            "scene_index": scene_index,
+                            "timeout_seconds": self._annotation_timeout_seconds,
+                        },
+                    )
+                return {
+                    "index": index,
+                    "scene_index": scene_index,
+                    "frame_path": str(frame_path),
+                    "annotation": None,
+                    "timed_out": 1,
+                    "failed": 0,
+                    "cache_hit": 0,
+                }
             except Exception as exc:
                 self._logger.warning(
                     "Frame annotation failed for %s: %s",
                     frame_path,
                     exc,
                 )
-        return annotations
+                await _emit_runtime_event(
+                    log_event,
+                    f"Frame annotation failed for {frame_path.name}.",
+                        {
+                            "frame_path": str(frame_path),
+                            "scene_index": scene_index,
+                            "error": str(exc),
+                        },
+                    )
+                return {
+                    "index": index,
+                    "scene_index": scene_index,
+                    "frame_path": str(frame_path),
+                    "annotation": None,
+                    "timed_out": 0,
+                    "failed": 1,
+                    "cache_hit": 0,
+                }
+
+            _set_cached_frame_annotation(
+                frame_hash,
+                annotation,
+                max_size=self._annotation_cache_size,
+            )
+            return {
+                "index": index,
+                "scene_index": scene_index,
+                "frame_path": str(frame_path),
+                "annotation": dict(annotation),
+                "timed_out": 0,
+                "failed": 0,
+                "cache_hit": 0,
+            }
+
+        results = await asyncio.gather(
+            *(annotate_single_frame(index, frame_entry) for index, frame_entry in enumerate(frame_entries))
+        )
+        return sorted(results, key=lambda item: int(item["index"]))
 
 
 def normalize_video_metadata(
@@ -1816,6 +2509,140 @@ def _deduplicate_frame_paths(
     return unique_frames
 
 
+def _compute_frame_annotation_cache_key(frame_path: Path) -> str | None:
+    try:
+        import imagehash
+        from PIL import Image
+
+        with Image.open(frame_path) as image:
+            return f"phash:{str(imagehash.phash(image))}"
+    except Exception:
+        try:
+            return f"sha256:{hashlib.sha256(frame_path.read_bytes()).hexdigest()}"
+        except Exception:
+            return None
+
+
+def _compute_frame_extraction_cache_key(
+    video_path: Path,
+    *,
+    scene: Mapping[str, Any],
+    video_metadata: Mapping[str, Any],
+    frame_scale: str,
+    scene_threshold: float,
+) -> str:
+    source = str(video_metadata.get("source") or "").strip()
+    source_video_id = (
+        str(video_metadata.get("source_video_id") or video_metadata.get("video_id") or "").strip()
+    )
+    if source and source_video_id:
+        video_identity = f"{source}:{source_video_id}"
+    else:
+        try:
+            stat = video_path.stat()
+            video_identity = (
+                f"path:{video_path.resolve()}:{stat.st_size}:{stat.st_mtime_ns}"
+            )
+        except OSError:
+            video_identity = f"path:{video_path}"
+
+    payload = "|".join(
+        [
+            video_identity,
+            f"scene_index:{int(scene.get('scene_index', 0) or 0)}",
+            f"start:{float(scene.get('timestamp_start', 0.0) or 0.0):.3f}",
+            f"end:{float(scene.get('timestamp_end', 0.0) or 0.0):.3f}",
+            f"scale:{frame_scale}",
+            f"threshold:{float(scene_threshold):.4f}",
+        ]
+    )
+    return hashlib.sha256(payload.encode("utf-8")).hexdigest()
+
+
+def _elapsed_time_ms(started_at: float) -> int:
+    return max(int(round((time.monotonic() - started_at) * 1000.0)), 0)
+
+
+def _get_cached_frame_annotation(frame_hash: str | None) -> dict[str, Any] | None:
+    if not frame_hash:
+        return None
+    with _FRAME_ANNOTATION_CACHE_LOCK:
+        cached = _FRAME_ANNOTATION_CACHE.get(frame_hash)
+        if cached is None:
+            return None
+        _FRAME_ANNOTATION_CACHE.move_to_end(frame_hash)
+        return dict(cached)
+
+
+def _set_cached_frame_annotation(
+    frame_hash: str | None,
+    annotation: Mapping[str, Any],
+    *,
+    max_size: int,
+) -> None:
+    if not frame_hash or max_size <= 0:
+        return
+    with _FRAME_ANNOTATION_CACHE_LOCK:
+        _FRAME_ANNOTATION_CACHE[frame_hash] = dict(annotation)
+        _FRAME_ANNOTATION_CACHE.move_to_end(frame_hash)
+        while len(_FRAME_ANNOTATION_CACHE) > max_size:
+            _FRAME_ANNOTATION_CACHE.popitem(last=False)
+
+
+def _get_cached_frame_extraction(
+    cache_key: str | None,
+) -> list[tuple[str, bytes]] | None:
+    if not cache_key:
+        return None
+    with _FRAME_EXTRACTION_CACHE_LOCK:
+        cached = _FRAME_EXTRACTION_CACHE.get(cache_key)
+        if cached is None:
+            return None
+        _FRAME_EXTRACTION_CACHE.move_to_end(cache_key)
+        return [(name, bytes(payload)) for name, payload in cached]
+
+
+def _set_cached_frame_extraction(
+    cache_key: str | None,
+    frame_paths: Sequence[Path],
+    *,
+    max_size: int,
+) -> None:
+    if not cache_key or max_size <= 0 or not frame_paths:
+        return
+
+    cached_frames: list[tuple[str, bytes]] = []
+    for frame_path in frame_paths:
+        try:
+            cached_frames.append((frame_path.name, frame_path.read_bytes()))
+        except Exception:
+            continue
+    if not cached_frames:
+        return
+
+    with _FRAME_EXTRACTION_CACHE_LOCK:
+        _FRAME_EXTRACTION_CACHE[cache_key] = cached_frames
+        _FRAME_EXTRACTION_CACHE.move_to_end(cache_key)
+        while len(_FRAME_EXTRACTION_CACHE) > max_size:
+            _FRAME_EXTRACTION_CACHE.popitem(last=False)
+
+
+def _restore_frame_extraction_cache(
+    output_dir: Path,
+    cached_frames: Sequence[tuple[str, bytes]],
+) -> list[Path]:
+    output_dir.mkdir(parents=True, exist_ok=True)
+    for existing_file in output_dir.glob("*.jpg"):
+        existing_file.unlink(missing_ok=True)
+
+    restored_paths: list[Path] = []
+    for file_name, payload in cached_frames:
+        destination = output_dir / file_name
+        destination.write_bytes(payload)
+        restored_paths.append(destination)
+    return sorted(restored_paths)
+
+
 def _aggregate_frame_annotations(
     annotations: Sequence[Mapping[str, Any]],
 ) -> dict[str, Any]:
@@ -1915,6 +2742,19 @@ def _normalize_frame_annotation_payload(payload: Any) -> dict[str, Any]:
         "visual_type": visual_type,
         "visual_entities": _ordered_unique_strings(raw_entities),
     }
+
+
+async def _emit_runtime_event(
+    callback: Callable[[str, Mapping[str, Any] | None], Awaitable[None] | None] | None,
+    message: str,
+    details: Mapping[str, Any] | None = None,
+) -> None:
+    if callback is None:
+        return
+
+    result = callback(message, details)
+    if inspect.isawaitable(result):
+        await result
 
 
 def _extract_generated_text(response: Any) -> str:

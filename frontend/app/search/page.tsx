@@ -1,5 +1,5 @@
-import { redirect } from "next/navigation";
+import { UnifiedSearchDemo } from "@/components/search/unified-search-demo";
 
 export default function SearchPage() {
-  redirect("/docs/search-api");
+  return <UnifiedSearchDemo />;
 }

@@ -10,6 +10,7 @@ This is the primary agent integration path for the first phase of Cerul.
 Use this skill when the task involves:
 
 - querying Cerul search endpoints
+- submitting videos to Cerul indexing endpoints
 - checking Cerul API usage
 - wiring Cerul into scripts, agents, or local automation
 - debugging Cerul API authentication or request payloads
@@ -28,6 +29,10 @@ OAuth is not the default path for this skill. Only use OAuth if Cerul later publ
 ## Supported Endpoints
 
 - `POST /v1/search`
+- `POST /v1/index`
+- `GET /v1/index/{video_id}`
+- `GET /v1/index`
+- `DELETE /v1/index/{video_id}`
 - `GET /v1/usage`
 
 ## Search Request Shape
@@ -35,9 +40,23 @@ OAuth is not the default path for this skill. Only use OAuth if Cerul later publ
 ```json
 {
   "query": "sam altman agi timeline",
-  "search_type": "knowledge",
   "max_results": 5,
-  "include_answer": true
+  "include_answer": true,
+  "filters": {
+    "speaker": "Sam Altman",
+    "source": "youtube"
+  }
+}
+```
+
+There is no `search_type` field. Cerul uses one unified search surface and returns summary, speech, and visual matches together.
+
+## Index Request Shape
+
+```json
+{
+  "url": "https://www.youtube.com/watch?v=abc123",
+  "force": false
 }
 ```
 
@@ -47,7 +66,8 @@ OAuth is not the default path for this skill. Only use OAuth if Cerul later publ
 - Include source URLs and timestamps in the final answer when the API returns them.
 - Match the user's language in your explanation, even though the API payload should stay English.
 - For code tasks, write one small reusable helper instead of duplicating raw request code in many files.
-- Treat `knowledge` as the default search type unless the user clearly wants `broll`.
+- If the user wants to search their own video first, submit it to `POST /v1/index` and poll until the status is `completed` or `failed`.
+- Search uses one unified surface. Do not invent a `search_type` field.
 
 ## Minimal HTTP Example
 
@@ -57,9 +77,20 @@ curl "${CERUL_BASE_URL:-https://api.cerul.ai}/v1/search" \
   -H "Content-Type: application/json" \
   -d '{
     "query": "sam altman agi timeline",
-    "search_type": "knowledge",
     "max_results": 5,
-    "include_answer": true
+    "include_answer": true,
+    "filters": {
+      "speaker": "Sam Altman"
+    }
+  }'
+```
+
+```bash
+curl "${CERUL_BASE_URL:-https://api.cerul.ai}/v1/index" \
+  -H "Authorization: Bearer $CERUL_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "url": "https://www.youtube.com/watch?v=abc123"
   }'
 ```
 
@@ -68,21 +99,46 @@ curl "${CERUL_BASE_URL:-https://api.cerul.ai}/v1/search" \
 ```python
 import os
 import requests
+import time
 
 base_url = os.environ.get("CERUL_BASE_URL", "https://api.cerul.ai")
 api_key = os.environ["CERUL_API_KEY"]
+headers = {
+    "Authorization": f"Bearer {api_key}",
+    "Content-Type": "application/json",
+}
+
+submit = requests.post(
+    f"{base_url}/v1/index",
+    headers=headers,
+    json={
+        "url": "https://www.youtube.com/watch?v=abc123",
+    },
+    timeout=30,
+)
+submit.raise_for_status()
+video_id = submit.json()["video_id"]
+
+while True:
+    status = requests.get(
+        f"{base_url}/v1/index/{video_id}",
+        headers=headers,
+        timeout=30,
+    )
+    status.raise_for_status()
+    payload = status.json()
+    if payload["status"] in {"completed", "failed"}:
+        break
+    time.sleep(10)
 
 response = requests.post(
     f"{base_url}/v1/search",
-    headers={
-        "Authorization": f"Bearer {api_key}",
-        "Content-Type": "application/json",
-    },
+    headers=headers,
     json={
         "query": "sam altman agi timeline",
-        "search_type": "knowledge",
         "max_results": 5,
         "include_answer": True,
+        "filters": {"speaker": "Sam Altman"},
     },
     timeout=30,
 )
@@ -108,9 +164,11 @@ const res = await fetch(`${baseUrl}/v1/search`, {
   },
   body: JSON.stringify({
     query: "sam altman agi timeline",
-    search_type: "knowledge",
     max_results: 5,
     include_answer: true,
+    filters: {
+      speaker: "Sam Altman",
+    },
   }),
 })
 

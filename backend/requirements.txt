@@ -1,7 +1,10 @@
 fastapi>=0.116,<1
 httpx>=0.28,<1
+socksio>=1.0,<2
 asyncpg>=0.30,<1
 google-genai>=1.11,<2
+boto3>=1.39,<2
+python-multipart>=0.0.20,<1
 PyYAML>=6.0,<7
 pytest>=8.4,<10
 stripe>=11,<15

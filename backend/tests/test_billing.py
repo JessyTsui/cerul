@@ -759,12 +759,12 @@ def test_deduct_credits_records_usage_and_updates_remaining_balance(database) ->
                 period_end,
             )
 
-            assert credits_used == 2
+            assert credits_used == 1
             assert monthly_usage is not None
             assert int(monthly_usage["credits_limit"]) == 1_000
-            assert int(monthly_usage["credits_used"]) == 2
+            assert int(monthly_usage["credits_used"]) == 1
             assert int(monthly_usage["request_count"]) == 1
-            assert int(monthly_usage["credits_limit"]) - int(monthly_usage["credits_used"]) == 998
+            assert int(monthly_usage["credits_limit"]) - int(monthly_usage["credits_used"]) == 999
         finally:
             await db.close()
 

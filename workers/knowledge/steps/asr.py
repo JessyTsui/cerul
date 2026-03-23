@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from workers.common.pipeline import PipelineContext, PipelineStep
+from workers.common.pipeline import PipelineContext, PipelineStep, emit_step_log
 from workers.knowledge.runtime import (
     KnowledgeTranscriber,
     normalize_transcript_segments,
@@ -28,11 +28,24 @@ class TranscribeKnowledgeVideoStep(PipelineStep):
             transcriber = self._transcriber or context.conf.get("transcriber")
             if transcriber is None:
                 raise RuntimeError("A knowledge transcriber is required.")
+            await emit_step_log(
+                context,
+                self.step_name,
+                "Starting ASR transcription because no captions were resolved earlier.",
+                details={"provider": type(transcriber).__name__},
+            )
             raw_segments = await transcriber.transcribe(
                 video_path,
                 video_metadata=video_metadata,
             )
             used_transcriber = True
+        else:
+            await emit_step_log(
+                context,
+                self.step_name,
+                "Skipping ASR because transcript segments already exist.",
+                details={"segment_count": len(raw_segments)},
+            )
 
         transcript_segments = normalize_transcript_segments(
             raw_segments,
@@ -47,4 +60,14 @@ class TranscribeKnowledgeVideoStep(PipelineStep):
         context.data["transcript_segment_count"] = len(transcript_segments)
         context.data["transcript_word_count"] = sum(
             len(str(segment["text"]).split()) for segment in transcript_segments
+        )
+        await emit_step_log(
+            context,
+            self.step_name,
+            "Transcript segments are ready.",
+            details={
+                "segment_count": len(transcript_segments),
+                "word_count": context.data["transcript_word_count"],
+                "transcript_source": context.data.get("transcript_source", "captions"),
+            },
         )

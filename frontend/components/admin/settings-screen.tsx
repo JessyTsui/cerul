@@ -72,7 +72,7 @@ function normalizeDraftTarget(target: DraftTarget): DraftTarget {
 
 function scopeKeyHint(target: DraftTarget): string {
   if (target.scopeType === "global") return "Global — no key needed";
-  if (target.scopeType === "track") return "broll or knowledge";
+  if (target.scopeType === "track") return "broll, knowledge, or unified";
   if (target.metricName === "jobs_completed" || target.metricName === "jobs_failed") return "Source slug or UUID";
   return "youtube, pexels, or pixabay";
 }
@@ -236,7 +236,7 @@ export function AdminSettingsScreen() {
                 </div>
               ))}
               {draftTargets.length === 0 ? (
-                <p className="py-4 text-center text-xs text-[var(--foreground-tertiary)]">No targets configured. Click "Add target" to set one.</p>
+                <p className="py-4 text-center text-xs text-[var(--foreground-tertiary)]">No targets configured. Click &quot;Add target&quot; to set one.</p>
               ) : null}
             </div>
           </article>

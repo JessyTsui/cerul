@@ -7,14 +7,14 @@ export const primaryNavigation = [
 
 export const marketingMetrics = [
   {
-    label: "Shared backbone",
-    value: "2 tracks",
-    caption: "B-roll and knowledge retrieval on the same platform spine.",
+    label: "Search surface",
+    value: "1 endpoint",
+    caption: "One query surface blends summary, speech, and visual retrieval.",
   },
   {
     label: "Public API",
-    value: "2 endpoints",
-    caption: "Search and usage first. Heavy processing stays behind workers.",
+    value: "3 endpoints",
+    caption: "Index, search, and usage stay public while heavy processing stays behind workers.",
   },
   {
     label: "Agent path",
@@ -108,7 +108,7 @@ export const dashboardSignals = [
     label: "Search health",
     value: "99.94%",
     change: "Stable",
-    caption: "Healthy request success rate across both product tracks.",
+    caption: "Healthy request success rate across the shared retrieval surface.",
   },
 ] as const;
 

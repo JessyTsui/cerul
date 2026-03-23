@@ -148,14 +148,18 @@ def test_run_once_creates_jobs_for_new_content_items() -> None:
         "ocean-waves": {"discovered": 1, "new_jobs": 1, "skipped": 0},
     }
     assert len(db.inserted_jobs) == 3
+    assert all(job["track"] == "unified" for job in db.inserted_jobs)
     assert db.inserted_jobs[0]["job_type"] == "index_video"
     assert db.inserted_jobs[0]["payload"]["source_item_id"] == "video-001"
-    assert db.inserted_jobs[0]["payload"]["video_id"] == "video-001"
-    assert db.inserted_jobs[1]["job_type"] == "index_asset"
+    assert db.inserted_jobs[0]["payload"]["source_video_id"] == "video-001"
+    assert db.inserted_jobs[0]["payload"]["url"] == "https://www.youtube.com/watch?v=video-001"
+    assert db.inserted_jobs[1]["job_type"] == "index_video"
     assert db.inserted_jobs[1]["payload"]["source_item_id"] == "501"
+    assert db.inserted_jobs[1]["payload"]["source"] == "pexels"
     assert db.inserted_jobs[1]["payload"]["query"] == "cinematic drone"
     assert db.inserted_jobs[2]["payload"]["source_item_id"] == "901"
-    assert db.inserted_jobs[2]["payload"]["raw_asset"]["source"] == "pixabay"
+    assert db.inserted_jobs[2]["payload"]["source"] == "pixabay"
+    assert db.inserted_jobs[2]["payload"]["url"] == "https://pixabay.com/videos/id-901/"
     youtube_client.search_channel_videos.assert_awaited_once_with(
         "channel-42",
         max_results=25,
@@ -364,4 +368,6 @@ def test_run_once_supports_legacy_metadata_backed_sources() -> None:
         "legacy-youtube": {"discovered": 1, "new_jobs": 1, "skipped": 0},
     }
     assert len(db.inserted_jobs) == 1
+    assert db.inserted_jobs[0]["track"] == "unified"
+    assert db.inserted_jobs[0]["payload"]["source"] == "youtube"
     assert db.updated_cursors == {"legacy-yt": "2026-03-10T12:00:00Z"}

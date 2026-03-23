@@ -68,6 +68,26 @@ class PixabayClient:
             raise ValueError("Pixabay response payload is missing a valid hits list.")
         return [hit for hit in hits if isinstance(hit, dict)]
 
+    async def get_video(self, video_id: str) -> dict[str, Any]:
+        if not self._api_key:
+            raise RuntimeError("PIXABAY_API_KEY is required to query Pixabay.")
+
+        async with httpx.AsyncClient(timeout=self._timeout) as client:
+            response = await self._request_with_retry(
+                client=client,
+                params={"key": self._api_key, "id": video_id},
+            )
+
+        response.raise_for_status()
+        payload = response.json()
+        hits = payload.get("hits", [])
+        if not isinstance(hits, list) or not hits:
+            raise LookupError(f"Pixabay video not found: {video_id}")
+        first_hit = hits[0]
+        if not isinstance(first_hit, dict):
+            raise ValueError("Pixabay video details payload is invalid.")
+        return first_hit
+
     async def _request_with_retry(
         self,
         *,

@@ -8,6 +8,7 @@ import httpx
 
 class PexelsClient:
     base_url = "https://api.pexels.com/videos/search"
+    details_url = "https://api.pexels.com/videos/videos"
 
     def __init__(
         self,
@@ -45,6 +46,22 @@ class PexelsClient:
         response.raise_for_status()
         payload = response.json()
         return payload.get("videos", [])
+
+    async def get_video(self, video_id: str) -> dict[str, Any]:
+        if not self._api_key:
+            raise RuntimeError("PEXELS_API_KEY is required to query Pexels.")
+
+        async with httpx.AsyncClient(timeout=self._timeout) as client:
+            response = await client.get(
+                f"{self.details_url}/{video_id}",
+                headers={"Authorization": self._api_key},
+            )
+
+        response.raise_for_status()
+        payload = response.json()
+        if not isinstance(payload, dict):
+            raise ValueError("Pexels video details payload is invalid.")
+        return payload
 
     async def _request_with_retry(
         self,

@@ -6,6 +6,7 @@ import { formatAdminDateTime } from "@/lib/admin-console";
 import { AdminLayout } from "./admin-layout";
 import { AdminMetricCard } from "./admin-metric-card";
 import { AdminRangePicker } from "./admin-range-picker";
+import { VideoLibraryPanel } from "./video-library-panel";
 import { WorkerLivePanel } from "./worker-live-panel";
 import { DashboardNotice, DashboardSkeleton, DashboardState } from "@/components/dashboard/dashboard-state";
 import { useAdminResource } from "./use-admin-resource";
@@ -57,6 +58,8 @@ export function AdminIngestionScreen() {
           ) : null}
 
           <WorkerLivePanel />
+
+          <VideoLibraryPanel />
 
           <section className="grid gap-3 md:grid-cols-3">
             <AdminMetricCard label="Jobs completed" metric={data.metrics.jobsCompleted} />
