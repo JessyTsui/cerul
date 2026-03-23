@@ -57,6 +57,7 @@ SET
     locked_at = NULL,
     updated_at = NOW()
 WHERE id = $1::uuid
+  AND COALESCE((input_payload->>'cancelled_by_user')::boolean, FALSE) = FALSE
 """
 
 RETRY_JOB_SQL = """
@@ -70,6 +71,7 @@ SET
     locked_at = NULL,
     updated_at = NOW()
 WHERE id = $1::uuid
+  AND COALESCE((input_payload->>'cancelled_by_user')::boolean, FALSE) = FALSE
 """
 
 FAIL_JOB_SQL = """
@@ -83,6 +85,7 @@ SET
     locked_at = NULL,
     updated_at = NOW()
 WHERE id = $1::uuid
+  AND COALESCE((input_payload->>'cancelled_by_user')::boolean, FALSE) = FALSE
 """
 
 RELEASE_LOCKED_JOBS_SQL = """
@@ -145,6 +148,15 @@ TOUCH_JOB_SQL = """
 UPDATE processing_jobs
 SET updated_at = NOW()
 WHERE id = $1::uuid
+  AND COALESCE((input_payload->>'cancelled_by_user')::boolean, FALSE) = FALSE
+"""
+
+JOB_WRITABLE_SQL = """
+SELECT TRUE
+FROM processing_jobs
+WHERE id = $1::uuid
+  AND COALESCE((input_payload->>'cancelled_by_user')::boolean, FALSE) = FALSE
+LIMIT 1
 """
 
 
@@ -209,6 +221,9 @@ class JobWorker:
         error_message = str(error)
         context = self._job_contexts.get(job_id)
 
+        if not await self._job_is_writable(conn, job_id):
+            return
+
         if attempts < max_attempts:
             delay_seconds = self.compute_retry_delay(attempts)
             await conn.execute(RETRY_JOB_SQL, job_id, error_message, delay_seconds)
@@ -233,6 +248,9 @@ class JobWorker:
         job_id: str,
         context: PipelineContext,
     ) -> None:
+        if not await self._job_is_writable(conn, job_id):
+            return
+
         seen_steps: set[str] = set()
 
         for step_name in context.completed_steps:
@@ -473,11 +491,7 @@ class JobWorker:
         ) -> None:
         conn = await asyncpg.connect(self.db_url)
         try:
-            job_exists = await conn.fetchval(
-                "SELECT TRUE FROM processing_jobs WHERE id = $1::uuid LIMIT 1",
-                job_id,
-            )
-            if not job_exists:
+            if not await self._job_is_writable(conn, job_id):
                 return
             await self._upsert_job_step(
                 conn=conn,
@@ -490,6 +504,14 @@ class JobWorker:
             await conn.execute(TOUCH_JOB_SQL, job_id)
         finally:
             await conn.close()
+
+    async def _job_is_writable(
+        self,
+        conn: asyncpg.Connection,
+        job_id: str,
+    ) -> bool:
+        row = await conn.fetchval(JOB_WRITABLE_SQL, job_id)
+        return bool(row)
 
     def _append_step_log(
         self,

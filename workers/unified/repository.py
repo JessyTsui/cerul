@@ -98,6 +98,10 @@ class AsyncpgUnifiedRepository:
                 SELECT TRUE
                 FROM processing_jobs
                 WHERE id = $1::uuid
+                  AND COALESCE(
+                      (input_payload->>'cancelled_by_user')::boolean,
+                      FALSE
+                  ) = FALSE
                 LIMIT 1
                 """,
                 job_id,

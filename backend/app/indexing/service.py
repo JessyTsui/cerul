@@ -324,7 +324,7 @@ class UnifiedIndexService:
             normalized_video_id,
         )
         if int(remaining_access or 0) == 0:
-            await self._delete_video_jobs(normalized_video_id)
+            await self._cancel_video_jobs(normalized_video_id)
             await self.db.execute(
                 "DELETE FROM videos WHERE id = $1::uuid",
                 normalized_video_id,
@@ -499,10 +499,34 @@ class UnifiedIndexService:
             video_id,
         )
 
-    async def _delete_video_jobs(self, video_id: str) -> None:
+    async def _cancel_video_jobs(self, video_id: str) -> None:
         await self.db.execute(
             """
-            DELETE FROM processing_jobs
+            UPDATE processing_jobs
+            SET
+                status = CASE
+                    WHEN status IN ('pending', 'running', 'retrying') THEN 'failed'
+                    ELSE status
+                END,
+                error_message = CASE
+                    WHEN status IN ('pending', 'running', 'retrying')
+                        THEN 'Cancelled by user.'
+                    ELSE error_message
+                END,
+                completed_at = CASE
+                    WHEN status IN ('pending', 'running', 'retrying') THEN NULL
+                    ELSE completed_at
+                END,
+                next_retry_at = NULL,
+                locked_by = NULL,
+                locked_at = NULL,
+                input_payload = jsonb_set(
+                    COALESCE(input_payload, '{}'::jsonb),
+                    '{cancelled_by_user}',
+                    'true'::jsonb,
+                    true
+                ),
+                updated_at = NOW()
             WHERE input_payload->>'video_id' = $1::text
             """,
             video_id,

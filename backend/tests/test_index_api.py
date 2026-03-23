@@ -411,7 +411,7 @@ def test_delete_indexed_video_removes_owner_access_and_video(database) -> None:
     ) == 0
 
 
-def test_delete_indexed_video_removes_associated_processing_jobs(database) -> None:
+def test_delete_indexed_video_cancels_associated_processing_jobs(database) -> None:
     app.dependency_overrides[require_api_key] = override_auth
 
     with TestClient(app) as client:
@@ -430,9 +430,19 @@ def test_delete_indexed_video_removes_associated_processing_jobs(database) -> No
         SELECT COUNT(*)
         FROM processing_jobs
         WHERE input_payload->>'video_id' = $1::text
+          AND status IN ('pending', 'running', 'retrying')
         """,
         video_id,
     ) == 0
+    assert database.fetchval(
+        """
+        SELECT COUNT(*)
+        FROM processing_jobs
+        WHERE input_payload->>'video_id' = $1::text
+          AND COALESCE((input_payload->>'cancelled_by_user')::boolean, FALSE) = TRUE
+        """,
+        video_id,
+    ) == 1
 
 
 def test_submit_index_rejects_unsupported_url() -> None:
