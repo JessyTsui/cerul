@@ -147,3 +147,42 @@ async def deduct_credits(
             raise InsufficientCreditsError("Monthly credit limit exhausted.")
 
         return int(inserted_usage["credits_used"])
+
+
+async def refund_credits(
+    db: asyncpg.Connection,
+    request_id: str,
+) -> int:
+    async with transaction_scope(db):
+        deleted_usage = await db.fetchrow(
+            """
+            DELETE FROM usage_events
+            WHERE request_id = $1
+            RETURNING user_id, credits_used, occurred_at
+            """,
+            request_id,
+        )
+        if deleted_usage is None:
+            return 0
+
+        occurred_at = deleted_usage["occurred_at"]
+        period_start, period_end = current_billing_period(occurred_at.date())
+
+        await db.execute(
+            """
+            UPDATE usage_monthly
+            SET
+                credits_used = GREATEST(usage_monthly.credits_used - $4, 0),
+                request_count = GREATEST(usage_monthly.request_count - 1, 0),
+                updated_at = NOW()
+            WHERE user_id = $1
+              AND period_start = $2
+              AND period_end = $3
+            """,
+            deleted_usage["user_id"],
+            period_start,
+            period_end,
+            int(deleted_usage["credits_used"]),
+        )
+
+        return int(deleted_usage["credits_used"])

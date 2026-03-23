@@ -384,6 +384,73 @@ def test_search_endpoint_rejects_request_when_remaining_credits_are_below_cost(d
     assert search_called is False
 
 
+def test_search_endpoint_reserves_credits_before_service_execution(database) -> None:
+    observed_usage_count: int | None = None
+
+    class StubService:
+        async def search(self, payload, *, user_id: str, request_id: str, image_path=None):
+            nonlocal observed_usage_count
+            observed_usage_count = await database.fetchval_async(
+                "SELECT COUNT(*) FROM usage_events WHERE request_id = $1",
+                request_id,
+            )
+            return search_router.SearchExecution(results=[], answer=None, tracking_links=[])
+
+    app.dependency_overrides[require_api_key] = override_auth
+
+    with pytest.MonkeyPatch.context() as monkeypatch:
+        monkeypatch.setattr(search_router, "resolve_search_service", lambda *_args, **_kwargs: StubService())
+
+        with TestClient(app) as client:
+            response = client.post(
+                "/v1/search",
+                json={
+                    "query": "agent workflows",
+                    "max_results": 1,
+                },
+            )
+
+    app.dependency_overrides.clear()
+
+    assert response.status_code == 200
+    assert observed_usage_count == 1
+
+
+def test_search_endpoint_refunds_reserved_credits_when_search_fails(database) -> None:
+    class StubService:
+        async def search(self, payload, *, user_id: str, request_id: str, image_path=None):
+            raise RuntimeError("embedding backend exploded")
+
+    app.dependency_overrides[require_api_key] = override_auth
+
+    with pytest.MonkeyPatch.context() as monkeypatch:
+        monkeypatch.setattr(search_router, "resolve_search_service", lambda *_args, **_kwargs: StubService())
+
+        with TestClient(app, raise_server_exceptions=False) as client:
+            response = client.post(
+                "/v1/search",
+                json={
+                    "query": "agent workflows",
+                    "max_results": 1,
+                },
+            )
+
+    app.dependency_overrides.clear()
+
+    assert response.status_code == 500
+    assert database.fetchval("SELECT COUNT(*) FROM usage_events") == 0
+    usage_row = database.fetchrow(
+        """
+        SELECT credits_used, request_count
+        FROM usage_monthly
+        WHERE user_id = $1
+        """,
+        TEST_USER_ID,
+    )
+    assert usage_row["credits_used"] == 0
+    assert usage_row["request_count"] == 0
+
+
 def test_usage_endpoint_returns_current_summary() -> None:
     app.dependency_overrides[require_api_key] = override_auth
 

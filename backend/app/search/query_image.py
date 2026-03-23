@@ -75,16 +75,33 @@ def cleanup_local_image(image_path: Path) -> None:
 
 async def _download_image(url: str) -> tuple[Path, str]:
     async with httpx.AsyncClient(timeout=30.0, follow_redirects=True) as client:
-        response = await client.get(url)
-        response.raise_for_status()
+        async with client.stream("GET", url) as response:
+            response.raise_for_status()
 
-    content_type = _normalize_content_type(response.headers.get("content-type"))
-    if content_type not in ALLOWED_MIME_TYPES:
-        raise ValueError(f"Unsupported image type: {content_type or 'unknown'}")
+            content_type = _normalize_content_type(response.headers.get("content-type"))
+            if content_type not in ALLOWED_MIME_TYPES:
+                raise ValueError(f"Unsupported image type: {content_type or 'unknown'}")
 
-    payload = bytes(response.content)
-    _validate_image_size(payload)
-    return _write_temp_image(payload, content_type)
+            content_length = response.headers.get("content-length")
+            if content_length:
+                try:
+                    parsed_content_length = int(content_length)
+                except ValueError:
+                    parsed_content_length = None
+                if parsed_content_length is not None and parsed_content_length > MAX_IMAGE_SIZE_BYTES:
+                    raise ValueError(
+                        f"Image too large: {parsed_content_length} bytes (max {MAX_IMAGE_SIZE_BYTES})"
+                    )
+
+            payload = bytearray()
+            async for chunk in response.aiter_bytes():
+                payload.extend(chunk)
+                if len(payload) > MAX_IMAGE_SIZE_BYTES:
+                    raise ValueError(
+                        f"Image too large: {len(payload)} bytes (max {MAX_IMAGE_SIZE_BYTES})"
+                    )
+
+    return _write_temp_image(bytes(payload), content_type)
 
 
 def _decode_base64_image(base64_str: str) -> tuple[Path, str]:

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from contextlib import asynccontextmanager
 import json
+import logging
 import time
 from pathlib import Path
 from typing import Any, AsyncIterator
@@ -20,10 +21,10 @@ from pydantic import ValidationError
 from app.auth import AuthContext, require_api_key
 from app.billing import (
     InsufficientCreditsError,
-    calculate_credit_cost,
     calculate_credits_remaining,
     deduct_credits,
     fetch_usage_summary,
+    refund_credits,
 )
 from app.db import get_db
 from app.search import (
@@ -50,6 +51,8 @@ router = APIRouter(
     },
 )
 
+LOGGER = logging.getLogger(__name__)
+
 
 @asynccontextmanager
 async def transaction_context(db: Any) -> AsyncIterator[Any]:
@@ -68,23 +71,6 @@ def resolve_search_service(search_type: str | None, db: Any) -> UnifiedSearchSer
     if normalized_search_type != "unified":
         raise ValueError(f"Unsupported search_type: {search_type}")
     return UnifiedSearchService(db)
-
-
-async def ensure_request_credits_available(
-    db: Any,
-    auth: AuthContext,
-    payload: SearchRequest,
-) -> None:
-    request_credit_cost = calculate_credit_cost("unified", payload.include_answer)
-
-    usage_summary = await fetch_usage_summary(db, auth.user_id)
-    credits_remaining = calculate_credits_remaining(usage_summary)
-
-    if credits_remaining < request_credit_cost:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Insufficient credits for this request.",
-        )
 
 
 async def append_query_log(
@@ -164,25 +150,25 @@ async def _execute_search_request(
     request_id: str,
     request_started_at: float,
 ) -> SearchResponse:
-    await ensure_request_credits_available(db, auth, payload)
     service = resolve_search_service("unified", db)
-    execution = await service.search(
-        payload,
-        user_id=auth.user_id,
-        request_id=request_id,
-        image_path=None if image_path is None else Path(image_path),
-    )
+    credits_used = 0
 
     try:
+        credits_used = await deduct_credits(
+            db,
+            auth.user_id,
+            auth.api_key_id,
+            request_id,
+            "unified",
+            payload.include_answer,
+        )
+        execution = await service.search(
+            payload,
+            user_id=auth.user_id,
+            request_id=request_id,
+            image_path=None if image_path is None else Path(image_path),
+        )
         async with transaction_context(db) as transactional_db:
-            credits_used = await deduct_credits(
-                transactional_db,
-                auth.user_id,
-                auth.api_key_id,
-                request_id,
-                "unified",
-                payload.include_answer,
-            )
             await append_query_log(
                 transactional_db,
                 request_id=request_id,
@@ -202,8 +188,19 @@ async def _execute_search_request(
     except InsufficientCreditsError as exc:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail=str(exc),
+            detail="Insufficient credits for this request.",
         ) from exc
+    except Exception:
+        if credits_used > 0:
+            try:
+                await refund_credits(db, request_id)
+            except Exception as refund_exc:  # pragma: no cover - best effort logging
+                LOGGER.warning(
+                    "Failed to refund reserved credits for request %s: %s",
+                    request_id,
+                    refund_exc,
+                )
+        raise
 
     return SearchResponse(
         results=execution.results,

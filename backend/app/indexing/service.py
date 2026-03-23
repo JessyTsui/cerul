@@ -204,10 +204,12 @@ class UnifiedIndexService:
         units_created = int(payload.get("units_created") or 0)
         job_status = str(payload.get("job_status") or "").strip()
 
-        if job_status == "failed":
-            status_value = "failed"
-        elif units_created > 0 and job_status in {"", "completed"}:
+        if job_status in {"pending", "running", "retrying"}:
+            status_value = "processing"
+        elif units_created > 0:
             status_value = "completed"
+        elif job_status == "failed":
+            status_value = "failed"
         else:
             status_value = "processing"
 
@@ -279,9 +281,15 @@ class UnifiedIndexService:
             IndexListItem(
                 video_id=str(row["video_id"]),
                 title=str(row["title"]),
-                status="completed"
-                if int(row["units_created"] or 0) > 0 and str(row["job_status"] or "") != "failed"
-                else str(row["job_status"] or "processing"),
+                status=(
+                    "processing"
+                    if str(row["job_status"] or "") in {"pending", "running", "retrying"}
+                    else (
+                        "completed"
+                        if int(row["units_created"] or 0) > 0
+                        else str(row["job_status"] or "processing")
+                    )
+                ),
                 units_created=int(row["units_created"] or 0),
                 created_at=row["created_at"],
                 completed_at=row["completed_at"],

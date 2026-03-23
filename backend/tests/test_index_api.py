@@ -374,6 +374,135 @@ def test_get_index_status_and_list(database) -> None:
     assert list_response.json()["videos"][0]["video_id"] == video_id
 
 
+def test_get_index_status_and_list_stay_completed_when_previous_units_exist(database) -> None:
+    video_id = "41111111-1111-1111-1111-111111111111"
+    vector = build_placeholder_vector(
+        "existing retrieval unit",
+        DEFAULT_KNOWLEDGE_VECTOR_DIMENSION,
+    )
+    database.fetchval(
+        """
+        INSERT INTO videos (
+            id,
+            source,
+            source_video_id,
+            source_url,
+            video_url,
+            thumbnail_url,
+            title,
+            description,
+            speaker,
+            duration_seconds,
+            metadata
+        )
+        VALUES (
+            $1::uuid,
+            'youtube',
+            'statusdemo01',
+            $2,
+            $2,
+            'https://example.com/thumb.jpg',
+            'Existing indexed video',
+            'Existing description',
+            'Cerul',
+            120,
+            '{}'::jsonb
+        )
+        RETURNING id::text
+        """,
+        video_id,
+        "https://www.youtube.com/watch?v=statusdemo01",
+    )
+    database.fetchval(
+        """
+        INSERT INTO video_access (video_id, owner_id)
+        VALUES ($1::uuid, $2)
+        RETURNING video_id::text
+        """,
+        video_id,
+        TEST_USER_ID,
+    )
+    database.fetchval(
+        """
+        INSERT INTO retrieval_units (
+            id,
+            video_id,
+            unit_type,
+            unit_index,
+            timestamp_start,
+            timestamp_end,
+            content_text,
+            transcript,
+            visual_desc,
+            visual_type,
+            keyframe_url,
+            metadata,
+            embedding
+        )
+        VALUES (
+            '42222222-2222-2222-2222-222222222222'::uuid,
+            $1::uuid,
+            'speech',
+            0,
+            0,
+            30,
+            'Existing indexed content',
+            'Existing indexed transcript',
+            NULL,
+            NULL,
+            'https://example.com/keyframe.jpg',
+            '{}'::jsonb,
+            $2::vector
+        )
+        RETURNING id::text
+        """,
+        video_id,
+        vector_to_literal(vector),
+    )
+    database.fetchval(
+        """
+        INSERT INTO processing_jobs (
+            track,
+            source_id,
+            job_type,
+            status,
+            input_payload,
+            error_message,
+            created_at,
+            updated_at
+        )
+        VALUES (
+            'unified',
+            NULL,
+            'index_video',
+            'failed',
+            $1::jsonb,
+            'Reindex failed',
+            NOW(),
+            NOW()
+        )
+        RETURNING id::text
+        """,
+        f'{{"video_id":"{video_id}","request_id":"req_existing"}}',
+    )
+
+    app.dependency_overrides[require_api_key] = override_auth
+
+    with TestClient(app) as client:
+        status_response = client.get(f"/v1/index/{video_id}")
+        list_response = client.get("/v1/index?page=1&per_page=20")
+
+    app.dependency_overrides.clear()
+
+    assert status_response.status_code == 200
+    assert status_response.json()["status"] == "completed"
+    assert status_response.json()["units_created"] == 1
+    matching_video = next(
+        video for video in list_response.json()["videos"] if video["video_id"] == video_id
+    )
+    assert matching_video["status"] == "completed"
+
+
 def test_get_index_status_returns_404_for_non_uuid_id(database) -> None:
     app.dependency_overrides[require_api_key] = override_auth
 
