@@ -2,8 +2,7 @@
 
 import type { Route } from "next";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { billing, getApiErrorMessage } from "@/lib/api";
 import { useConsoleViewer } from "@/components/console/console-viewer-context";
 import {
@@ -53,29 +52,13 @@ const planFeatures: Record<string, string[]> = {
   ],
 };
 
-type BootstrapAdminStatus =
-  | "loading"
-  | "available"
-  | "already_admin"
-  | "disabled"
-  | "managed_by_emails"
-  | "admin_exists"
-  | "unavailable";
-
 export function DashboardSettingsScreen() {
-  const router = useRouter();
   const viewer = useConsoleViewer();
   const { data, error, isLoading, refresh } = useMonthlyUsage();
   const [billingAction, setBillingAction] = useState<"checkout" | "portal" | null>(
     null,
   );
   const [billingError, setBillingError] = useState<string | null>(null);
-  const [bootstrapSecret, setBootstrapSecret] = useState("");
-  const [bootstrapError, setBootstrapError] = useState<string | null>(null);
-  const [isPromotingAdmin, setIsPromotingAdmin] = useState(false);
-  const [bootstrapStatus, setBootstrapStatus] = useState<BootstrapAdminStatus>(
-    () => (viewer.isAdmin ? "already_admin" : "loading"),
-  );
   const normalizedTier = data?.tier.toLowerCase() ?? "free";
   const availableBillingAction = data
     ? resolveDashboardBillingAction(data.tier, data.hasStripeCustomer)
@@ -107,51 +90,6 @@ export function DashboardSettingsScreen() {
       ? "Private / not exposed"
       : `${formatNumber(data.rateLimitPerSec)} req/s`;
 
-  useEffect(() => {
-    if (viewer.isAdmin) {
-      setBootstrapStatus("already_admin");
-      return;
-    }
-
-    let cancelled = false;
-
-    void fetch("/api/console/bootstrap-admin/status", {
-      credentials: "include",
-      cache: "no-store",
-    })
-      .then(async (response) => {
-        if (cancelled) {
-          return;
-        }
-
-        if (!response.ok) {
-          setBootstrapStatus("unavailable");
-          return;
-        }
-
-        const payload = await response.json() as {
-          eligible?: boolean;
-          reason?: BootstrapAdminStatus;
-        };
-
-        if (payload.eligible === true) {
-          setBootstrapStatus("available");
-          return;
-        }
-
-        setBootstrapStatus(payload.reason ?? "unavailable");
-      })
-      .catch(() => {
-        if (!cancelled) {
-          setBootstrapStatus("unavailable");
-        }
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [viewer.isAdmin]);
-
   async function handleCheckout() {
     setBillingAction("checkout");
     setBillingError(null);
@@ -182,160 +120,6 @@ export function DashboardSettingsScreen() {
     }
   }
 
-  async function handleBootstrapAdmin() {
-    const trimmedSecret = bootstrapSecret.trim();
-
-    if (!trimmedSecret) {
-      setBootstrapError("Bootstrap admin secret is required.");
-      return;
-    }
-
-    setIsPromotingAdmin(true);
-    setBootstrapError(null);
-
-    try {
-      const response = await fetch("/api/console/bootstrap-admin", {
-        method: "POST",
-        credentials: "include",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ secret: trimmedSecret }),
-      });
-
-      const payload = await response.json().catch(() => null) as { detail?: string } | null;
-
-      if (!response.ok) {
-        setBootstrapError(payload?.detail ?? "Unable to promote this account to administrator.");
-        return;
-      }
-
-      router.replace("/admin");
-      router.refresh();
-    } catch {
-      setBootstrapError("Unable to promote this account to administrator.");
-    } finally {
-      setIsPromotingAdmin(false);
-    }
-  }
-
-  const bootstrapPanel = viewer.isAdmin ? null : bootstrapStatus === "available" ? (
-    <section>
-      <article className="surface-elevated rounded-[32px] px-6 py-6">
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-          <div className="max-w-2xl">
-            <p className="eyebrow">Bootstrap admin</p>
-            <h2 className="mt-4 text-3xl font-semibold tracking-[-0.04em] text-white">
-              Promote this logged-in account to administrator
-            </h2>
-            <p className="mt-3 text-sm leading-7 text-[var(--foreground-secondary)]">
-              This is a one-time bootstrap path for the first admin. Sign in with the
-              account you want to elevate, then enter the secret from
-              <span className="font-mono text-white"> BOOTSTRAP_ADMIN_SECRET</span>.
-            </p>
-          </div>
-          <span className="inline-flex items-center rounded-full border border-[var(--border-brand)] bg-[var(--brand-subtle)] px-3 py-1.5 font-mono text-[11px] uppercase tracking-[0.16em] text-[var(--brand-bright)]">
-            No admin exists yet
-          </span>
-        </div>
-
-        <div className="mt-6 grid gap-5 xl:grid-cols-[minmax(0,1fr)_320px]">
-          <label className="space-y-2 text-sm text-[var(--foreground-secondary)]">
-            <span className="block font-mono text-[11px] uppercase tracking-[0.16em] text-[var(--foreground-tertiary)]">
-              Bootstrap secret
-            </span>
-            <input
-              type="password"
-              value={bootstrapSecret}
-              onChange={(event) => setBootstrapSecret(event.target.value)}
-              placeholder="Enter bootstrap admin secret"
-              className="h-12 w-full rounded-[14px] border border-[var(--border)] bg-[var(--surface)] px-4 text-white outline-none transition focus:border-[var(--brand)]"
-              autoComplete="off"
-            />
-          </label>
-
-          <div className="space-y-3">
-            <button
-              className="button-primary w-full"
-              type="button"
-              disabled={isPromotingAdmin}
-              onClick={() => void handleBootstrapAdmin()}
-            >
-              {isPromotingAdmin ? "Promoting..." : "Promote current account"}
-            </button>
-            <p className="text-xs leading-6 text-[var(--foreground-tertiary)]">
-              After success, this account will be redirected into the admin console.
-            </p>
-          </div>
-        </div>
-
-        {bootstrapError ? (
-          <div className="mt-4 rounded-[18px] border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-100">
-            {bootstrapError}
-          </div>
-        ) : null}
-      </article>
-    </section>
-  ) : bootstrapStatus === "loading" ? (
-    <section>
-      <article className="surface rounded-[28px] px-6 py-5">
-        <p className="text-sm text-[var(--foreground-tertiary)]">
-          Checking admin bootstrap status...
-        </p>
-      </article>
-    </section>
-  ) : bootstrapStatus === "disabled" ? (
-    <section>
-      <article className="surface rounded-[28px] px-6 py-5">
-        <p className="font-mono text-[11px] uppercase tracking-[0.16em] text-[var(--foreground-tertiary)]">
-          Admin bootstrap unavailable
-        </p>
-        <p className="mt-3 text-sm leading-7 text-[var(--foreground-secondary)]">
-          Set <span className="font-mono text-white">BOOTSTRAP_ADMIN_SECRET</span> in
-          <span className="font-mono text-white"> .env</span> if you want the first logged-in
-          account to be able to self-promote to admin.
-        </p>
-      </article>
-    </section>
-  ) : bootstrapStatus === "managed_by_emails" ? (
-    <section>
-      <article className="surface rounded-[28px] px-6 py-5">
-        <p className="font-mono text-[11px] uppercase tracking-[0.16em] text-[var(--foreground-tertiary)]">
-          Admin access managed by email
-        </p>
-        <p className="mt-3 text-sm leading-7 text-[var(--foreground-secondary)]">
-          This workspace is using configured dashboard admin email settings, so
-          bootstrap promotion is intentionally disabled.
-        </p>
-      </article>
-    </section>
-  ) : bootstrapStatus === "admin_exists" ? (
-    <section>
-      <article className="surface rounded-[28px] px-6 py-5">
-        <p className="font-mono text-[11px] uppercase tracking-[0.16em] text-[var(--foreground-tertiary)]">
-          Administrator already exists
-        </p>
-        <p className="mt-3 text-sm leading-7 text-[var(--foreground-secondary)]">
-          Bootstrap promotion is only available for the first administrator. This
-          workspace already has an admin account, so access must be granted by an
-          existing administrator instead.
-        </p>
-      </article>
-    </section>
-  ) : bootstrapStatus === "unavailable" ? (
-    <section>
-      <article className="surface rounded-[28px] px-6 py-5">
-        <p className="font-mono text-[11px] uppercase tracking-[0.16em] text-[var(--foreground-tertiary)]">
-          Admin bootstrap status unavailable
-        </p>
-        <p className="mt-3 text-sm leading-7 text-[var(--foreground-secondary)]">
-          The console could not confirm bootstrap eligibility for this session.
-          Refresh the page and verify the current environment configuration.
-        </p>
-      </article>
-    </section>
-  ) : null;
-
   return (
     <DashboardLayout
       actions={
@@ -354,12 +138,12 @@ export function DashboardSettingsScreen() {
     >
       {isLoading && !data ? (
         <>
-          {bootstrapPanel}
+
           <DashboardSkeleton />
         </>
       ) : error && !data ? (
         <>
-          {bootstrapPanel}
+
           <DashboardState
             action={
               <button className="button-primary" onClick={() => void refresh()} type="button">
@@ -388,7 +172,7 @@ export function DashboardSettingsScreen() {
               tone="error"
             />
           ) : null}
-          {bootstrapPanel}
+
 
           <section className="grid gap-6 xl:grid-cols-[1.12fr_0.88fr]">
             <article className="surface-elevated relative overflow-hidden rounded-[36px] px-6 py-6 sm:px-7">
@@ -747,7 +531,7 @@ export function DashboardSettingsScreen() {
         </>
       ) : (
         <>
-          {bootstrapPanel}
+
           <DashboardState
             action={
               <button className="button-primary" onClick={() => void refresh()} type="button">

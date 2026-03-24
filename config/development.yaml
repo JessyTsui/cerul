@@ -1,5 +1,0 @@
-public:
-  app_env: development
-  api_base_url: http://localhost:8000
-  web_base_url: http://localhost:3000
-  demo_mode: true

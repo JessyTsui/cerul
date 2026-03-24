@@ -4,26 +4,24 @@
 
 Runtime configuration is split into two layers by sensitivity:
 
-### `.env` files — Secrets & credentials only
-API keys, database URLs, auth secrets, third-party tokens.
+### `.env` files — Secrets, credentials, and deployment-specific settings
+API keys, database URLs, auth secrets, model names, embedding dimensions, URLs, feature flags.
 - `.env.example` — template (committed to git)
 - `.env` — local development (gitignored)
 - `.env.production` — production deployment (gitignored)
 
-### `config/*.yaml` — Non-sensitive parameters
-Search thresholds, model names, feature flags, public URLs, tuning knobs.
-- `config/base.yaml` — shared defaults
-- `config/development.yaml` — local overrides
-- `config/production.yaml` — production overrides
+### `config/base.yaml` — Algorithm and business parameters only
+Search thresholds, rerank counts, scene detection sensitivity, download quality, feature toggles.
+These are values that rarely change between environments.
 
 ### Decision rule for new parameters
 
-| Question | → Location |
-|----------|-----------|
-| Would leaking this value cause a security incident? | `.env` |
-| Is this an API key, password, token, or connection string? | `.env` |
-| Everything else (thresholds, model IDs, feature toggles, URLs) | `config/*.yaml` |
+| Question | Location |
+|----------|----------|
+| Is this a secret (API key, password, token, connection string)? | `.env` |
+| Does this change between environments (URLs, model names, dimensions)? | `.env` |
+| Is this a tuning knob that's the same everywhere (thresholds, top-N counts)? | `config/base.yaml` |
 
 When adding a new parameter:
-1. Add to **all three** `.env` files if it's a secret, or the relevant `config/*.yaml` if not
-2. Keep the key list across `.env`, `.env.example`, and `.env.production` in sync at all times
+1. Add to **all three** `.env` files if it belongs in `.env`, keeping keys in sync
+2. Only add to `config/base.yaml` if it's a pure algorithm/business parameter

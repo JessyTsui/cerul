@@ -18,19 +18,22 @@ import yaml
 _CONFIG_ENV_PREFIX = "CERUL__"
 _LEGACY_ENV_OVERRIDES: dict[str, tuple[str, ...]] = {
     "ADMIN_CONSOLE_EMAILS": ("dashboard", "admin_emails"),
-    "BOOTSTRAP_ADMIN_SECRET": ("dashboard", "bootstrap_admin_secret"),
     "DATABASE_URL": ("database", "url"),
     "EMBEDDING_BACKEND": ("embedding", "backend"),
     "EMBEDDING_MODEL": ("embedding", "model"),
     "EMBEDDING_DIMENSION": ("embedding", "dimension"),
     "EMBEDDING_NORMALIZE": ("embedding", "normalize"),
     "MMR_LAMBDA": ("search", "mmr_lambda"),
+    "API_BASE_URL": ("public", "api_base_url"),
+    "WEB_BASE_URL": ("public", "web_base_url"),
     "NEXT_PUBLIC_API_BASE_URL": ("public", "api_base_url"),
     "NEXT_PUBLIC_SITE_URL": ("public", "web_base_url"),
+    "DEMO_MODE": ("public", "demo_mode"),
+    "RERANK_BACKEND": ("knowledge", "rerank_backend"),
+    "RERANK_MODEL": ("knowledge", "rerank_model"),
     "STRIPE_PRO_PRICE_ID": ("stripe", "pro_price_id"),
     "STRIPE_SECRET_KEY": ("stripe", "secret_key"),
     "STRIPE_WEBHOOK_SECRET": ("stripe", "webhook_secret"),
-    "WEB_BASE_URL": ("public", "web_base_url"),
     "OPENAI_TRANSCRIBE_BASE_URL": ("knowledge", "transcription", "base_url"),
     "OPENAI_TRANSCRIBE_MODEL": ("knowledge", "transcription", "model"),
     "OPENAI_TRANSCRIBE_RESPONSE_FORMAT": ("knowledge", "transcription", "response_format"),
@@ -63,9 +66,9 @@ _SETTINGS_CACHE_KEY: tuple[str, tuple[tuple[str, str], ...]] | None = None
 class PublicSettings(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    app_env: str
-    api_base_url: str
-    web_base_url: str
+    app_env: str = "development"
+    api_base_url: str = "http://localhost:8000"
+    web_base_url: str = "http://localhost:3000"
     demo_mode: bool = False
     default_track: str
     enabled_tracks: list[str]
@@ -90,7 +93,6 @@ class EmbeddingSettings(BaseModel):
     backend: str = "gemini"
     model: str = "gemini-embedding-2-preview"
     dimension: int = Field(default=768, ge=128, le=3072)
-    # Set to false to skip L2 normalisation (only relevant when dimension != 3072).
     normalize: bool = True
 
     @field_validator("backend", mode="before")
@@ -125,8 +127,6 @@ class KnowledgeSettings(BaseModel):
     scene_threshold: float = Field(ge=0.0, le=1.0)
     rerank_top_n: int = Field(gt=0)
     rerank_prompt_template: str
-    # "openai" → OpenAICompatibleRerankerBackend (default, pointwise, N calls/search)
-    # "cohere" → CohereRerankerBackend (batch, 1 call/search, recommended for production)
     rerank_backend: str = "openai"
     rerank_model: str = "gpt-4o-mini"
     download: KnowledgeDownloadSettings = Field(
@@ -177,7 +177,6 @@ class DashboardSettings(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     admin_emails: list[str] = Field(default_factory=list)
-    bootstrap_admin_secret: str | None = None
 
     @field_validator("admin_emails", mode="before")
     @classmethod
@@ -209,15 +208,6 @@ class DashboardSettings(BaseModel):
             normalized.append(cleaned)
 
         return normalized
-
-    @field_validator("bootstrap_admin_secret", mode="before")
-    @classmethod
-    def normalize_bootstrap_admin_secret(cls, value: Any) -> str | None:
-        if value is None:
-            return None
-
-        cleaned = str(value).strip()
-        return cleaned or None
 
 
 class Settings(BaseModel):
@@ -255,15 +245,21 @@ def load_settings(
     environment_source = environ if environ is not None else os.environ
     selected_environment = environment or resolve_environment(environment_source)
 
-    merged_config = _deep_merge(
-        _load_yaml_file(config_root / "base.yaml"),
-        _load_yaml_file(config_root / f"{selected_environment}.yaml"),
-    )
+    merged_config = _load_yaml_file(config_root / "base.yaml")
+
+    env_file = config_root / f"{selected_environment}.yaml"
+    if env_file.exists():
+        merged_config = _deep_merge(merged_config, _load_yaml_file(env_file))
+
     merged_config = _deep_merge(
         merged_config,
         _load_environment_overrides(environment_source),
     )
     merged_config["environment"] = selected_environment
+
+    merged_config.setdefault("public", {})
+    merged_config["public"].setdefault("app_env", selected_environment)
+
     return Settings.model_validate(merged_config)
 
 
@@ -389,7 +385,7 @@ def _parse_legacy_override(name: str, raw_value: str) -> Any:
         except ValueError:
             return _SKIP
 
-    if name == "EMBEDDING_NORMALIZE":
+    if name in ("EMBEDDING_NORMALIZE", "DEMO_MODE"):
         parsed = yaml.safe_load(cleaned)
         if isinstance(parsed, bool):
             return parsed
