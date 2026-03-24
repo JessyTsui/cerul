@@ -67,6 +67,34 @@ class R2FrameUploader:
             frame_path,
         )
 
+    def upload_bytes_sync(
+        self,
+        key: str,
+        data: bytes,
+        content_type: str = "application/octet-stream",
+        cache_control: str = "public, max-age=31536000",
+    ) -> str:
+        client = self._get_client()
+        client.put_object(
+            Bucket=self._bucket_name,
+            Key=key,
+            Body=data,
+            ContentType=content_type,
+            CacheControl=cache_control,
+        )
+        return self.public_url_for_key(key)
+
+    async def upload_bytes(
+        self,
+        key: str,
+        data: bytes,
+        content_type: str = "application/octet-stream",
+        cache_control: str = "public, max-age=31536000",
+    ) -> str:
+        return await asyncio.to_thread(
+            self.upload_bytes_sync, key, data, content_type, cache_control
+        )
+
     async def upload_frames_batch(
         self,
         video_id: str,

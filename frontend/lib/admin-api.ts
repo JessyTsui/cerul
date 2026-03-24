@@ -338,6 +338,46 @@ export type AdminIndexedVideosResponse = {
   query: string | null;
 };
 
+export type AdminSource = {
+  id: string;
+  slug: string;
+  track: string;
+  sourceType: string | null;
+  displayName: string;
+  isActive: boolean;
+  config: Record<string, unknown>;
+  metadata: Record<string, unknown>;
+  syncCursor: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type AdminSourcesResponse = {
+  generatedAt: string;
+  sources: AdminSource[];
+};
+
+export type CreateSourceInput = {
+  slug: string;
+  track: string;
+  sourceType?: string;
+  displayName: string;
+  isActive?: boolean;
+  config?: Record<string, unknown>;
+  metadata?: Record<string, unknown>;
+};
+
+export type UpdateSourceInput = {
+  slug?: string;
+  track?: string;
+  sourceType?: string;
+  displayName?: string;
+  isActive?: boolean;
+  config?: Record<string, unknown>;
+  metadata?: Record<string, unknown>;
+  syncCursor?: string | null;
+};
+
 function isPlainObject(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
@@ -1127,5 +1167,100 @@ export const admin = {
         ? raw.processing_jobs_deleted
         : 0,
     };
+  },
+
+  async getSources(): Promise<AdminSourcesResponse> {
+    const payload = await fetchWithAuth<unknown>("/admin/sources", {
+      method: "GET",
+      cache: "no-store",
+    });
+    const raw = ensureObject(payload, "Invalid admin sources response.");
+    return {
+      generatedAt: typeof raw.generated_at === "string" ? raw.generated_at : "",
+      sources: Array.isArray(raw.sources)
+        ? raw.sources.map((item) => {
+            const value = ensureObject(item, "Invalid admin source payload.");
+            return {
+              id: typeof value.id === "string" ? value.id : "",
+              slug: typeof value.slug === "string" ? value.slug : "",
+              track: typeof value.track === "string" ? value.track : "",
+              sourceType: typeof value.source_type === "string" ? value.source_type : null,
+              displayName: typeof value.display_name === "string" ? value.display_name : "",
+              isActive: value.is_active === true,
+              config: isPlainObject(value.config) ? value.config : {},
+              metadata: isPlainObject(value.metadata) ? value.metadata : {},
+              syncCursor: typeof value.sync_cursor === "string" ? value.sync_cursor : null,
+              createdAt: typeof value.created_at === "string" ? value.created_at : "",
+              updatedAt: typeof value.updated_at === "string" ? value.updated_at : "",
+            };
+          })
+        : [],
+    };
+  },
+
+  async createSource(input: CreateSourceInput): Promise<AdminSource> {
+    const payload = await fetchWithAuth<unknown>("/admin/sources", {
+      method: "POST",
+      body: {
+        slug: input.slug,
+        track: input.track,
+        source_type: input.sourceType ?? "youtube",
+        display_name: input.displayName,
+        is_active: input.isActive ?? true,
+        config: input.config ?? {},
+        metadata: input.metadata ?? {},
+      },
+    });
+    const value = ensureObject(payload, "Invalid create source response.");
+    return {
+      id: typeof value.id === "string" ? value.id : "",
+      slug: typeof value.slug === "string" ? value.slug : "",
+      track: typeof value.track === "string" ? value.track : "",
+      sourceType: typeof value.source_type === "string" ? value.source_type : null,
+      displayName: typeof value.display_name === "string" ? value.display_name : "",
+      isActive: value.is_active === true,
+      config: isPlainObject(value.config) ? value.config : {},
+      metadata: isPlainObject(value.metadata) ? value.metadata : {},
+      syncCursor: typeof value.sync_cursor === "string" ? value.sync_cursor : null,
+      createdAt: typeof value.created_at === "string" ? value.created_at : "",
+      updatedAt: typeof value.updated_at === "string" ? value.updated_at : "",
+    };
+  },
+
+  async updateSource(sourceId: string, input: UpdateSourceInput): Promise<AdminSource> {
+    const body: Record<string, unknown> = {};
+    if (input.slug !== undefined) body.slug = input.slug;
+    if (input.track !== undefined) body.track = input.track;
+    if (input.sourceType !== undefined) body.source_type = input.sourceType;
+    if (input.displayName !== undefined) body.display_name = input.displayName;
+    if (input.isActive !== undefined) body.is_active = input.isActive;
+    if (input.config !== undefined) body.config = input.config;
+    if (input.metadata !== undefined) body.metadata = input.metadata;
+    if (input.syncCursor !== undefined) body.sync_cursor = input.syncCursor;
+
+    const payload = await fetchWithAuth<unknown>(`/admin/sources/${sourceId}`, {
+      method: "PATCH",
+      body,
+    });
+    const value = ensureObject(payload, "Invalid update source response.");
+    return {
+      id: typeof value.id === "string" ? value.id : "",
+      slug: typeof value.slug === "string" ? value.slug : "",
+      track: typeof value.track === "string" ? value.track : "",
+      sourceType: typeof value.source_type === "string" ? value.source_type : null,
+      displayName: typeof value.display_name === "string" ? value.display_name : "",
+      isActive: value.is_active === true,
+      config: isPlainObject(value.config) ? value.config : {},
+      metadata: isPlainObject(value.metadata) ? value.metadata : {},
+      syncCursor: typeof value.sync_cursor === "string" ? value.sync_cursor : null,
+      createdAt: typeof value.created_at === "string" ? value.created_at : "",
+      updatedAt: typeof value.updated_at === "string" ? value.updated_at : "",
+    };
+  },
+
+  async deleteSource(sourceId: string): Promise<void> {
+    await fetchWithAuth<null>(`/admin/sources/${sourceId}`, {
+      method: "DELETE",
+    });
   },
 };
