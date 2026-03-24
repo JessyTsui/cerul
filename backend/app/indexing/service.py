@@ -2,8 +2,10 @@ from __future__ import annotations
 
 import asyncpg
 import hashlib
+import ipaddress
 import json
 import re
+import socket
 import secrets
 from typing import Any
 from urllib.parse import parse_qs, urlparse
@@ -421,6 +423,7 @@ class UnifiedIndexService:
             return {"source": "pixabay", "source_video_id": pixabay_match.group(1)}
 
         if path.lower().endswith(DIRECT_VIDEO_EXTENSIONS):
+            self._validate_direct_video_url(parsed)
             return {
                 "source": "upload",
                 "source_video_id": hashlib.sha256(url.encode("utf-8")).hexdigest()[:24],
@@ -430,6 +433,63 @@ class UnifiedIndexService:
 
     def generate_request_id(self) -> str:
         return f"req_{secrets.token_hex(12)}"
+
+    def _validate_direct_video_url(self, parsed: Any) -> None:
+        scheme = str(parsed.scheme or "").strip().lower()
+        hostname = str(parsed.hostname or "").strip().lower()
+
+        if scheme not in {"http", "https"}:
+            raise HTTPException(
+                status_code=422,
+                detail="Direct video URLs must use http or https.",
+            )
+        if not hostname:
+            raise HTTPException(
+                status_code=422,
+                detail="Direct video URLs must include a valid host.",
+            )
+        if parsed.username or parsed.password:
+            raise HTTPException(
+                status_code=422,
+                detail="Direct video URLs must not include embedded credentials.",
+            )
+        if hostname in {"localhost"} or hostname.endswith(".local"):
+            raise HTTPException(
+                status_code=422,
+                detail="Direct video URLs must be publicly reachable.",
+            )
+
+        candidate_ips: set[str] = set()
+        try:
+            candidate_ips.add(str(ipaddress.ip_address(hostname)))
+        except ValueError:
+            if "." not in hostname:
+                raise HTTPException(
+                    status_code=422,
+                    detail="Direct video URLs must use a public host.",
+                ) from None
+            try:
+                infos = socket.getaddrinfo(hostname, None, type=socket.SOCK_STREAM)
+            except socket.gaierror as exc:
+                raise HTTPException(
+                    status_code=422,
+                    detail="Direct video host could not be resolved.",
+                ) from exc
+            candidate_ips.update(info[4][0] for info in infos if info and info[4])
+
+        if not candidate_ips:
+            raise HTTPException(
+                status_code=422,
+                detail="Direct video host could not be resolved.",
+            )
+
+        for ip_text in candidate_ips:
+            ip = ipaddress.ip_address(ip_text)
+            if not ip.is_global:
+                raise HTTPException(
+                    status_code=422,
+                    detail="Direct video URLs must resolve to public internet addresses.",
+                )
 
     def _normalize_video_id(self, video_id: str) -> str:
         try:

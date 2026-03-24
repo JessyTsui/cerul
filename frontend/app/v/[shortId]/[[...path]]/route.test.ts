@@ -59,6 +59,8 @@ describe("tracking proxy route", () => {
         redirect: "manual",
       }),
     );
+    expect(init?.headers).toBeInstanceOf(Headers);
+    expect((init?.headers as Headers).get("accept")).toBe("*/*");
   });
 
   it("forwards detail pages and preserves HTML bodies", async () => {
@@ -104,5 +106,42 @@ describe("tracking proxy route", () => {
 
     expect(response.status).toBe(404);
     expect(vi.mocked(global.fetch)).not.toHaveBeenCalled();
+  });
+
+  it("forwards browser context headers to the backend", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        new Response(null, {
+          status: 302,
+          headers: {
+            location: "https://www.youtube.com/watch?v=demo123&t=42",
+          },
+        }),
+      ),
+    );
+
+    const request = new NextRequest("http://127.0.0.1:3001/v/abc123xy", {
+      headers: {
+        accept: "text/html",
+        "user-agent": "Mozilla/5.0 test",
+        referer: "http://127.0.0.1:3001/search",
+        "x-forwarded-for": "203.0.113.7",
+      },
+    });
+
+    await GET(request, {
+      params: Promise.resolve({
+        shortId: "abc123xy",
+      }),
+    });
+
+    const [, init] = vi.mocked(global.fetch).mock.calls[0] ?? [];
+    expect((init?.headers as Headers).get("accept")).toBe("text/html");
+    expect((init?.headers as Headers).get("user-agent")).toBe("Mozilla/5.0 test");
+    expect((init?.headers as Headers).get("referer")).toBe(
+      "http://127.0.0.1:3001/search",
+    );
+    expect((init?.headers as Headers).get("x-forwarded-for")).toBe("203.0.113.7");
   });
 });

@@ -65,11 +65,28 @@ async function proxyTrackingRequest(
   });
 
   try {
+    const forwardedHeaders = new Headers();
+    const forwardHeader = (headerName: string) => {
+      const value = request.headers.get(headerName);
+      if (value) {
+        forwardedHeaders.set(headerName, value);
+      }
+    };
+
+    forwardHeader("accept");
+    forwardHeader("user-agent");
+    forwardHeader("referer");
+    forwardHeader("x-forwarded-for");
+    forwardHeader("x-real-ip");
+    forwardHeader("cf-connecting-ip");
+
+    if (!forwardedHeaders.has("accept")) {
+      forwardedHeaders.set("accept", "*/*");
+    }
+
     const response = await fetch(upstreamUrl, {
       method: "GET",
-      headers: {
-        accept: request.headers.get("accept") ?? "*/*",
-      },
+      headers: forwardedHeaders,
       cache: "no-store",
       redirect: "manual",
     });

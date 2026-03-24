@@ -592,6 +592,39 @@ def test_get_index_status_returns_404_for_non_uuid_id(database) -> None:
     assert response.json()["error"]["code"] == "not_found"
 
 
+def test_submit_index_rejects_file_scheme_direct_video_url(database) -> None:
+    app.dependency_overrides[require_api_key] = override_auth
+
+    with TestClient(app) as client:
+        response = client.post(
+            "/v1/index",
+            json={"url": "file:///tmp/demo.mp4"},
+        )
+
+    app.dependency_overrides.clear()
+
+    assert response.status_code == 422
+    assert response.json()["error"]["message"] == "Direct video URLs must use http or https"
+
+
+def test_submit_index_rejects_private_direct_video_host(database) -> None:
+    app.dependency_overrides[require_api_key] = override_auth
+
+    with TestClient(app) as client:
+        response = client.post(
+            "/v1/index",
+            json={"url": "http://127.0.0.1/private.mp4"},
+        )
+
+    app.dependency_overrides.clear()
+
+    assert response.status_code == 422
+    assert (
+        response.json()["error"]["message"]
+        == "Direct video URLs must resolve to public internet addresses"
+    )
+
+
 def test_delete_indexed_video_removes_owner_access_and_video(database) -> None:
     app.dependency_overrides[require_api_key] = override_auth
 
