@@ -516,6 +516,38 @@ class AdminSourcesRecentVideosResponse(BaseModel):
     sources: list[AdminSourceRecentVideosEntry] = Field(default_factory=list)
 
 
+class CreateSourceFromUrlRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    url: str = Field(min_length=1, max_length=500)
+
+
+class CreateSourceFromUrlResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    ok: bool
+    source: AdminSource
+    already_exists: bool = False
+
+
+class TriggerSearchRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    query: str = Field(min_length=1, max_length=500)
+    max_results: int = Field(default=20, ge=1, le=100)
+    min_view_count: int = Field(default=5000, ge=0)
+    min_duration_seconds: int = Field(default=180, ge=0)
+
+
+class TriggerSearchResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    ok: bool
+    jobs_created: int
+    videos_found: int
+    videos_filtered: int
+
+
 class SubmitVideoRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 

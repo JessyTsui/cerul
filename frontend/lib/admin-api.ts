@@ -431,6 +431,19 @@ export type SubmitVideoResult = {
   alreadyExists: boolean;
 };
 
+export type CreateSourceFromUrlResult = {
+  ok: boolean;
+  source: AdminSource;
+  alreadyExists: boolean;
+};
+
+export type TriggerSearchResult = {
+  ok: boolean;
+  jobsCreated: number;
+  videosFound: number;
+  videosFiltered: number;
+};
+
 export type VideoJobStatus = {
   jobId: string;
   videoId: string;
@@ -1437,5 +1450,55 @@ export const admin = {
         attempts: isFiniteNumber(v.attempts) ? v.attempts : 0,
       };
     });
+  },
+
+  async createSourceFromUrl(url: string): Promise<CreateSourceFromUrlResult> {
+    const payload = await fetchWithAuth<unknown>("/admin/sources/from-url", {
+      method: "POST",
+      body: { url },
+    });
+    const v = ensureObject(payload, "Invalid create source from URL response.");
+    const rawSource = ensureObject(v.source, "Invalid source in response.");
+    return {
+      ok: v.ok === true,
+      source: {
+        id: typeof rawSource.id === "string" ? rawSource.id : "",
+        slug: typeof rawSource.slug === "string" ? rawSource.slug : "",
+        track: typeof rawSource.track === "string" ? rawSource.track : "",
+        sourceType: typeof rawSource.source_type === "string" ? rawSource.source_type : null,
+        displayName: typeof rawSource.display_name === "string" ? rawSource.display_name : "",
+        isActive: rawSource.is_active === true,
+        config: isPlainObject(rawSource.config) ? rawSource.config : {},
+        metadata: isPlainObject(rawSource.metadata) ? rawSource.metadata : {},
+        syncCursor: typeof rawSource.sync_cursor === "string" ? rawSource.sync_cursor : null,
+        createdAt: typeof rawSource.created_at === "string" ? rawSource.created_at : "",
+        updatedAt: typeof rawSource.updated_at === "string" ? rawSource.updated_at : "",
+      },
+      alreadyExists: v.already_exists === true,
+    };
+  },
+
+  async triggerSearch(params: {
+    query: string;
+    maxResults?: number;
+    minViewCount?: number;
+    minDurationSeconds?: number;
+  }): Promise<TriggerSearchResult> {
+    const payload = await fetchWithAuth<unknown>("/admin/search/trigger", {
+      method: "POST",
+      body: {
+        query: params.query,
+        max_results: params.maxResults ?? 20,
+        min_view_count: params.minViewCount ?? 5000,
+        min_duration_seconds: params.minDurationSeconds ?? 180,
+      },
+    });
+    const v = ensureObject(payload, "Invalid trigger search response.");
+    return {
+      ok: v.ok === true,
+      jobsCreated: isFiniteNumber(v.jobs_created) ? v.jobs_created : 0,
+      videosFound: isFiniteNumber(v.videos_found) ? v.videos_found : 0,
+      videosFiltered: isFiniteNumber(v.videos_filtered) ? v.videos_filtered : 0,
+    };
   },
 };

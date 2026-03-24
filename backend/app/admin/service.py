@@ -29,7 +29,9 @@ from .models import (
     AdminMetricTargetUpsert,
     AdminMetricValue,
     AdminVideoJobStatus,
+    CreateSourceFromUrlResponse,
     SubmitVideoResponse,
+    TriggerSearchResponse,
     AdminNamedCount,
     AdminNotice,
     AdminOverviewMetrics,
@@ -2776,6 +2778,339 @@ async def fetch_sources_recent_videos(
     return AdminSourcesRecentVideosResponse(
         generated_at=_utc_now(),
         sources=list(sources_map.values()),
+    )
+
+
+_YT_CHANNEL_ID_RE = _re.compile(r"UC[\w-]{20,}")
+
+
+def _extract_channel_id_from_url(url: str) -> tuple[str | None, str | None]:
+    """Extract channel ID or handle from a YouTube URL.
+    Returns (channel_id, handle). At least one will be set if valid."""
+    url = url.strip()
+    if _YT_CHANNEL_ID_RE.fullmatch(url):
+        return url, None
+
+    try:
+        from urllib.parse import urlparse
+        parsed = urlparse(url if url.startswith("http") else f"https://{url}")
+        if "youtube.com" not in parsed.hostname or "":
+            return None, None
+        parts = [p for p in parsed.path.split("/") if p]
+        if not parts:
+            return None, None
+        if parts[0] == "channel" and len(parts) > 1:
+            return parts[1], None
+        if parts[0].startswith("@"):
+            return None, parts[0][1:]
+        if parts[0] in ("c", "user") and len(parts) > 1:
+            return None, parts[1]
+    except Exception:
+        pass
+    return None, None
+
+
+async def _resolve_channel_id(handle: str) -> str | None:
+    """Resolve a YouTube handle to a channel ID via the API."""
+    api_key = os.getenv("YOUTUBE_API_KEY", "").strip()
+    if not api_key:
+        return None
+    async with httpx.AsyncClient(timeout=15.0) as client:
+        resp = await client.get(
+            "https://www.googleapis.com/youtube/v3/channels",
+            params={"key": api_key, "forHandle": handle, "part": "id"},
+        )
+        if resp.status_code != 200:
+            return None
+        items = resp.json().get("items", [])
+        return items[0]["id"] if items else None
+
+
+async def _fetch_channel_metadata(channel_id: str) -> dict[str, Any]:
+    """Fetch channel info for creating a source."""
+    api_key = os.getenv("YOUTUBE_API_KEY", "").strip()
+    if not api_key:
+        raise ValueError("YOUTUBE_API_KEY is not configured.")
+
+    async with httpx.AsyncClient(timeout=15.0) as client:
+        resp = await client.get(
+            "https://www.googleapis.com/youtube/v3/channels",
+            params={
+                "key": api_key,
+                "id": channel_id,
+                "part": "snippet,statistics,brandingSettings",
+            },
+        )
+        resp.raise_for_status()
+        data = resp.json()
+
+    items = data.get("items", [])
+    if not items:
+        raise ValueError(f"YouTube channel not found: {channel_id}")
+
+    item = items[0]
+    snippet = item.get("snippet") or {}
+    stats = item.get("statistics") or {}
+    branding = (item.get("brandingSettings") or {}).get("channel") or {}
+
+    thumbs = snippet.get("thumbnails") or {}
+    thumb_url = None
+    for key in ("high", "medium", "default"):
+        t = thumbs.get(key)
+        if isinstance(t, dict) and t.get("url"):
+            thumb_url = t["url"]
+            break
+
+    # Parse keywords
+    keywords: list[str] = []
+    raw_kw = branding.get("keywords", "")
+    if raw_kw:
+        for m in _re.finditer(r'"([^"]+)"|(\S+)', raw_kw):
+            kw = (m.group(1) or m.group(2) or "").strip()
+            if kw:
+                keywords.append(kw)
+
+    title = snippet.get("title", channel_id)
+    return {
+        "title": title,
+        "description": (snippet.get("description") or "").strip(),
+        "thumbnail_url": thumb_url,
+        "custom_url": snippet.get("customUrl"),
+        "country": snippet.get("country"),
+        "subscriber_count": int(stats["subscriberCount"]) if stats.get("subscriberCount") else None,
+        "video_count": int(stats["videoCount"]) if stats.get("videoCount") else None,
+        "view_count": int(stats["viewCount"]) if stats.get("viewCount") else None,
+        "keywords": keywords,
+    }
+
+
+def _slugify(name: str) -> str:
+    slug = _re.sub(r"[^a-z0-9]+", "-", name.lower()).strip("-")
+    return slug or "channel"
+
+
+async def create_source_from_url(
+    db: Any,
+    *,
+    url: str,
+) -> CreateSourceFromUrlResponse:
+    """Resolve a YouTube channel URL/ID, fetch metadata, and create a source."""
+    channel_id, handle = _extract_channel_id_from_url(url)
+
+    if not channel_id and handle:
+        channel_id = await _resolve_channel_id(handle)
+
+    if not channel_id:
+        raise ValueError(
+            "Could not resolve channel. Please provide a channel URL "
+            "(youtube.com/channel/UC... or youtube.com/@handle) or a channel ID."
+        )
+
+    # Check if already exists
+    existing = await db.fetchrow(
+        "SELECT id FROM content_sources WHERE config->>'channel_id' = $1",
+        channel_id,
+    )
+    if existing:
+        source = await db.fetchrow(
+            """SELECT id, slug, track, source_type, display_name, base_url,
+                      is_active, config, sync_cursor, metadata, created_at, updated_at
+               FROM content_sources WHERE id = $1""",
+            existing["id"],
+        )
+        return CreateSourceFromUrlResponse(
+            ok=True,
+            source=_serialize_admin_source(source),
+            already_exists=True,
+        )
+
+    # Fetch channel metadata from YouTube
+    meta = await _fetch_channel_metadata(channel_id)
+    slug = _slugify(meta["title"])
+    display_name = meta["title"]
+
+    # Ensure unique slug
+    slug_exists = await db.fetchval(
+        "SELECT 1 FROM content_sources WHERE slug = $1", slug
+    )
+    if slug_exists:
+        slug = f"{slug}-{channel_id[-6:].lower()}"
+
+    config = json.dumps({"channel_id": channel_id, "max_results": 30})
+    metadata = json.dumps({
+        "thumbnail_url": meta["thumbnail_url"],
+        "description": meta["description"],
+        "custom_url": meta["custom_url"],
+        "country": meta["country"],
+        "subscriber_count": meta["subscriber_count"],
+        "video_count": meta["video_count"],
+        "view_count": meta["view_count"],
+        "keywords": meta["keywords"],
+    })
+
+    row = await db.fetchrow(
+        """
+        INSERT INTO content_sources (
+            id, slug, track, source_type, display_name,
+            is_active, config, sync_cursor, metadata
+        )
+        VALUES (gen_random_uuid(), $1, 'unified', 'youtube', $2,
+                TRUE, $3::jsonb, NULL, $4::jsonb)
+        RETURNING id, slug, track, source_type, display_name, base_url,
+                  is_active, config, sync_cursor, metadata, created_at, updated_at
+        """,
+        slug,
+        display_name,
+        config,
+        metadata,
+    )
+
+    return CreateSourceFromUrlResponse(
+        ok=True,
+        source=_serialize_admin_source(row),
+        already_exists=False,
+    )
+
+
+async def trigger_youtube_search(
+    db: Any,
+    *,
+    query: str,
+    max_results: int = 20,
+    min_view_count: int = 5000,
+    min_duration_seconds: int = 180,
+) -> TriggerSearchResponse:
+    """Run an ad-hoc YouTube search and create processing jobs for results."""
+    api_key = os.getenv("YOUTUBE_API_KEY", "").strip()
+    if not api_key:
+        raise ValueError("YOUTUBE_API_KEY is not configured.")
+
+    # Search YouTube
+    async with httpx.AsyncClient(timeout=30.0) as client:
+        resp = await client.get(
+            "https://www.googleapis.com/youtube/v3/search",
+            params={
+                "key": api_key,
+                "q": query,
+                "type": "video",
+                "part": "snippet",
+                "maxResults": min(max_results, 50),
+                "order": "relevance",
+                "relevanceLanguage": "en",
+            },
+        )
+        resp.raise_for_status()
+        search_data = resp.json()
+
+    video_ids = [
+        item["id"]["videoId"]
+        for item in search_data.get("items", [])
+        if isinstance(item.get("id"), dict) and item["id"].get("videoId")
+    ]
+
+    if not video_ids:
+        return TriggerSearchResponse(ok=True, jobs_created=0, videos_found=0, videos_filtered=0)
+
+    # Fetch full metadata
+    async with httpx.AsyncClient(timeout=30.0) as client:
+        resp = await client.get(
+            "https://www.googleapis.com/youtube/v3/videos",
+            params={
+                "key": api_key,
+                "id": ",".join(video_ids),
+                "part": "snippet,contentDetails,statistics",
+            },
+        )
+        resp.raise_for_status()
+        videos_data = resp.json()
+
+    videos_found = len(videos_data.get("items", []))
+    jobs_created = 0
+    videos_filtered = 0
+
+    for item in videos_data.get("items", []):
+        vid = item.get("id", "")
+        snippet = item.get("snippet") or {}
+        stats = item.get("statistics") or {}
+        content = item.get("contentDetails") or {}
+
+        # Parse duration
+        duration = 0
+        dur_match = _re.fullmatch(r"PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?", content.get("duration", ""))
+        if dur_match:
+            h, m, s = (int(v or 0) for v in dur_match.groups())
+            duration = h * 3600 + m * 60 + s
+
+        views = int(stats.get("viewCount", 0) or 0)
+        live = (snippet.get("liveBroadcastContent") or "none").lower()
+
+        # Filter
+        if duration < min_duration_seconds or live != "none" or views < min_view_count:
+            videos_filtered += 1
+            continue
+
+        # Check duplicate
+        exists = await db.fetchval(
+            """SELECT 1 FROM processing_jobs
+               WHERE input_payload->>'source_video_id' = $1 LIMIT 1""",
+            vid,
+        )
+        if exists:
+            continue
+
+        # Pick thumbnail
+        thumbs = snippet.get("thumbnails") or {}
+        thumb_url = None
+        for key in ("maxres", "standard", "high", "medium", "default"):
+            t = thumbs.get(key)
+            if isinstance(t, dict) and t.get("url"):
+                thumb_url = t["url"]
+                break
+
+        meta = {
+            "source": "youtube",
+            "source_video_id": vid,
+            "video_id": vid,
+            "source_url": f"https://www.youtube.com/watch?v={vid}",
+            "video_url": f"https://www.youtube.com/watch?v={vid}",
+            "thumbnail_url": thumb_url,
+            "title": snippet.get("title", ""),
+            "description": snippet.get("description", ""),
+            "channel_title": snippet.get("channelTitle"),
+            "channel_id": snippet.get("channelId"),
+            "published_at": snippet.get("publishedAt"),
+            "duration_seconds": duration,
+            "view_count": views,
+        }
+
+        payload = json.dumps({
+            "track": "unified",
+            "discovery_track": "unified",
+            "source_slug": "manual-search",
+            "source_type": "youtube_search",
+            "source_item_id": vid,
+            "source": "youtube",
+            "source_video_id": vid,
+            "url": meta["video_url"],
+            "owner_id": None,
+            "item": meta,
+            "source_metadata": meta,
+            "manual_search": True,
+            "search_query": query,
+        }, default=str)
+
+        await db.execute(
+            """INSERT INTO processing_jobs (track, source_id, job_type, status, input_payload)
+               VALUES ('unified', NULL, 'index_video', 'pending', $1::jsonb)""",
+            payload,
+        )
+        jobs_created += 1
+
+    return TriggerSearchResponse(
+        ok=True,
+        jobs_created=jobs_created,
+        videos_found=videos_found,
+        videos_filtered=videos_filtered,
     )
 
 

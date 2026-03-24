@@ -19,11 +19,16 @@ from app.admin import (
     AdminTargetsUpsertRequest,
     AdminVideoJobStatus,
     AdminWorkerLiveResponse,
+    CreateSourceFromUrlRequest,
+    CreateSourceFromUrlResponse,
     CreateSourceRequest,
     SubmitVideoRequest,
     SubmitVideoResponse,
+    TriggerSearchRequest,
+    TriggerSearchResponse,
     UpdateSourceRequest,
     create_source,
+    create_source_from_url,
     delete_source,
     delete_indexed_video_data,
     delete_target,
@@ -43,6 +48,7 @@ from app.admin import (
     require_admin_access,
     retry_job,
     submit_video,
+    trigger_youtube_search,
     update_source,
     upsert_targets,
 )
@@ -186,6 +192,44 @@ async def get_sources_recent_videos(
 ) -> AdminSourcesRecentVideosResponse:
     await require_admin_access(session, db)
     return await fetch_sources_recent_videos(db, limit=limit)
+
+
+@router.post("/sources/from-url", response_model=CreateSourceFromUrlResponse)
+async def post_create_source_from_url(
+    payload: CreateSourceFromUrlRequest,
+    session: SessionContext = Depends(require_session),
+    db: Any = Depends(get_db),
+) -> CreateSourceFromUrlResponse:
+    await require_admin_access(session, db)
+    try:
+        return await create_source_from_url(db, url=payload.url)
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(exc),
+        ) from exc
+
+
+@router.post("/search/trigger", response_model=TriggerSearchResponse)
+async def post_trigger_search(
+    payload: TriggerSearchRequest,
+    session: SessionContext = Depends(require_session),
+    db: Any = Depends(get_db),
+) -> TriggerSearchResponse:
+    await require_admin_access(session, db)
+    try:
+        return await trigger_youtube_search(
+            db,
+            query=payload.query,
+            max_results=payload.max_results,
+            min_view_count=payload.min_view_count,
+            min_duration_seconds=payload.min_duration_seconds,
+        )
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(exc),
+        ) from exc
 
 
 @router.post("/videos/submit", response_model=SubmitVideoResponse)

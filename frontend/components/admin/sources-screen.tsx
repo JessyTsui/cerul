@@ -9,6 +9,7 @@ import {
   type CreateSourceInput,
   type SourceAnalyticsRange,
   type SubmitVideoResult,
+  type TriggerSearchResult,
   type VideoJobStatus,
 } from "@/lib/admin-api";
 import { getApiErrorMessage } from "@/lib/api";
@@ -122,38 +123,6 @@ function ChannelAvatar({ url, name, size = 12 }: { url: string; name: string; si
   );
 }
 
-/**
- * Extract YouTube channel ID from various URL formats.
- * Supports: /channel/UC..., /@handle, /c/name, /user/name
- */
-function extractChannelInfo(input: string): { type: "id" | "url"; value: string } | null {
-  const trimmed = input.trim();
-  if (!trimmed) return null;
-
-  // Already a channel ID (starts with UC and ~24 chars)
-  if (/^UC[\w-]{20,}$/.test(trimmed)) {
-    return { type: "id", value: trimmed };
-  }
-
-  try {
-    const url = new URL(trimmed.startsWith("http") ? trimmed : `https://${trimmed}`);
-    if (!url.hostname.includes("youtube.com")) return null;
-
-    const parts = url.pathname.split("/").filter(Boolean);
-    if (parts[0] === "channel" && parts[1]) {
-      return { type: "id", value: parts[1] };
-    }
-    // For @handle, /c/name, /user/name — return the URL for display
-    if (parts[0]?.startsWith("@") || parts[0] === "c" || parts[0] === "user") {
-      return { type: "url", value: trimmed };
-    }
-  } catch {
-    // not a URL
-  }
-
-  return null;
-}
-
 export function AdminSourcesScreen() {
   const [sources, setSources] = useState<AdminSource[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -168,12 +137,15 @@ export function AdminSourcesScreen() {
   const [togglingId, setTogglingId] = useState<string | null>(null);
 
   // Modals
-  const [showQuickAddModal, setShowQuickAddModal] = useState(false);
+  const [showAddSourceModal, setShowAddSourceModal] = useState(false);
   const [showSubmitVideoModal, setShowSubmitVideoModal] = useState(false);
+  const [showSearchModal, setShowSearchModal] = useState(false);
 
-  // Quick-add by URL
-  const [quickAddUrl, setQuickAddUrl] = useState("");
-  const [quickAddError, setQuickAddError] = useState<string | null>(null);
+  // Add source by URL
+  const [addSourceUrl, setAddSourceUrl] = useState("");
+  const [addSourceLoading, setAddSourceLoading] = useState(false);
+  const [addSourceError, setAddSourceError] = useState<string | null>(null);
+  const [addSourceResult, setAddSourceResult] = useState<{ name: string; alreadyExists: boolean } | null>(null);
 
   // Video submission
   const [videoUrl, setVideoUrl] = useState("");
@@ -181,6 +153,12 @@ export function AdminSourcesScreen() {
   const [videoSubmitResult, setVideoSubmitResult] = useState<SubmitVideoResult | null>(null);
   const [videoSubmitError, setVideoSubmitError] = useState<string | null>(null);
   const [videoJobs, setVideoJobs] = useState<VideoJobStatus[]>([]);
+
+  // Search
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searchLoading, setSearchLoading] = useState(false);
+  const [searchError, setSearchError] = useState<string | null>(null);
+  const [searchResult, setSearchResult] = useState<TriggerSearchResult | null>(null);
 
   // Analytics
   const [analyticsRange, setAnalyticsRange] = useState<SourceAnalyticsRange>("7d");
@@ -232,16 +210,24 @@ export function AdminSourcesScreen() {
     void loadRecentVideos();
   }, [loadSources, loadRecentVideos]);
 
+  // ESC to close modals
+  useEffect(() => {
+    function onKeyDown(e: KeyboardEvent) {
+      if (e.key === "Escape") {
+        setShowAddSourceModal(false);
+        setShowSubmitVideoModal(false);
+        setShowSearchModal(false);
+        setConfirmDeleteSource(null);
+        closeForm();
+      }
+    }
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, []);
+
   useEffect(() => {
     void loadAnalytics(analyticsRange);
   }, [analyticsRange, loadAnalytics]);
-
-  function openCreateForm() {
-    setForm(emptyForm);
-    setEditingId(null);
-    setShowForm(true);
-    setActionError(null);
-  }
 
   function openEditForm(source: AdminSource) {
     const channelId =
@@ -330,31 +316,41 @@ export function AdminSourcesScreen() {
     }
   }
 
-  async function handleQuickAdd() {
-    const info = extractChannelInfo(quickAddUrl);
-    if (!info) {
-      setQuickAddError(
-        "Please enter a valid YouTube channel URL or channel ID (e.g. https://www.youtube.com/channel/UC... or https://www.youtube.com/@handle)",
-      );
-      return;
+  async function handleAddSource() {
+    if (!addSourceUrl.trim()) return;
+    setAddSourceLoading(true);
+    setAddSourceError(null);
+    setAddSourceResult(null);
+    try {
+      const result = await admin.createSourceFromUrl(addSourceUrl.trim());
+      setAddSourceResult({
+        name: result.source.displayName,
+        alreadyExists: result.alreadyExists,
+      });
+      if (!result.alreadyExists) {
+        void loadSources();
+      }
+      setAddSourceUrl("");
+    } catch (err) {
+      setAddSourceError(getApiErrorMessage(err, "Failed to add channel."));
+    } finally {
+      setAddSourceLoading(false);
     }
+  }
 
-    if (info.type === "url") {
-      setQuickAddError(
-        "Please use the channel ID format (UC...). You can find it in the channel's URL under /channel/UC...",
-      );
-      return;
+  async function handleTriggerSearch() {
+    if (!searchQuery.trim()) return;
+    setSearchLoading(true);
+    setSearchError(null);
+    setSearchResult(null);
+    try {
+      const result = await admin.triggerSearch({ query: searchQuery.trim() });
+      setSearchResult(result);
+    } catch (err) {
+      setSearchError(getApiErrorMessage(err, "Search failed."));
+    } finally {
+      setSearchLoading(false);
     }
-
-    setQuickAddError(null);
-    setShowQuickAddModal(false);
-    setForm({
-      ...emptyForm,
-      channelId: info.value,
-    });
-    setEditingId(null);
-    setShowForm(true);
-    setQuickAddUrl("");
   }
 
   async function handleToggleActive(source: AdminSource) {
@@ -455,6 +451,18 @@ export function AdminSourcesScreen() {
           <button
             className="button-secondary"
             onClick={() => {
+              setSearchQuery("");
+              setSearchResult(null);
+              setSearchError(null);
+              setShowSearchModal(true);
+            }}
+            type="button"
+          >
+            Search YouTube
+          </button>
+          <button
+            className="button-secondary"
+            onClick={() => {
               setVideoUrl("");
               setVideoSubmitResult(null);
               setVideoSubmitError(null);
@@ -466,17 +474,15 @@ export function AdminSourcesScreen() {
             Submit video
           </button>
           <button
-            className="button-secondary"
+            className="button-primary"
             onClick={() => {
-              setQuickAddUrl("");
-              setQuickAddError(null);
-              setShowQuickAddModal(true);
+              setAddSourceUrl("");
+              setAddSourceError(null);
+              setAddSourceResult(null);
+              setShowAddSourceModal(true);
             }}
             type="button"
           >
-            Add channel
-          </button>
-          <button className="button-primary" onClick={openCreateForm} type="button">
             Add source
           </button>
         </>
@@ -520,47 +526,116 @@ export function AdminSourcesScreen() {
         </div>
       ) : null}
 
-      {/* Quick-add channel modal */}
-      {showQuickAddModal ? (
+      {/* Add source modal */}
+      {showAddSourceModal ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
           <div className="surface-elevated mx-4 w-full max-w-lg rounded-[24px] px-6 py-6">
             <p className="text-lg font-semibold text-white">Add YouTube channel</p>
             <p className="mt-1 text-sm text-[var(--foreground-secondary)]">
-              Paste a channel URL or channel ID to quickly add a new source.
+              Paste a channel URL or ID. Channel info will be fetched automatically.
             </p>
-            <div className="mt-4 flex gap-3">
-              <input
-                type="text"
-                value={quickAddUrl}
-                onChange={(e) => {
-                  setQuickAddUrl(e.target.value);
-                  setQuickAddError(null);
-                }}
-                placeholder="e.g. https://youtube.com/@OpenAI or UCxxxxxxx"
-                className={inputClassName}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") void handleQuickAdd();
-                }}
-                autoFocus
-              />
-            </div>
-            {quickAddError ? (
-              <p className="mt-2 text-xs text-red-300">{quickAddError}</p>
+            <input
+              type="text"
+              value={addSourceUrl}
+              onChange={(e) => {
+                setAddSourceUrl(e.target.value);
+                setAddSourceError(null);
+                setAddSourceResult(null);
+              }}
+              placeholder="e.g. https://youtube.com/@OpenAI or UCxxxxxxx"
+              className={`mt-4 ${inputClassName}`}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") void handleAddSource();
+              }}
+              autoFocus
+            />
+            {addSourceError ? (
+              <p className="mt-2 text-xs text-red-300">{addSourceError}</p>
+            ) : null}
+            {addSourceResult ? (
+              <p className={`mt-2 text-xs ${addSourceResult.alreadyExists ? "text-amber-300" : "text-emerald-300"}`}>
+                {addSourceResult.alreadyExists
+                  ? `"${addSourceResult.name}" already exists.`
+                  : `"${addSourceResult.name}" added successfully.`}
+              </p>
             ) : null}
             <div className="mt-5 flex gap-3">
               <button
                 className="button-primary"
                 type="button"
-                onClick={() => void handleQuickAdd()}
+                disabled={addSourceLoading}
+                onClick={() => void handleAddSource()}
               >
-                Add
+                {addSourceLoading ? "Adding..." : "Add"}
               </button>
               <button
                 className="button-secondary"
                 type="button"
-                onClick={() => setShowQuickAddModal(false)}
+                onClick={() => setShowAddSourceModal(false)}
               >
-                Cancel
+                {addSourceResult ? "Close" : "Cancel"}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {/* Search YouTube modal */}
+      {showSearchModal ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
+          <div className="surface-elevated mx-4 w-full max-w-lg rounded-[24px] px-6 py-6">
+            <p className="text-lg font-semibold text-white">Search YouTube</p>
+            <p className="mt-1 text-sm text-[var(--foreground-secondary)]">
+              Search for videos and queue matching results for indexing.
+              Videos under 3 min or 5K views are filtered automatically.
+            </p>
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => {
+                setSearchQuery(e.target.value);
+                setSearchError(null);
+                setSearchResult(null);
+              }}
+              placeholder="e.g. AI frontier model release 2026"
+              className={`mt-4 ${inputClassName}`}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") void handleTriggerSearch();
+              }}
+              autoFocus
+            />
+            {searchError ? (
+              <p className="mt-2 text-xs text-red-300">{searchError}</p>
+            ) : null}
+            {searchResult ? (
+              <div className="mt-3 rounded-[14px] border border-[var(--border)] bg-[rgba(255,255,255,0.02)] p-4 text-sm">
+                <p className="text-white">
+                  Found <strong>{searchResult.videosFound}</strong> videos,
+                  filtered <strong>{searchResult.videosFiltered}</strong>,
+                  created <strong className="text-emerald-300">{searchResult.jobsCreated}</strong> jobs.
+                </p>
+                {searchResult.jobsCreated === 0 && searchResult.videosFound > 0 ? (
+                  <p className="mt-1 text-xs text-[var(--foreground-tertiary)]">
+                    All matching videos were either already queued or filtered out.
+                  </p>
+                ) : null}
+              </div>
+            ) : null}
+            <div className="mt-5 flex gap-3">
+              <button
+                className="button-primary"
+                type="button"
+                disabled={searchLoading}
+                onClick={() => void handleTriggerSearch()}
+              >
+                {searchLoading ? "Searching..." : "Search"}
+              </button>
+              <button
+                className="button-secondary"
+                type="button"
+                onClick={() => setShowSearchModal(false)}
+              >
+                {searchResult ? "Close" : "Cancel"}
               </button>
             </div>
           </div>
