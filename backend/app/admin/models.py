@@ -8,7 +8,7 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 AdminRangeKey = Literal["today", "7d", "30d"]
 TargetScopeType = Literal["global", "track", "source"]
 TargetComparisonMode = Literal["at_least", "at_most"]
-ContentSourceTrack = Literal["broll", "knowledge", "shared"]
+ContentSourceTrack = Literal["broll", "knowledge", "shared", "unified"]
 
 
 class AdminWindow(BaseModel):
@@ -405,9 +405,12 @@ class AdminSource(BaseModel):
     id: str
     slug: str
     track: ContentSourceTrack
+    source_type: str | None = None
     display_name: str
     base_url: str | None = None
     is_active: bool
+    config: dict[str, Any] = Field(default_factory=dict)
+    sync_cursor: str | None = None
     metadata: dict[str, Any] = Field(default_factory=dict)
     created_at: datetime
     updated_at: datetime
@@ -425,9 +428,12 @@ class CreateSourceRequest(BaseModel):
 
     slug: str = Field(min_length=1, max_length=120)
     track: ContentSourceTrack
+    source_type: str | None = Field(default=None, min_length=1, max_length=120)
     display_name: str = Field(min_length=1, max_length=200)
     base_url: str | None = Field(default=None, max_length=500)
     is_active: bool = True
+    config: dict[str, Any] = Field(default_factory=dict)
+    sync_cursor: str | None = Field(default=None, max_length=500)
     metadata: dict[str, Any] = Field(default_factory=dict)
 
 
@@ -436,9 +442,12 @@ class UpdateSourceRequest(BaseModel):
 
     slug: str | None = Field(default=None, min_length=1, max_length=120)
     track: ContentSourceTrack | None = None
+    source_type: str | None = Field(default=None, min_length=1, max_length=120)
     display_name: str | None = Field(default=None, min_length=1, max_length=200)
     base_url: str | None = Field(default=None, max_length=500)
     is_active: bool | None = None
+    config: dict[str, Any] | None = None
+    sync_cursor: str | None = Field(default=None, max_length=500)
     metadata: dict[str, Any] | None = None
 
     @model_validator(mode="after")
@@ -446,7 +455,7 @@ class UpdateSourceRequest(BaseModel):
         if not self.model_fields_set:
             raise ValueError("At least one field must be provided.")
 
-        for required_field in ("slug", "track", "display_name", "is_active", "metadata"):
+        for required_field in ("slug", "track", "source_type", "display_name", "is_active"):
             if (
                 required_field in self.model_fields_set
                 and getattr(self, required_field) is None

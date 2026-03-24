@@ -196,8 +196,10 @@ def _normalize_source_slug(value: str) -> str:
 
 def _normalize_source_track(value: str) -> str:
     track = str(value).strip().lower()
-    if track not in {"broll", "knowledge", "shared"}:
-        raise ValueError("Content source track must be one of: broll, knowledge, shared.")
+    if track not in {"broll", "knowledge", "shared", "unified"}:
+        raise ValueError(
+            "Content source track must be one of: broll, knowledge, shared, unified."
+        )
     return track
 
 
@@ -215,17 +217,74 @@ def _normalize_source_base_url(value: str | None) -> str | None:
     return normalized or None
 
 
+def _normalize_source_type(value: str | None) -> str | None:
+    if value is None:
+        return None
+    normalized = str(value).strip().lower()
+    return normalized or None
+
+
+def _normalize_source_sync_cursor(value: str | None) -> str | None:
+    if value is None:
+        return None
+    normalized = str(value).strip()
+    return normalized or None
+
+
+def _normalize_source_mapping(value: dict[str, Any] | None) -> dict[str, Any]:
+    if not isinstance(value, dict):
+        return {}
+    return dict(value)
+
+
+def _infer_source_type(
+    *,
+    track: str,
+    slug: str,
+    base_url: str | None,
+    config: dict[str, Any],
+    metadata: dict[str, Any],
+    source_type: str | None,
+) -> str | None:
+    explicit_source_type = _normalize_source_type(source_type)
+    if explicit_source_type is not None:
+        return explicit_source_type
+
+    for candidate_key in ("source_type", "provider", "source", "source_name"):
+        candidate = _normalize_source_type(config.get(candidate_key)) or _normalize_source_type(
+            metadata.get(candidate_key)
+        )
+        if candidate is not None:
+            return candidate
+
+    if track == "knowledge":
+        return "youtube"
+
+    normalized_slug = slug.lower()
+    normalized_base_url = (base_url or "").lower()
+    for candidate in ("youtube", "pexels", "pixabay"):
+        if candidate in normalized_slug or candidate in normalized_base_url:
+            return candidate
+
+    return None
+
+
 def _serialize_admin_source(row: Any) -> AdminSource:
+    raw_config = _coerce_json_value(row.get("config"))
     raw_metadata = _coerce_json_value(row.get("metadata"))
+    config = raw_config if isinstance(raw_config, dict) else {}
     metadata = raw_metadata if isinstance(raw_metadata, dict) else {}
 
     return AdminSource(
         id=str(row["id"]),
         slug=str(row["slug"]),
         track=str(row["track"]),
+        source_type=_normalize_source_type(row.get("source_type")),
         display_name=str(row["display_name"]),
         base_url=str(row["base_url"]) if row.get("base_url") else None,
         is_active=bool(row["is_active"]),
+        config=config,
+        sync_cursor=_normalize_source_sync_cursor(row.get("sync_cursor")),
         metadata=metadata,
         created_at=row["created_at"],
         updated_at=row["updated_at"],
@@ -239,9 +298,12 @@ async def fetch_sources(db: Any) -> AdminSourcesResponse:
             id::text AS id,
             slug,
             track,
+            source_type,
             display_name,
             base_url,
             is_active,
+            config,
+            sync_cursor,
             metadata,
             created_at,
             updated_at
@@ -261,35 +323,60 @@ async def create_source(
     *,
     payload: CreateSourceRequest,
 ) -> AdminSource:
+    slug = _normalize_source_slug(payload.slug)
+    track = _normalize_source_track(payload.track)
+    base_url = _normalize_source_base_url(payload.base_url)
+    config = _normalize_source_mapping(payload.config)
+    metadata = _normalize_source_mapping(payload.metadata)
+    if not config and metadata:
+        config = dict(metadata)
+    source_type = _infer_source_type(
+        track=track,
+        slug=slug,
+        base_url=base_url,
+        config=config,
+        metadata=metadata,
+        source_type=payload.source_type,
+    )
+
     try:
         row = await db.fetchrow(
             """
             INSERT INTO content_sources (
                 slug,
                 track,
+                source_type,
                 display_name,
                 base_url,
                 is_active,
+                config,
+                sync_cursor,
                 metadata
             )
-            VALUES ($1, $2, $3, $4, $5, $6::jsonb)
+            VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb, $8, $9::jsonb)
             RETURNING
                 id::text AS id,
                 slug,
                 track,
+                source_type,
                 display_name,
                 base_url,
                 is_active,
+                config,
+                sync_cursor,
                 metadata,
                 created_at,
                 updated_at
             """,
-            _normalize_source_slug(payload.slug),
-            _normalize_source_track(payload.track),
+            slug,
+            track,
+            source_type,
             _normalize_source_display_name(payload.display_name),
-            _normalize_source_base_url(payload.base_url),
+            base_url,
             payload.is_active,
-            json.dumps(payload.metadata),
+            json.dumps(config),
+            _normalize_source_sync_cursor(payload.sync_cursor),
+            json.dumps(metadata),
         )
     except asyncpg.UniqueViolationError as exc:
         raise ValueError("Content source slug already exists.") from exc
@@ -311,6 +398,8 @@ async def update_source(
 
     assignments: list[str] = []
     params: list[Any] = []
+    normalized_metadata: dict[str, Any] | None = None
+    normalized_config: dict[str, Any] | None = None
 
     if "slug" in payload.model_fields_set:
         params.append(_normalize_source_slug(payload.slug or ""))
@@ -319,6 +408,10 @@ async def update_source(
     if "track" in payload.model_fields_set:
         params.append(_normalize_source_track(payload.track or ""))
         assignments.append(f"track = ${len(params)}")
+
+    if "source_type" in payload.model_fields_set:
+        params.append(_normalize_source_type(payload.source_type))
+        assignments.append(f"source_type = ${len(params)}")
 
     if "display_name" in payload.model_fields_set:
         params.append(_normalize_source_display_name(payload.display_name or ""))
@@ -332,9 +425,23 @@ async def update_source(
         params.append(payload.is_active)
         assignments.append(f"is_active = ${len(params)}")
 
+    if "config" in payload.model_fields_set:
+        normalized_config = _normalize_source_mapping(payload.config)
     if "metadata" in payload.model_fields_set:
-        metadata = payload.metadata if payload.metadata is not None else {}
-        params.append(json.dumps(metadata))
+        normalized_metadata = _normalize_source_mapping(payload.metadata)
+        if normalized_config is None:
+            normalized_config = dict(normalized_metadata)
+
+    if normalized_config is not None:
+        params.append(json.dumps(normalized_config))
+        assignments.append(f"config = ${len(params)}::jsonb")
+
+    if "sync_cursor" in payload.model_fields_set:
+        params.append(_normalize_source_sync_cursor(payload.sync_cursor))
+        assignments.append(f"sync_cursor = ${len(params)}")
+
+    if "metadata" in payload.model_fields_set:
+        params.append(json.dumps(normalized_metadata or {}))
         assignments.append(f"metadata = ${len(params)}::jsonb")
 
     if not assignments:
@@ -353,9 +460,12 @@ async def update_source(
                 id::text AS id,
                 slug,
                 track,
+                source_type,
                 display_name,
                 base_url,
                 is_active,
+                config,
+                sync_cursor,
                 metadata,
                 created_at,
                 updated_at

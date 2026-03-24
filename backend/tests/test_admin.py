@@ -704,9 +704,11 @@ def test_admin_sources_support_crud(
         json={
             "slug": "OpenAI-YouTube",
             "track": "knowledge",
+            "source_type": "youtube",
             "display_name": "OpenAI YouTube",
             "base_url": "https://www.youtube.com/@OpenAI",
             "is_active": True,
+            "config": {"channel_id": "channel-openai", "max_results": 25},
             "metadata": {"kind": "channel", "priority": 1},
         },
     )
@@ -716,9 +718,12 @@ def test_admin_sources_support_crud(
     source_id = created_payload["id"]
     assert created_payload["slug"] == "openai-youtube"
     assert created_payload["track"] == "knowledge"
+    assert created_payload["source_type"] == "youtube"
     assert created_payload["display_name"] == "OpenAI YouTube"
     assert created_payload["base_url"] == "https://www.youtube.com/@OpenAI"
     assert created_payload["is_active"] is True
+    assert created_payload["config"] == {"channel_id": "channel-openai", "max_results": 25}
+    assert created_payload["sync_cursor"] is None
     assert created_payload["metadata"] == {"kind": "channel", "priority": 1}
 
     list_response = admin_client.get("/admin/sources")
@@ -732,10 +737,13 @@ def test_admin_sources_support_crud(
         f"/admin/sources/{source_id}",
         json={
             "slug": "OpenAI-Library",
-            "track": "shared",
+            "track": "unified",
+            "source_type": "youtube",
             "display_name": "OpenAI Library",
             "base_url": None,
             "is_active": False,
+            "config": {"query": "OpenAI", "max_results": 10},
+            "sync_cursor": "2026-03-25T00:00:00Z",
             "metadata": {"kind": "archive", "priority": 2},
         },
     )
@@ -743,15 +751,18 @@ def test_admin_sources_support_crud(
     assert update_response.status_code == 200
     updated_payload = update_response.json()
     assert updated_payload["slug"] == "openai-library"
-    assert updated_payload["track"] == "shared"
+    assert updated_payload["track"] == "unified"
+    assert updated_payload["source_type"] == "youtube"
     assert updated_payload["display_name"] == "OpenAI Library"
     assert updated_payload["base_url"] is None
     assert updated_payload["is_active"] is False
+    assert updated_payload["config"] == {"query": "OpenAI", "max_results": 10}
+    assert updated_payload["sync_cursor"] == "2026-03-25T00:00:00Z"
     assert updated_payload["metadata"] == {"kind": "archive", "priority": 2}
 
     source_row = database.fetchrow(
         """
-        SELECT slug, track, display_name, base_url, is_active, metadata
+        SELECT slug, track, source_type, display_name, base_url, is_active, config, sync_cursor, metadata
         FROM content_sources
         WHERE id = $1::uuid
         """,
@@ -759,12 +770,19 @@ def test_admin_sources_support_crud(
     )
     assert source_row is not None
     assert str(source_row["slug"]) == "openai-library"
-    assert str(source_row["track"]) == "shared"
+    assert str(source_row["track"]) == "unified"
+    assert str(source_row["source_type"]) == "youtube"
     assert str(source_row["display_name"]) == "OpenAI Library"
     assert source_row["base_url"] is None
     assert bool(source_row["is_active"]) is False
+    raw_config = source_row["config"]
+    stored_config = json.loads(raw_config) if isinstance(raw_config, str) else dict(raw_config)
+    assert stored_config == {"query": "OpenAI", "max_results": 10}
+    assert str(source_row["sync_cursor"]) == "2026-03-25T00:00:00Z"
     raw_metadata = source_row["metadata"]
-    stored_metadata = json.loads(raw_metadata) if isinstance(raw_metadata, str) else dict(raw_metadata)
+    stored_metadata = (
+        json.loads(raw_metadata) if isinstance(raw_metadata, str) else dict(raw_metadata)
+    )
     assert stored_metadata == {"kind": "archive", "priority": 2}
 
     delete_response = admin_client.delete(f"/admin/sources/{source_id}")
@@ -782,7 +800,9 @@ def test_admin_sources_reject_duplicate_slug_and_missing_source(
         json={
             "slug": "docs-feed",
             "track": "knowledge",
+            "source_type": "youtube",
             "display_name": "Docs Feed",
+            "config": {"channel_id": "docs-feed"},
             "metadata": {"kind": "docs"},
         },
     )
@@ -794,7 +814,9 @@ def test_admin_sources_reject_duplicate_slug_and_missing_source(
         json={
             "slug": "DOCS-FEED",
             "track": "knowledge",
+            "source_type": "youtube",
             "display_name": "Duplicate Docs Feed",
+            "config": {"channel_id": "duplicate-docs-feed"},
             "metadata": {"kind": "docs"},
         },
     )
