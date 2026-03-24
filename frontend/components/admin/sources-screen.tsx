@@ -742,27 +742,27 @@ export function AdminSourcesScreen() {
                         ) : null}
                       </div>
 
-                      {/* Actions — fixed width */}
-                      <div className="flex shrink-0 items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
+                      {/* Actions */}
+                      <div className="flex shrink-0 items-center gap-2" onClick={(e) => e.stopPropagation()}>
                         {channelId ? (
                           <a
                             href={getChannelUrl(channelId)}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="inline-flex h-7 items-center rounded-lg border border-[var(--border)] px-2 text-xs text-[var(--foreground-secondary)] transition hover:border-[var(--brand)] hover:text-white"
+                            className="inline-flex h-7 items-center rounded-lg border border-[var(--border)] px-2.5 text-xs text-[var(--foreground-secondary)] transition hover:border-[var(--brand)] hover:text-white"
                           >
-                            YT
+                            YouTube
                           </a>
                         ) : null}
                         <button
-                          className="inline-flex h-7 items-center rounded-lg border border-[var(--border)] px-2 text-xs text-[var(--foreground-secondary)] transition hover:border-[var(--brand)] hover:text-white"
+                          className="inline-flex h-7 items-center rounded-lg border border-[var(--border)] px-2.5 text-xs text-[var(--foreground-secondary)] transition hover:border-[var(--brand)] hover:text-white"
                           onClick={() => openEditForm(source)}
                           type="button"
                         >
                           Edit
                         </button>
                         <button
-                          className="inline-flex h-7 items-center rounded-lg border border-[var(--border)] px-2 text-xs text-[var(--foreground-secondary)] transition hover:border-amber-500 hover:text-amber-300"
+                          className="inline-flex h-7 items-center rounded-lg border border-[var(--border)] px-2.5 text-xs text-[var(--foreground-secondary)] transition hover:border-amber-500 hover:text-amber-300"
                           disabled={togglingId === source.id}
                           onClick={() => void handleToggleActive(source)}
                           type="button"
@@ -774,11 +774,11 @@ export function AdminSourcesScreen() {
                               : "Resume"}
                         </button>
                         <button
-                          className="inline-flex h-7 items-center rounded-lg border border-red-500/40 bg-red-500/10 px-2 text-xs text-red-300 transition hover:border-red-500 hover:bg-red-500/20"
+                          className="inline-flex h-7 items-center rounded-lg border border-red-500/40 bg-red-500/10 px-2.5 text-xs text-red-300 transition hover:border-red-500 hover:bg-red-500/20"
                           onClick={() => setConfirmDeleteSource(source)}
                           type="button"
                         >
-                          Del
+                          Delete
                         </button>
                       </div>
 
