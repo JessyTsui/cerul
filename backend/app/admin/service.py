@@ -429,8 +429,6 @@ async def update_source(
         normalized_config = _normalize_source_mapping(payload.config)
     if "metadata" in payload.model_fields_set:
         normalized_metadata = _normalize_source_mapping(payload.metadata)
-        if normalized_config is None:
-            normalized_config = dict(normalized_metadata)
 
     if normalized_config is not None:
         params.append(json.dumps(normalized_config))

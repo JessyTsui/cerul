@@ -833,6 +833,61 @@ def test_admin_sources_reject_duplicate_slug_and_missing_source(
     assert missing_response.json()["detail"] == "Content source not found."
 
 
+def test_admin_sources_metadata_patch_preserves_existing_config(
+    admin_client: TestClient,
+    database,
+) -> None:
+    create_response = admin_client.post(
+        "/admin/sources",
+        json={
+            "slug": "openai-library",
+            "track": "knowledge",
+            "source_type": "youtube",
+            "display_name": "OpenAI Library",
+            "config": {"channel_id": "channel-openai", "max_results": 25},
+            "metadata": {"kind": "channel"},
+        },
+    )
+
+    assert create_response.status_code == 201
+    source_id = create_response.json()["id"]
+
+    update_response = admin_client.patch(
+        f"/admin/sources/{source_id}",
+        json={"metadata": {"kind": "archive", "priority": 2}},
+    )
+
+    assert update_response.status_code == 200
+    updated_payload = update_response.json()
+    assert updated_payload["config"] == {
+        "channel_id": "channel-openai",
+        "max_results": 25,
+    }
+    assert updated_payload["metadata"] == {"kind": "archive", "priority": 2}
+
+    source_row = database.fetchrow(
+        """
+        SELECT config, metadata
+        FROM content_sources
+        WHERE id = $1::uuid
+        """,
+        source_id,
+    )
+    assert source_row is not None
+
+    raw_config = source_row["config"]
+    stored_config = (
+        json.loads(raw_config) if isinstance(raw_config, str) else dict(raw_config)
+    )
+    assert stored_config == {"channel_id": "channel-openai", "max_results": 25}
+
+    raw_metadata = source_row["metadata"]
+    stored_metadata = (
+        json.loads(raw_metadata) if isinstance(raw_metadata, str) else dict(raw_metadata)
+    )
+    assert stored_metadata == {"kind": "archive", "priority": 2}
+
+
 def test_admin_worker_live_includes_retrying_jobs_and_steps(
     admin_client: TestClient,
     database,
