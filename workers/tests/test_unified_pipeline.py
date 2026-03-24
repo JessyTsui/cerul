@@ -360,6 +360,92 @@ def test_unified_pipeline_skips_unit_replace_when_job_is_cancelled_mid_persist()
     assert context.data["indexed_unit_count"] == 0
 
 
+def test_unified_pipeline_ignores_telemetry_callback_failures() -> None:
+    repository = InMemoryUnifiedRepository()
+    embedding_backend = StubEmbeddingBackend()
+    summary_generator = StubSummaryGenerator()
+    pipeline = UnifiedIndexingPipeline(
+        repository=repository,
+        embedding_backend=embedding_backend,
+        summary_generator=summary_generator,
+        frame_uploader=StubFrameUploader(),
+    )
+
+    knowledge_context = PipelineContext(
+        data={
+            "stored_video": {
+                "source_video_id": "abc123xyz00",
+                "source_url": "https://www.youtube.com/watch?v=abc123xyz00",
+                "video_url": "https://www.youtube.com/watch?v=abc123xyz00",
+                "thumbnail_url": "https://img.youtube.com/vi/abc123xyz00/hqdefault.jpg",
+                "title": "AGI Timeline",
+                "description": "A long-form interview about AGI.",
+                "speaker": "Sam Altman",
+                "published_at": None,
+                "duration_seconds": 600,
+                "license": None,
+                "metadata": {"creator": "Lex Fridman"},
+            },
+            "stored_segments": [
+                {
+                    "segment_index": 0,
+                    "timestamp_start": 12.0,
+                    "timestamp_end": 48.0,
+                    "transcript_text": "AGI is coming sooner than most people expect.",
+                    "visual_description": "Slide with an AGI roadmap and milestone arrows.",
+                    "visual_text_content": "AGI roadmap",
+                    "visual_type": "slide",
+                    "title": "AGI timeline",
+                    "metadata": {"keywords": ["agi", "timeline"]},
+                    "embedding": [0.11, 0.22, 0.33],
+                }
+            ],
+        },
+        completed_steps=["StoreKnowledgeSegmentsStep"],
+    )
+
+    mocked_pipeline = Mock()
+    mocked_pipeline.run = AsyncMock(return_value=knowledge_context)
+
+    async def progress_callback(step_name: str, status: str, context: PipelineContext) -> None:
+        del step_name, status, context
+        raise RuntimeError("progress callback unavailable")
+
+    async def step_log_callback(
+        step_name: str,
+        level: str,
+        message: str,
+        details: dict[str, object],
+        context: PipelineContext,
+    ) -> None:
+        del step_name, level, message, details, context
+        raise RuntimeError("step log callback unavailable")
+
+    with patch(
+        "workers.unified.pipeline.KnowledgeIndexingPipeline",
+        return_value=mocked_pipeline,
+    ):
+        context = run_async(
+            pipeline.run(
+                url="https://www.youtube.com/watch?v=abc123xyz00",
+                source="youtube",
+                source_video_id="abc123xyz00",
+                owner_id="user-123",
+                video_id="video-123",
+                job_id="job-telemetry-errors",
+                conf={
+                    "scene_threshold": 0.2,
+                    "progress_callback": progress_callback,
+                    "step_log_callback": step_log_callback,
+                },
+            )
+        )
+
+    assert context.error is None
+    assert context.data["indexed_unit_count"] == 3
+    assert repository.completed_jobs["job-telemetry-errors"]["units_created"] == 3
+
+
 def test_unified_pipeline_builds_visual_units_for_direct_video(tmp_path) -> None:
     repository = InMemoryUnifiedRepository()
     embedding_backend = StubEmbeddingBackend()

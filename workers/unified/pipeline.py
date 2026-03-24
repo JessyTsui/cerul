@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import inspect
 import json
+import logging
 import mimetypes
 import os
 import re
@@ -45,6 +46,7 @@ DEFAULT_UNIFIED_STEP_TIMEOUTS: dict[str, float] = {
 }
 DEFAULT_KEYFRAME_CAPTURE_CONCURRENCY = 6
 DEFAULT_KEYFRAME_CAPTURE_TIMEOUT_SECONDS = 30.0
+logger = logging.getLogger(__name__)
 
 DEFAULT_UNIFIED_TIMEOUT_GUIDANCE: dict[str, str] = {
     "FetchUnifiedMetadataStep": "Metadata fetch timed out; inspect the upstream source and proxy path.",
@@ -412,9 +414,17 @@ class UnifiedIndexingPipeline:
         callback = context.conf.get("progress_callback")
         if not callable(callback):
             return
-        result = callback(step_name, status, context)
-        if inspect.isawaitable(result):
-            await result
+        try:
+            result = callback(step_name, status, context)
+            if inspect.isawaitable(result):
+                await result
+        except Exception as exc:  # pragma: no cover - best effort callback guard
+            logger.warning(
+                "Unified progress callback failed for %s (%s): %s",
+                step_name,
+                status,
+                exc,
+            )
 
     async def _emit_step_log(
         self,
@@ -427,9 +437,17 @@ class UnifiedIndexingPipeline:
         callback = context.conf.get("step_log_callback")
         if not callable(callback):
             return
-        result = callback(step_name, level, message, dict(details or {}), context)
-        if inspect.isawaitable(result):
-            await result
+        try:
+            result = callback(step_name, level, message, dict(details or {}), context)
+            if inspect.isawaitable(result):
+                await result
+        except Exception as exc:  # pragma: no cover - best effort callback guard
+            logger.warning(
+                "Unified step log callback failed for %s (%s): %s",
+                step_name,
+                level,
+                exc,
+            )
 
     def _resolve_step_timeout(self, context: PipelineContext, step_name: str) -> float | None:
         raw_timeouts = context.conf.get("step_timeouts")

@@ -42,8 +42,16 @@ def create_embedding_backend(
         resolved_dimension = DEFAULT_GEMINI_EMBEDDING_DIMENSION
 
     if backend_type == "openai_compatible":
+        env_model = os.getenv("EMBEDDING_MODEL", "").strip()
+        configured_model = str(settings.embedding.model or "").strip()
+        resolved_model = env_model or (
+            configured_model
+            if configured_model
+            and configured_model != DEFAULT_GEMINI_EMBEDDING_MODEL
+            else None
+        )
         return OpenAICompatibleEmbeddingBackend(
-            model=settings.embedding.model,
+            model=resolved_model,
             output_dimension=resolved_dimension,
         )
 

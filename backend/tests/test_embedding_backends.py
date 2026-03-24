@@ -53,6 +53,20 @@ def test_create_embedding_backend_openai_compatible(
     assert backend.name == "openai_compatible:qwen3-vl-embedding-2b"
 
 
+def test_create_embedding_backend_openai_compatible_uses_backend_fallback_model(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("EMBEDDING_BACKEND", "openai_compatible")
+    monkeypatch.setenv("EMBEDDING_OPENAI_BASE_URL", "http://localhost:9999/v1")
+    monkeypatch.delenv("EMBEDDING_MODEL", raising=False)
+    monkeypatch.delenv("EMBEDDING_OPENAI_MODEL", raising=False)
+
+    backend = create_embedding_backend()
+
+    assert isinstance(backend, OpenAICompatibleEmbeddingBackend)
+    assert backend.name == "openai_compatible:default"
+
+
 def test_create_embedding_backend_openai_compatible_uses_env_dimension(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
