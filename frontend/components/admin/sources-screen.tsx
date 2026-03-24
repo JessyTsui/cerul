@@ -167,6 +167,10 @@ export function AdminSourcesScreen() {
   const [confirmDeleteSource, setConfirmDeleteSource] = useState<AdminSource | null>(null);
   const [togglingId, setTogglingId] = useState<string | null>(null);
 
+  // Modals
+  const [showQuickAddModal, setShowQuickAddModal] = useState(false);
+  const [showSubmitVideoModal, setShowSubmitVideoModal] = useState(false);
+
   // Quick-add by URL
   const [quickAddUrl, setQuickAddUrl] = useState("");
   const [quickAddError, setQuickAddError] = useState<string | null>(null);
@@ -343,6 +347,7 @@ export function AdminSourcesScreen() {
     }
 
     setQuickAddError(null);
+    setShowQuickAddModal(false);
     setForm({
       ...emptyForm,
       channelId: info.value,
@@ -447,6 +452,30 @@ export function AdminSourcesScreen() {
           >
             Refresh
           </button>
+          <button
+            className="button-secondary"
+            onClick={() => {
+              setVideoUrl("");
+              setVideoSubmitResult(null);
+              setVideoSubmitError(null);
+              setVideoJobs([]);
+              setShowSubmitVideoModal(true);
+            }}
+            type="button"
+          >
+            Submit video
+          </button>
+          <button
+            className="button-secondary"
+            onClick={() => {
+              setQuickAddUrl("");
+              setQuickAddError(null);
+              setShowQuickAddModal(true);
+            }}
+            type="button"
+          >
+            Add channel
+          </button>
           <button className="button-primary" onClick={openCreateForm} type="button">
             Add source
           </button>
@@ -491,157 +520,178 @@ export function AdminSourcesScreen() {
         </div>
       ) : null}
 
-      {/* Quick-add by URL */}
-      <section>
-        <article className="surface rounded-[28px] px-6 py-5">
-          <p className="font-mono text-[11px] uppercase tracking-[0.16em] text-[var(--foreground-tertiary)]">
-            Quick add channel
-          </p>
-          <div className="mt-3 flex gap-3">
-            <input
-              type="text"
-              value={quickAddUrl}
-              onChange={(e) => {
-                setQuickAddUrl(e.target.value);
-                setQuickAddError(null);
-              }}
-              placeholder="Paste YouTube channel URL or channel ID..."
-              className="h-12 flex-1 rounded-[14px] border border-[var(--border)] bg-[var(--surface)] px-4 text-white outline-none transition focus:border-[var(--brand)]"
-              onKeyDown={(e) => {
-                if (e.key === "Enter") void handleQuickAdd();
-              }}
-            />
-            <button
-              className="button-primary shrink-0"
-              type="button"
-              onClick={() => void handleQuickAdd()}
-            >
-              Add
-            </button>
-          </div>
-          {quickAddError ? (
-            <p className="mt-2 text-xs text-red-300">{quickAddError}</p>
-          ) : null}
-        </article>
-      </section>
-
-      {/* Submit individual video */}
-      <section>
-        <article className="surface rounded-[28px] px-6 py-5">
-          <p className="font-mono text-[11px] uppercase tracking-[0.16em] text-[var(--foreground-tertiary)]">
-            Submit video for indexing
-          </p>
-          <div className="mt-3 flex gap-3">
-            <input
-              type="text"
-              value={videoUrl}
-              onChange={(e) => {
-                setVideoUrl(e.target.value);
-                setVideoSubmitError(null);
-                setVideoSubmitResult(null);
-              }}
-              placeholder="Paste YouTube video URL (e.g. youtube.com/watch?v=...)"
-              className="h-12 flex-1 rounded-[14px] border border-[var(--border)] bg-[var(--surface)] px-4 text-white outline-none transition focus:border-[var(--brand)]"
-              onKeyDown={(e) => {
-                if (e.key === "Enter") void handleSubmitVideo();
-              }}
-            />
-            <button
-              className="button-primary shrink-0"
-              type="button"
-              disabled={videoSubmitting}
-              onClick={() => void handleSubmitVideo()}
-            >
-              {videoSubmitting ? "Submitting..." : "Submit"}
-            </button>
-          </div>
-          {videoSubmitError ? (
-            <p className="mt-2 text-xs text-red-300">{videoSubmitError}</p>
-          ) : null}
-
-          {videoSubmitResult ? (
-            <div className="mt-3 rounded-[14px] border border-[var(--border)] bg-[rgba(255,255,255,0.02)] p-4">
-              <div className="flex gap-3">
-                {videoSubmitResult.thumbnailUrl ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img
-                    src={videoSubmitResult.thumbnailUrl}
-                    alt=""
-                    className="h-16 w-28 shrink-0 rounded-[8px] object-cover"
-                  />
-                ) : null}
-                <div className="min-w-0 flex-1">
-                  <p className="font-semibold text-white">{videoSubmitResult.title}</p>
-                  <p className="mt-0.5 text-xs text-[var(--foreground-tertiary)]">
-                    {videoSubmitResult.channelTitle}
-                    {videoSubmitResult.durationSeconds != null
-                      ? ` · ${formatDuration(videoSubmitResult.durationSeconds)}`
-                      : ""}
-                  </p>
-                  <p className={`mt-1 text-xs ${videoSubmitResult.alreadyExists ? "text-amber-300" : "text-emerald-300"}`}>
-                    {videoSubmitResult.alreadyExists
-                      ? "This video already has a processing job."
-                      : "Job created successfully. The worker will pick it up shortly."}
-                  </p>
-                </div>
-                <button
-                  className="button-secondary shrink-0 self-start"
-                  type="button"
-                  onClick={() => void handleCheckVideoStatus(videoSubmitResult.videoId)}
-                >
-                  Refresh status
-                </button>
-              </div>
-
-              {videoJobs.length > 0 ? (
-                <div className="mt-3 space-y-1.5">
-                  <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-[var(--foreground-tertiary)]">
-                    Job history
-                  </p>
-                  {videoJobs.map((job) => (
-                    <div
-                      key={job.jobId}
-                      className="flex items-center gap-4 rounded-[10px] border border-[var(--border)] bg-[rgba(255,255,255,0.02)] px-3 py-2 text-xs"
-                    >
-                      <span
-                        className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] ${
-                          job.status === "completed"
-                            ? "border border-emerald-500/30 bg-emerald-500/10 text-emerald-300"
-                            : job.status === "failed"
-                              ? "border border-red-500/30 bg-red-500/10 text-red-300"
-                              : job.status === "running"
-                                ? "border border-blue-500/30 bg-blue-500/10 text-blue-300"
-                                : "border border-[var(--border)] bg-[rgba(255,255,255,0.04)] text-[var(--foreground-tertiary)]"
-                        }`}
-                      >
-                        {job.status}
-                      </span>
-                      <span className="text-[var(--foreground-tertiary)]">
-                        Created {new Date(job.createdAt).toLocaleString()}
-                      </span>
-                      {job.completedAt ? (
-                        <span className="text-[var(--foreground-tertiary)]">
-                          Completed {new Date(job.completedAt).toLocaleString()}
-                        </span>
-                      ) : null}
-                      {job.attempts > 0 ? (
-                        <span className="text-[var(--foreground-tertiary)]">
-                          Attempts: {job.attempts}
-                        </span>
-                      ) : null}
-                      {job.errorMessage ? (
-                        <span className="truncate text-red-300" title={job.errorMessage}>
-                          {job.errorMessage}
-                        </span>
-                      ) : null}
-                    </div>
-                  ))}
-                </div>
-              ) : null}
+      {/* Quick-add channel modal */}
+      {showQuickAddModal ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
+          <div className="surface-elevated mx-4 w-full max-w-lg rounded-[24px] px-6 py-6">
+            <p className="text-lg font-semibold text-white">Add YouTube channel</p>
+            <p className="mt-1 text-sm text-[var(--foreground-secondary)]">
+              Paste a channel URL or channel ID to quickly add a new source.
+            </p>
+            <div className="mt-4 flex gap-3">
+              <input
+                type="text"
+                value={quickAddUrl}
+                onChange={(e) => {
+                  setQuickAddUrl(e.target.value);
+                  setQuickAddError(null);
+                }}
+                placeholder="e.g. https://youtube.com/@OpenAI or UCxxxxxxx"
+                className={inputClassName}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") void handleQuickAdd();
+                }}
+                autoFocus
+              />
             </div>
-          ) : null}
-        </article>
-      </section>
+            {quickAddError ? (
+              <p className="mt-2 text-xs text-red-300">{quickAddError}</p>
+            ) : null}
+            <div className="mt-5 flex gap-3">
+              <button
+                className="button-primary"
+                type="button"
+                onClick={() => void handleQuickAdd()}
+              >
+                Add
+              </button>
+              <button
+                className="button-secondary"
+                type="button"
+                onClick={() => setShowQuickAddModal(false)}
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {/* Submit video modal */}
+      {showSubmitVideoModal ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
+          <div className="surface-elevated mx-4 w-full max-w-xl rounded-[24px] px-6 py-6">
+            <p className="text-lg font-semibold text-white">Submit video for indexing</p>
+            <p className="mt-1 text-sm text-[var(--foreground-secondary)]">
+              Paste a YouTube video URL to manually queue it for processing.
+            </p>
+            <div className="mt-4 flex gap-3">
+              <input
+                type="text"
+                value={videoUrl}
+                onChange={(e) => {
+                  setVideoUrl(e.target.value);
+                  setVideoSubmitError(null);
+                  setVideoSubmitResult(null);
+                }}
+                placeholder="e.g. https://youtube.com/watch?v=dQw4w9WgXcQ"
+                className={inputClassName}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") void handleSubmitVideo();
+                }}
+                autoFocus
+              />
+            </div>
+            {videoSubmitError ? (
+              <p className="mt-2 text-xs text-red-300">{videoSubmitError}</p>
+            ) : null}
+
+            {videoSubmitResult ? (
+              <div className="mt-4 rounded-[14px] border border-[var(--border)] bg-[rgba(255,255,255,0.02)] p-4">
+                <div className="flex gap-3">
+                  {videoSubmitResult.thumbnailUrl ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={videoSubmitResult.thumbnailUrl}
+                      alt=""
+                      className="h-16 w-28 shrink-0 rounded-[8px] object-cover"
+                    />
+                  ) : null}
+                  <div className="min-w-0 flex-1">
+                    <p className="font-semibold text-white">{videoSubmitResult.title}</p>
+                    <p className="mt-0.5 text-xs text-[var(--foreground-tertiary)]">
+                      {videoSubmitResult.channelTitle}
+                      {videoSubmitResult.durationSeconds != null
+                        ? ` · ${formatDuration(videoSubmitResult.durationSeconds)}`
+                        : ""}
+                    </p>
+                    <p className={`mt-1 text-xs ${videoSubmitResult.alreadyExists ? "text-amber-300" : "text-emerald-300"}`}>
+                      {videoSubmitResult.alreadyExists
+                        ? "This video already has a processing job."
+                        : "Job created successfully."}
+                    </p>
+                  </div>
+                </div>
+
+                {videoJobs.length > 0 ? (
+                  <div className="mt-3 space-y-1.5">
+                    <div className="flex items-center justify-between">
+                      <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-[var(--foreground-tertiary)]">
+                        Job status
+                      </p>
+                      <button
+                        className="text-xs text-[var(--foreground-secondary)] transition hover:text-white"
+                        type="button"
+                        onClick={() => void handleCheckVideoStatus(videoSubmitResult.videoId)}
+                      >
+                        Refresh
+                      </button>
+                    </div>
+                    {videoJobs.map((job) => (
+                      <div
+                        key={job.jobId}
+                        className="flex items-center gap-3 rounded-[10px] border border-[var(--border)] bg-[rgba(255,255,255,0.02)] px-3 py-2 text-xs"
+                      >
+                        <span
+                          className={`inline-flex shrink-0 items-center rounded-full px-2 py-0.5 text-[10px] ${
+                            job.status === "completed"
+                              ? "border border-emerald-500/30 bg-emerald-500/10 text-emerald-300"
+                              : job.status === "failed"
+                                ? "border border-red-500/30 bg-red-500/10 text-red-300"
+                                : job.status === "running"
+                                  ? "border border-blue-500/30 bg-blue-500/10 text-blue-300"
+                                  : "border border-[var(--border)] bg-[rgba(255,255,255,0.04)] text-[var(--foreground-tertiary)]"
+                          }`}
+                        >
+                          {job.status}
+                        </span>
+                        <span className="text-[var(--foreground-tertiary)]">
+                          {new Date(job.createdAt).toLocaleString()}
+                        </span>
+                        {job.errorMessage ? (
+                          <span className="truncate text-red-300" title={job.errorMessage}>
+                            {job.errorMessage}
+                          </span>
+                        ) : null}
+                      </div>
+                    ))}
+                  </div>
+                ) : null}
+              </div>
+            ) : null}
+
+            <div className="mt-5 flex gap-3">
+              {!videoSubmitResult ? (
+                <button
+                  className="button-primary"
+                  type="button"
+                  disabled={videoSubmitting}
+                  onClick={() => void handleSubmitVideo()}
+                >
+                  {videoSubmitting ? "Submitting..." : "Submit"}
+                </button>
+              ) : null}
+              <button
+                className="button-secondary"
+                type="button"
+                onClick={() => setShowSubmitVideoModal(false)}
+              >
+                {videoSubmitResult ? "Close" : "Cancel"}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       {showForm ? (
         <section>
