@@ -7,6 +7,7 @@ from app.billing.credits import (
     calculate_credit_cost,
     current_billing_period,
     deduct_credits,
+    refund_credits,
 )
 from app.billing.usage import (
     calculate_credits_remaining,
@@ -63,4 +64,5 @@ __all__ = [
     "is_paid_tier",
     "key_limit_for_tier",
     "monthly_credit_limit_for_tier",
+    "refund_credits",
 ]

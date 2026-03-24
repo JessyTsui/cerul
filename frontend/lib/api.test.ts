@@ -438,6 +438,9 @@ describe("dashboard API client", () => {
           startedAt: "2026-03-11T09:01:00Z",
           completedAt: "2026-03-11T09:02:00Z",
           updatedAt: "2026-03-11T09:02:00Z",
+          durationMs: null,
+          guidance: null,
+          logs: [],
         },
       ],
     });
@@ -456,6 +459,7 @@ describe("dashboard API client", () => {
           tracks: {
             broll: 5,
             knowledge: 3,
+            unified: 0,
           },
         }),
         {
@@ -477,6 +481,7 @@ describe("dashboard API client", () => {
       tracks: {
         broll: 5,
         knowledge: 3,
+        unified: 0,
       },
     });
   });

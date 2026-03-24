@@ -3,7 +3,7 @@ from __future__ import annotations
 import tempfile
 from pathlib import Path
 
-from workers.common.pipeline import PipelineContext, PipelineStep
+from workers.common.pipeline import PipelineContext, PipelineStep, emit_step_log
 from workers.knowledge.runtime import KnowledgeVideoDownloader
 
 
@@ -35,9 +35,24 @@ class DownloadKnowledgeVideoStep(PipelineStep):
         if downloader is None:
             raise RuntimeError("A knowledge video downloader is required.")
 
+        await emit_step_log(
+            context,
+            self.step_name,
+            "Starting source video download.",
+            details={
+                "source_url": video_metadata.get("source_url"),
+                "temp_dir": str(temp_dir),
+            },
+        )
         video_path = await downloader.download_video(video_metadata, Path(str(temp_dir)))
         resolved_video_path = Path(video_path)
         if not resolved_video_path.exists():
             raise FileNotFoundError(f"Downloaded video does not exist: {resolved_video_path}")
 
         context.data["video_path"] = str(resolved_video_path)
+        await emit_step_log(
+            context,
+            self.step_name,
+            "Downloaded source video successfully.",
+            details={"video_path": str(resolved_video_path)},
+        )

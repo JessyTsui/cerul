@@ -6,6 +6,8 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 FRONTEND_DIR="${ROOT_DIR}/frontend"
 BACKEND_DIR="${ROOT_DIR}/backend"
 BACKEND_VENV="${BACKEND_DIR}/.venv"
+WORKERS_DIR="${ROOT_DIR}/workers"
+WORKERS_VENV="${WORKERS_DIR}/.venv"
 FAST_MODE="false"
 SKIP_MIGRATIONS="false"
 ENV_FILE="${CERUL_ENV_FILE:-${ROOT_DIR}/.env}"
@@ -147,6 +149,19 @@ clean_backend() {
   fi
 }
 
+clean_workers() {
+  echo "[clean] Removing worker generated files..."
+  find "${WORKERS_DIR}" -type d -name "__pycache__" -prune -exec rm -rf {} +
+  find "${WORKERS_DIR}" -type f -name "*.pyc" -delete
+  rm -rf "${WORKERS_DIR}/.pytest_cache"
+  rm -rf "${WORKERS_DIR}/.mypy_cache"
+  rm -rf "${WORKERS_DIR}/.ruff_cache"
+
+  if [ "${FAST_MODE}" = "false" ]; then
+    rm -rf "${WORKERS_VENV}"
+  fi
+}
+
 install_frontend() {
   require_frontend_package_manager
   echo "[install] Installing frontend dependencies..."
@@ -160,6 +175,15 @@ install_backend() {
   echo "[install] Installing backend dependencies..."
   "${BACKEND_VENV}/bin/python" -m pip install --upgrade pip
   "${BACKEND_VENV}/bin/python" -m pip install -r "${BACKEND_DIR}/requirements.txt"
+}
+
+install_workers() {
+  require_command python3
+  echo "[install] Creating worker virtualenv..."
+  python3 -m venv "${WORKERS_VENV}"
+  echo "[install] Installing worker dependencies..."
+  "${WORKERS_VENV}/bin/python" -m pip install --upgrade pip
+  "${WORKERS_VENV}/bin/python" -m pip install -r "${WORKERS_DIR}/requirements.txt"
 }
 
 run_migrations() {
@@ -204,10 +228,12 @@ kill_port "${FRONTEND_PORT}"
 kill_port "${BACKEND_PORT}"
 clean_frontend
 clean_backend
+clean_workers
 
 if [ "${FAST_MODE}" = "false" ]; then
   install_frontend
   install_backend
+  install_workers
 else
   if [ ! -d "${FRONTEND_DIR}/node_modules" ]; then
     install_frontend
@@ -215,6 +241,10 @@ else
 
   if [ ! -x "${BACKEND_VENV}/bin/python" ]; then
     install_backend
+  fi
+
+  if [ ! -x "${WORKERS_VENV}/bin/python" ]; then
+    install_workers
   fi
 fi
 

@@ -99,22 +99,21 @@ export function ConsoleFrame({
     <div className="mx-auto flex min-h-screen max-w-[1580px] flex-col px-4 pb-12 pt-4 sm:px-6 xl:px-8">
       <header className="surface-elevated sticky top-4 z-40 overflow-hidden rounded-[32px] px-4 py-4 sm:px-5">
         <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(34,211,238,0.18),transparent_28%),radial-gradient(circle_at_88%_18%,rgba(249,115,22,0.12),transparent_26%)]" />
-        <div className="relative flex flex-col gap-5">
-          <div className="grid gap-5 xl:grid-cols-[minmax(340px,400px)_minmax(0,1fr)_auto] xl:items-center xl:gap-8">
-            <div className="flex items-center gap-6 xl:pr-10 xl:border-r xl:border-[var(--border)]">
-              <BrandMark />
-              <div className="hidden h-12 w-px bg-[linear-gradient(180deg,transparent,rgba(103,232,249,0.36),transparent)] xl:block" />
-              <div className="min-w-0">
-                <p className="font-mono text-[11px] uppercase tracking-[0.18em] text-[var(--foreground-tertiary)]">
-                  Control plane
-                </p>
-                <p className="mt-1 truncate text-sm text-[var(--foreground-secondary)]">
-                  {viewer.displayName ?? viewer.email ?? "Authenticated workspace"}
-                </p>
+        <div className="relative flex flex-col gap-4">
+          <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
+            <div className="min-w-0 flex-1 space-y-4">
+              <div className="flex flex-wrap items-center gap-4">
+                <BrandMark />
+                <div className="min-w-0">
+                  <p className="font-mono text-[11px] uppercase tracking-[0.18em] text-[var(--foreground-tertiary)]">
+                    Control plane
+                  </p>
+                  <p className="mt-1 truncate text-sm text-[var(--foreground-secondary)]">
+                    {viewer.displayName ?? viewer.email ?? "Authenticated workspace"}
+                  </p>
+                </div>
               </div>
-            </div>
 
-            <div className="flex min-w-0 flex-col gap-3 xl:px-10">
               <div className="flex flex-wrap items-center gap-2">
                 {sectionLinks.map((item) => (
                   <Link
@@ -131,45 +130,41 @@ export function ConsoleFrame({
                 ))}
               </div>
 
-              <nav className="overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-                <div className="flex min-w-max items-center gap-2 pr-2">
+              <nav>
+                <div className="flex flex-wrap gap-2">
                   {routeItems.map((item) => (
                     <Link
                       key={item.href}
                       href={item.href as Route}
-                      className={`inline-flex items-center gap-3 rounded-full border px-4 py-2.5 text-sm transition ${
+                      className={`inline-flex min-h-10 items-center rounded-full border px-3.5 py-2 text-sm transition ${
                         isRouteActive(currentPath, item.href)
                           ? "border-[var(--border-brand)] bg-[linear-gradient(135deg,rgba(34,211,238,0.18),rgba(14,165,233,0.12))] text-white shadow-[0_0_0_1px_rgba(34,211,238,0.14)_inset]"
-                          : "border-transparent bg-transparent text-[var(--foreground-secondary)] hover:border-[var(--border)] hover:bg-[rgba(255,255,255,0.03)] hover:text-white"
+                          : "border-[var(--border)] bg-[rgba(255,255,255,0.02)] text-[var(--foreground-secondary)] hover:border-[var(--border-strong)] hover:text-white"
                       }`}
                     >
-                      <span className="font-mono text-[11px] uppercase tracking-[0.16em] text-[var(--foreground-tertiary)]">
+                      <span className="hidden font-mono text-[10px] uppercase tracking-[0.16em] text-[var(--foreground-tertiary)] 2xl:inline">
                         {item.meta}
                       </span>
-                      <span>{item.label}</span>
+                      <span className={item.meta ? "2xl:ml-2" : ""}>{item.label}</span>
                     </Link>
                   ))}
                 </div>
               </nav>
             </div>
 
-            <div className="flex flex-col gap-3 xl:items-end">
-              <div className="flex flex-wrap items-center gap-2">
-                <span className="inline-flex min-h-10 items-center rounded-full border border-[var(--border)] bg-[rgba(8,12,20,0.72)] px-4 text-sm text-[var(--foreground-secondary)]">
-                  {getRoleLabel(viewer)}
-                </span>
-                <button
-                  type="button"
-                  className="button-secondary"
-                  disabled={isSigningOut}
-                  onClick={() => void handleSignOut()}
-                >
-                  {isSigningOut ? "Signing out..." : "Sign out"}
-                </button>
-              </div>
-              <p className="max-w-[260px] truncate text-right text-xs text-[var(--foreground-tertiary)]">
-                {viewer.email ?? "Authenticated workspace"}
-              </p>
+            <div className="flex flex-wrap items-center gap-2 xl:max-w-[420px] xl:justify-end">
+              <span className="inline-flex min-h-10 items-center rounded-full border border-[var(--border)] bg-[rgba(8,12,20,0.72)] px-4 text-sm text-[var(--foreground-secondary)]">
+                {getRoleLabel(viewer)}
+              </span>
+              {actions}
+              <button
+                type="button"
+                className="button-secondary"
+                disabled={isSigningOut}
+                onClick={() => void handleSignOut()}
+              >
+                {isSigningOut ? "Signing out..." : "Sign out"}
+              </button>
             </div>
           </div>
 
@@ -180,29 +175,23 @@ export function ConsoleFrame({
       </header>
 
       <main className="flex-1 pt-7">
-        <section className="relative overflow-hidden rounded-[36px] border border-[var(--border)] bg-[linear-gradient(180deg,rgba(9,13,22,0.94),rgba(7,10,17,0.9))] px-6 py-6 shadow-[0_26px_80px_rgba(0,0,0,0.32)] sm:px-8 sm:py-7">
+        <section className="relative overflow-hidden rounded-[32px] border border-[var(--border)] bg-[linear-gradient(180deg,rgba(9,13,22,0.94),rgba(7,10,17,0.9))] px-5 py-5 shadow-[0_26px_80px_rgba(0,0,0,0.32)] sm:px-7 sm:py-6">
           <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(103,232,249,0.12),transparent_36%),radial-gradient(circle_at_80%_20%,rgba(249,115,22,0.08),transparent_24%)]" />
-          <div className="relative flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
-            <div className="max-w-3xl">
+          <div className="relative flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
+            <div className="max-w-2xl">
               <p className="eyebrow">{mode === "dashboard" ? "Workspace Console" : "Admin Console"}</p>
-              <h1 className="mt-4 text-4xl font-semibold tracking-[-0.06em] text-white sm:text-5xl lg:text-6xl">
+              <h1 className="mt-3 text-3xl font-semibold tracking-[-0.06em] text-white sm:text-4xl lg:text-5xl">
                 {title}
               </h1>
-              <p className="mt-4 max-w-3xl text-base leading-8 text-[var(--foreground-secondary)] sm:text-lg">
+              <p className="mt-3 max-w-2xl text-sm leading-7 text-[var(--foreground-secondary)] sm:text-base">
                 {description}
               </p>
             </div>
 
-            <div className="flex flex-col gap-3 lg:items-end">
-              <div className="flex flex-wrap gap-2">
-                <span className="inline-flex items-center rounded-full border border-[var(--border)] bg-[rgba(255,255,255,0.03)] px-3 py-1.5 font-mono text-[11px] uppercase tracking-[0.16em] text-[var(--foreground-tertiary)]">
-                  {viewer.isAdmin ? "Admin visibility" : "Member visibility"}
-                </span>
-                <span className="inline-flex items-center rounded-full border border-[var(--border-brand)] bg-[var(--brand-subtle)] px-3 py-1.5 font-mono text-[11px] uppercase tracking-[0.16em] text-[var(--brand-bright)]">
-                  {mode === "dashboard" ? "Self-serve surface" : "Internal telemetry"}
-                </span>
-              </div>
-              {actions ? <div className="flex flex-wrap gap-3">{actions}</div> : null}
+            <div className="flex flex-wrap gap-2 lg:justify-end">
+              <span className="inline-flex items-center rounded-full border border-[var(--border)] bg-[rgba(255,255,255,0.03)] px-3 py-1.5 font-mono text-[11px] uppercase tracking-[0.16em] text-[var(--foreground-tertiary)]">
+                {viewer.isAdmin ? "Admin visibility" : "Member visibility"}
+              </span>
             </div>
           </div>
         </section>

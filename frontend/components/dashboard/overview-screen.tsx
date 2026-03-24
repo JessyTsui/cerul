@@ -25,8 +25,10 @@ const requestExamples = {
   -H "Content-Type: application/json" \\
   -d '{
     "query": "analyze this demo scene",
-    "search_type": "knowledge",
-    "include_answer": true
+    "include_answer": true,
+    "filters": {
+      "source": "youtube"
+    }
   }'`,
   python: `import requests
 
@@ -35,8 +37,10 @@ response = requests.post(
     headers={"Authorization": "Bearer YOUR_CERUL_API_KEY"},
     json={
         "query": "analyze this demo scene",
-        "search_type": "knowledge",
         "include_answer": True,
+        "filters": {
+            "source": "youtube",
+        },
     },
 )
 print(response.json())`,
@@ -48,8 +52,10 @@ print(response.json())`,
   },
   body: JSON.stringify({
     query: "analyze this demo scene",
-    search_type: "knowledge",
     include_answer: true,
+    filters: {
+      source: "youtube",
+    },
   }),
 });`,
 } as const;

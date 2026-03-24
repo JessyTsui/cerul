@@ -20,6 +20,10 @@ _LEGACY_ENV_OVERRIDES: dict[str, tuple[str, ...]] = {
     "ADMIN_CONSOLE_EMAILS": ("dashboard", "admin_emails"),
     "BOOTSTRAP_ADMIN_SECRET": ("dashboard", "bootstrap_admin_secret"),
     "DATABASE_URL": ("database", "url"),
+    "EMBEDDING_BACKEND": ("embedding", "backend"),
+    "EMBEDDING_MODEL": ("embedding", "model"),
+    "EMBEDDING_DIMENSION": ("embedding", "dimension"),
+    "EMBEDDING_NORMALIZE": ("embedding", "normalize"),
     "MMR_LAMBDA": ("search", "mmr_lambda"),
     "NEXT_PUBLIC_API_BASE_URL": ("public", "api_base_url"),
     "NEXT_PUBLIC_SITE_URL": ("public", "web_base_url"),
@@ -27,6 +31,29 @@ _LEGACY_ENV_OVERRIDES: dict[str, tuple[str, ...]] = {
     "STRIPE_SECRET_KEY": ("stripe", "secret_key"),
     "STRIPE_WEBHOOK_SECRET": ("stripe", "webhook_secret"),
     "WEB_BASE_URL": ("public", "web_base_url"),
+    "OPENAI_TRANSCRIBE_BASE_URL": ("knowledge", "transcription", "base_url"),
+    "OPENAI_TRANSCRIBE_MODEL": ("knowledge", "transcription", "model"),
+    "OPENAI_TRANSCRIBE_RESPONSE_FORMAT": ("knowledge", "transcription", "response_format"),
+    "OPENAI_TRANSCRIBE_TIMEOUT_SECONDS": ("knowledge", "transcription", "timeout_seconds"),
+    "OPENAI_TRANSCRIBE_TIMESTAMP_GRANULARITY": (
+        "knowledge",
+        "transcription",
+        "timestamp_granularity",
+    ),
+    "ASR_BASE_URL": ("knowledge", "transcription", "base_url"),
+    "ASR_MODEL": ("knowledge", "transcription", "model"),
+    "ASR_RESPONSE_FORMAT": ("knowledge", "transcription", "response_format"),
+    "ASR_TIMEOUT_SECONDS": ("knowledge", "transcription", "timeout_seconds"),
+    "ASR_TIMESTAMP_GRANULARITY": (
+        "knowledge",
+        "transcription",
+        "timestamp_granularity",
+    ),
+    "R2_ACCOUNT_ID": ("r2", "account_id"),
+    "R2_ACCESS_KEY_ID": ("r2", "access_key_id"),
+    "R2_SECRET_ACCESS_KEY": ("r2", "secret_access_key"),
+    "R2_BUCKET_NAME": ("r2", "bucket_name"),
+    "R2_PUBLIC_URL": ("r2", "public_url"),
 }
 
 _SETTINGS_CACHE: Settings | None = None
@@ -57,18 +84,85 @@ class SearchSettings(BaseModel):
     clip_score_threshold: float | None = None
 
 
+class EmbeddingSettings(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    backend: str = "gemini"
+    model: str = "gemini-embedding-2-preview"
+    dimension: int = Field(default=768, ge=128, le=3072)
+    # Set to false to skip L2 normalisation (only relevant when dimension != 3072).
+    normalize: bool = True
+
+    @field_validator("backend", mode="before")
+    @classmethod
+    def normalize_backend(cls, value: Any) -> str:
+        cleaned = str(value or "gemini").strip().lower()
+        if cleaned not in {"gemini", "openai_compatible"}:
+            raise ValueError("embedding.backend must be 'gemini' or 'openai_compatible'")
+        return cleaned
+
+
+class KnowledgeTranscriptionSettings(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    provider: str = "openai_compatible"
+    base_url: str = "https://api.openai.com/v1"
+    model: str = "whisper-1"
+    response_format: str = "auto"
+    timeout_seconds: float = Field(default=600.0, gt=0.0)
+    timestamp_granularity: str = "segment"
+
+
+class KnowledgeDownloadSettings(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    max_height: int = Field(default=480, gt=0)
+
+
 class KnowledgeSettings(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     scene_threshold: float = Field(ge=0.0, le=1.0)
     rerank_top_n: int = Field(gt=0)
     rerank_prompt_template: str
+    # "openai" → OpenAICompatibleRerankerBackend (default, pointwise, N calls/search)
+    # "cohere" → CohereRerankerBackend (batch, 1 call/search, recommended for production)
+    rerank_backend: str = "openai"
+    rerank_model: str = "gpt-4o-mini"
+    download: KnowledgeDownloadSettings = Field(
+        default_factory=KnowledgeDownloadSettings
+    )
+    transcription: KnowledgeTranscriptionSettings = Field(
+        default_factory=KnowledgeTranscriptionSettings
+    )
 
 
 class DatabaseSettings(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     url: str | None = None
+
+
+class R2Settings(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    account_id: str = ""
+    access_key_id: str = ""
+    secret_access_key: str = ""
+    bucket_name: str = "cerul-cdn"
+    public_url: str = ""
+
+    @field_validator("account_id", "access_key_id", "secret_access_key", "bucket_name", "public_url", mode="before")
+    @classmethod
+    def normalize_string(cls, value: Any) -> str:
+        if value is None:
+            return ""
+        return str(value).strip()
+
+    @model_validator(mode="after")
+    def normalize_public_url(self) -> "R2Settings":
+        self.public_url = self.public_url.rstrip("/")
+        return self
 
 
 class StripeSettings(BaseModel):
@@ -133,9 +227,11 @@ class Settings(BaseModel):
     environment: str
     public: PublicSettings
     search: SearchSettings
+    embedding: EmbeddingSettings = Field(default_factory=EmbeddingSettings)
     knowledge: KnowledgeSettings
     dashboard: DashboardSettings = Field(default_factory=DashboardSettings)
     database: DatabaseSettings = Field(default_factory=DatabaseSettings)
+    r2: R2Settings = Field(default_factory=R2Settings)
     stripe: StripeSettings = Field(default_factory=StripeSettings)
 
 
@@ -286,6 +382,18 @@ def _parse_legacy_override(name: str, raw_value: str) -> Any:
             return float(cleaned)
         except ValueError:
             return _SKIP
+
+    if name == "EMBEDDING_DIMENSION":
+        try:
+            return int(cleaned)
+        except ValueError:
+            return _SKIP
+
+    if name == "EMBEDDING_NORMALIZE":
+        parsed = yaml.safe_load(cleaned)
+        if isinstance(parsed, bool):
+            return parsed
+        return _SKIP
 
     if not cleaned:
         return None

@@ -41,7 +41,16 @@ Most video search today is limited to transcripts — what was *said*. Cerul goe
 
 ## Quickstart
 
-Get video search results in seconds:
+Index any video, then search it with one query:
+
+```bash
+curl "https://api.cerul.ai/v1/index" \
+  -H "Authorization: Bearer YOUR_CERUL_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "url": "https://www.youtube.com/watch?v=hmtuvNfytjM"
+  }'
+```
 
 ```bash
 curl "https://api.cerul.ai/v1/search" \
@@ -49,30 +58,41 @@ curl "https://api.cerul.ai/v1/search" \
   -H "Content-Type: application/json" \
   -d '{
     "query": "Sam Altman views on AI video generation tools",
-    "search_type": "knowledge",
     "max_results": 3,
-    "include_answer": true
+    "include_answer": true,
+    "filters": {
+      "speaker": "Sam Altman",
+      "source": "youtube"
+    }
   }'
 ```
 
 <details>
-<summary><strong>Example response</strong></summary>
+<summary><strong>Example search response</strong></summary>
 
 ```json
 {
   "results": [
     {
-      "id": "yt_hmtuvNfytjM_1223",
+      "id": "unit_hmtuvNfytjM_1223",
       "score": 0.96,
       "title": "Sam Altman on the Future of AI Creative Tools",
-      "description": "OpenAI CEO discusses the implications of AI video generation",
-      "video_url": "https://www.youtube.com/watch?v=hmtuvNfytjM&t=1223s",
+      "url": "https://cerul.ai/v/a8f3k2x",
+      "snippet": "AI video generation tools are improving fast, but controllability and reliability still need work.",
+      "thumbnail_url": "https://i.ytimg.com/vi/hmtuvNfytjM/hqdefault.jpg",
+      "keyframe_url": "https://cdn.cerul.ai/frames/hmtuvNfytjM/f012.jpg",
+      "duration": 5400,
+      "source": "youtube",
       "speaker": "Sam Altman",
       "timestamp_start": 1223,
       "timestamp_end": 1345,
-      "answer": "Altman believes AI video generation will democratize filmmaking..."
+      "unit_type": "speech"
     }
-  ]
+  ],
+  "answer": "Altman frames AI video generation as improving quickly, while noting that production-grade control is still the bottleneck.",
+  "credits_used": 2,
+  "credits_remaining": 998,
+  "request_id": "req_abc123xyz456"
 }
 ```
 
@@ -83,7 +103,8 @@ curl "https://api.cerul.ai/v1/search" \
 | | Feature | Description |
 |---|---|---|
 | **Visual Retrieval** | Beyond transcripts | Index slides, charts, demos, and on-screen content — not just speech |
-| **Two Search Tracks** | `broll` + `knowledge` | Semantic footage search and deep knowledge retrieval on shared infra |
+| **Unified Search** | One query surface | Search summaries, speech segments, and visual evidence without choosing a track |
+| **Unified Indexing** | `POST /v1/index` | Index YouTube, Pexels, Pixabay, and direct video URLs on the same pipeline |
 | **Agent-Ready** | Built for LLMs | Designed for tool-use and function calling — clean JSON in, clean JSON out |
 | **Timestamp Precision** | Frame-accurate results | Every result comes with exact start/end timestamps and confidence scores |
 | **Installable Skills** | Codex & Claude | Drop-in agent skills with direct HTTP access — no MCP needed |
@@ -144,6 +165,8 @@ backend/.venv/bin/python -m pip install -r backend/requirements.txt
 # Optional: run migrations explicitly when you only need a schema update
 ./scripts/migrate-db.sh
 backend/.venv/bin/python -m uvicorn app.main:app --app-dir backend --reload --host 127.0.0.1 --port 8000
+# Tests keep the same app environment and only swap the database.
+# By default they derive an isolated database from DATABASE_URL, e.g. cerul -> cerul_test.
 backend/.venv/bin/pytest backend/tests
 ```
 
@@ -153,8 +176,8 @@ backend/.venv/bin/pytest backend/tests
 python3 -m venv workers/.venv
 workers/.venv/bin/python -m pip install -r workers/requirements.txt
 workers/.venv/bin/pytest workers/tests
-workers/.venv/bin/python workers/worker.py --db-url "$DATABASE_URL"
-workers/.venv/bin/python workers/scheduler.py --once --database-url "$DATABASE_URL"
+workers/.venv/bin/python -m workers.worker --db-url "$DATABASE_URL"
+workers/.venv/bin/python -m workers.scheduler --once --database-url "$DATABASE_URL"
 ```
 
 </details>
@@ -173,8 +196,8 @@ database as a release/predeploy step before rolling out code that depends on the
 ## Project Status
 
 - [x] Shared platform backbone: auth, API keys, usage tracking, rate limiting, dashboard, and docs
-- [x] End-to-end `broll` indexing and search flow on the shared retrieval stack
-- [x] `knowledge` retrieval, answer generation, and step-pipeline ingestion
+- [x] Unified `index + search` flow on the shared retrieval stack
+- [x] Summary, speech, and visual retrieval units in one embedding space
 - [x] Agent-facing integrations via installable skills and direct HTTP access
 - [ ] Higher-scale production validation for ingestion coverage and retrieval quality
 - [ ] Stripe billing validation in test mode

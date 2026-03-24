@@ -4,6 +4,7 @@ import asyncio
 import hashlib
 import logging
 import math
+from pathlib import Path
 from typing import Sequence, TypeVar
 
 from app.config import get_settings
@@ -13,11 +14,9 @@ T = TypeVar("T")
 logger = logging.getLogger(__name__)
 
 DEFAULT_MMR_LAMBDA = 0.75
-# Placeholder query vectors must stay aligned with the stored embedding schema
-# until T07 replaces them with real Gemini query embeddings.
-DEFAULT_VECTOR_DIMENSION = 768
-DEFAULT_BROLL_VECTOR_DIMENSION = DEFAULT_VECTOR_DIMENSION
-DEFAULT_KNOWLEDGE_VECTOR_DIMENSION = DEFAULT_VECTOR_DIMENSION
+# Placeholder query vectors must stay aligned with each track's stored schema.
+DEFAULT_BROLL_VECTOR_DIMENSION = 768
+DEFAULT_KNOWLEDGE_VECTOR_DIMENSION = 3072
 
 
 def resolve_mmr_lambda(override: float | None = None) -> float:
@@ -54,18 +53,35 @@ def build_placeholder_vector(seed_text: str, dimension: int) -> list[float]:
 
 async def resolve_query_vector(
     *,
-    query: str,
+    query: str | None = None,
+    image_path: Path | None = None,
     search_type: str,
     expected_dimension: int,
     embedding_backend: EmbeddingBackend,
     query_vector: Sequence[float] | None = None,
 ) -> list[float]:
     if query_vector is None:
-        resolved_vector = [
-            float(value)
-            for value in await asyncio.to_thread(embedding_backend.embed_text, query)
-        ]
-        vector_source = embedding_backend.name
+        if image_path is not None:
+            embed_query_with_image = getattr(embedding_backend, "embed_query_with_image", None)
+            if not callable(embed_query_with_image):
+                raise ValueError("Embedding backend does not support image queries.")
+            resolved_vector = [
+                float(value)
+                for value in await asyncio.to_thread(
+                    embed_query_with_image,
+                    query,
+                    image_path=image_path,
+                )
+            ]
+            vector_source = f"{embedding_backend.name} multimodal"
+        elif query:
+            resolved_vector = [
+                float(value)
+                for value in await asyncio.to_thread(embedding_backend.embed_query, query)
+            ]
+            vector_source = embedding_backend.name
+        else:
+            raise ValueError("No query input provided.")
     else:
         resolved_vector = [float(value) for value in query_vector]
         vector_source = "request override"
@@ -105,6 +121,8 @@ def parse_vector(raw_value: Sequence[float] | str | None) -> list[float] | None:
 
 
 def cosine_similarity(left: Sequence[float], right: Sequence[float]) -> float:
+    if len(left) != len(right):
+        return 0.0
     numerator = sum(left_value * right_value for left_value, right_value in zip(left, right))
     left_norm = math.sqrt(sum(value * value for value in left))
     right_norm = math.sqrt(sum(value * value for value in right))

@@ -39,8 +39,8 @@ def test_deduct_credits_returns_expected_costs(database) -> None:
             )
 
             assert broll_credits == 1
-            assert knowledge_credits == 2
-            assert answered_credits == 3
+            assert knowledge_credits == 1
+            assert answered_credits == 2
         finally:
             await db.close()
 
@@ -70,8 +70,8 @@ def test_deduct_credits_is_idempotent_per_request_id(database) -> None:
                 True,
             )
 
-            assert first_charge == 3
-            assert second_charge == 3
+            assert first_charge == 2
+            assert second_charge == 2
             assert (
                 await database.fetchval_async(
                     """
@@ -85,7 +85,7 @@ def test_deduct_credits_is_idempotent_per_request_id(database) -> None:
                     period_start,
                     period_end,
                 )
-                == 3
+                == 2
             )
             assert await database.fetchval_async("SELECT COUNT(*) FROM usage_events") == 1
         finally:

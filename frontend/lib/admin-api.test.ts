@@ -1,6 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   admin,
+  normalizeAdminIndexedVideos,
+  normalizeAdminWorkerLive,
   normalizeAdminSummary,
   normalizeAdminTargetsResponse,
 } from "./admin-api";
@@ -156,5 +158,292 @@ describe("admin targets client", () => {
         method: "GET",
       }),
     );
+  });
+});
+
+describe("normalizeAdminWorkerLive", () => {
+  it("normalizes worker step durations, guidance, and logs", () => {
+    const normalized = normalizeAdminWorkerLive({
+      generated_at: "2026-03-22T15:30:00Z",
+      queue: {
+        pending: 0,
+        running: 1,
+        retrying: 0,
+        completed: 2,
+        failed: 0,
+      },
+      active_jobs: [
+        {
+          job_id: "job_1",
+          track: "knowledge",
+          status: "running",
+          source: "youtube",
+          video_id: "vid_1",
+          title: "Demo run",
+          started_at: "2026-03-22T15:20:00Z",
+          created_at: "2026-03-22T15:19:00Z",
+          last_activity_at: "2026-03-22T15:29:00Z",
+          attempts: 1,
+          max_attempts: 3,
+          total_duration_ms: 540000,
+          error_message: null,
+          steps: [
+            {
+              step_name: "AnalyzeKnowledgeFramesStep",
+              status: "running",
+              artifacts: {
+                scene_analysis_count: 1,
+              },
+              started_at: "2026-03-22T15:25:00Z",
+              completed_at: null,
+              updated_at: "2026-03-22T15:29:00Z",
+              duration_ms: 240000,
+              guidance: "Frame analysis may be waiting on Gemini.",
+              logs: [
+                {
+                  at: "2026-03-22T15:25:30Z",
+                  level: "info",
+                  message: "Analyzing scene 1/4.",
+                  details: {
+                    scene_index: 0,
+                  },
+                },
+              ],
+              error_message: null,
+            },
+          ],
+        },
+      ],
+      recent_completed: [
+        {
+          job_id: "job_done",
+          video_id: "vid_done",
+          title: "Completed demo",
+          segment_count: 12,
+          completed_at: "2026-03-22T15:28:00Z",
+          total_duration_ms: 183000,
+        },
+      ],
+      failed_jobs: [
+        {
+          job_id: "job_failed",
+          track: "unified",
+          status: "failed",
+          source: "youtube",
+          video_id: "vid_failed",
+          title: "Failed demo",
+          started_at: "2026-03-22T15:00:00Z",
+          created_at: "2026-03-22T14:59:00Z",
+          last_activity_at: "2026-03-22T15:10:00Z",
+          attempts: 2,
+          max_attempts: 3,
+          total_duration_ms: 600000,
+          error_message: "Gemini timeout",
+          steps: [],
+        },
+      ],
+      failed_jobs_total: 14,
+      failed_jobs_limit: 5,
+      failed_jobs_offset: 10,
+    });
+
+    expect(normalized.activeJobs[0].steps[0]).toEqual(
+      expect.objectContaining({
+        durationMs: 240000,
+        guidance: "Frame analysis may be waiting on Gemini.",
+        logs: [
+          expect.objectContaining({
+            level: "info",
+            message: "Analyzing scene 1/4.",
+          }),
+        ],
+      }),
+    );
+    expect(normalized.activeJobs[0].totalDurationMs).toBe(540000);
+    expect(normalized.recentCompleted[0].totalDurationMs).toBe(183000);
+    expect(normalized.failedJobs[0]).toEqual(
+      expect.objectContaining({
+        jobId: "job_failed",
+        totalDurationMs: 600000,
+        errorMessage: "Gemini timeout",
+      }),
+    );
+    expect(normalized.failedJobsTotal).toBe(14);
+    expect(normalized.failedJobsLimit).toBe(5);
+    expect(normalized.failedJobsOffset).toBe(10);
+  });
+
+  it("builds failed job pagination params for worker live", async () => {
+    const originalFetch = global.fetch;
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          generated_at: "2026-03-22T15:30:00Z",
+          queue: { pending: 0, running: 0, retrying: 0, completed: 0, failed: 0 },
+          active_jobs: [],
+          recent_completed: [],
+          failed_jobs: [],
+          failed_jobs_total: 0,
+          failed_jobs_limit: 5,
+          failed_jobs_offset: 10,
+        }),
+        {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        },
+      ),
+    ));
+
+    await admin.getWorkerLive({ failedLimit: 5, failedOffset: 10 });
+
+    expect(global.fetch).toHaveBeenCalledWith(
+      "/api/console/admin/worker/live?failed_limit=5&failed_offset=10",
+      expect.objectContaining({
+        credentials: "include",
+        method: "GET",
+      }),
+    );
+
+    vi.unstubAllGlobals();
+    global.fetch = originalFetch;
+  });
+
+  it("calls the kill job endpoint", async () => {
+    const originalFetch = global.fetch;
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          ok: true,
+          job_id: "job_failed",
+        }),
+        {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        },
+      ),
+    ));
+
+    const result = await admin.killJob("job_failed");
+
+    expect(result).toEqual({ ok: true, jobId: "job_failed" });
+    expect(global.fetch).toHaveBeenCalledWith(
+      "/api/console/admin/jobs/job_failed/kill",
+      expect.objectContaining({
+        credentials: "include",
+        method: "POST",
+      }),
+    );
+
+    vi.unstubAllGlobals();
+    global.fetch = originalFetch;
+  });
+
+  it("normalizes indexed video admin payloads", () => {
+    const normalized = normalizeAdminIndexedVideos({
+      generated_at: "2026-03-23T10:00:00Z",
+      videos: [
+        {
+          video_id: "vid_1",
+          source: "youtube",
+          source_video_id: "LCEmiRjPEtQ",
+          title: "Andrej Karpathy: Software Is Changing (Again)",
+          source_url: "https://www.youtube.com/watch?v=LCEmiRjPEtQ",
+          video_url: "https://www.youtube.com/watch?v=LCEmiRjPEtQ",
+          speaker: "Y Combinator",
+          created_at: "2026-03-22T10:00:00Z",
+          updated_at: "2026-03-23T10:00:00Z",
+          units_created: 60,
+          last_job_status: "completed",
+          last_job_at: "2026-03-23T09:55:00Z",
+        },
+      ],
+      total: 1,
+      limit: 10,
+      offset: 0,
+      query: "Karpathy",
+    });
+
+    expect(normalized.total).toBe(1);
+    expect(normalized.query).toBe("Karpathy");
+    expect(normalized.videos[0]).toEqual(
+      expect.objectContaining({
+        videoId: "vid_1",
+        sourceVideoId: "LCEmiRjPEtQ",
+        unitsCreated: 60,
+        lastJobStatus: "completed",
+      }),
+    );
+  });
+
+  it("calls the indexed videos endpoint with query and pagination", async () => {
+    const originalFetch = global.fetch;
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          generated_at: "2026-03-23T10:00:00Z",
+          videos: [],
+          total: 0,
+          limit: 8,
+          offset: 8,
+          query: "Karpathy",
+        }),
+        {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        },
+      ),
+    ));
+
+    await admin.getIndexedVideos({ query: "Karpathy", limit: 8, offset: 8 });
+
+    expect(global.fetch).toHaveBeenCalledWith(
+      "/api/console/admin/videos?query=Karpathy&limit=8&offset=8",
+      expect.objectContaining({
+        credentials: "include",
+        method: "GET",
+      }),
+    );
+
+    vi.unstubAllGlobals();
+    global.fetch = originalFetch;
+  });
+
+  it("calls the delete indexed video endpoint", async () => {
+    const originalFetch = global.fetch;
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          ok: true,
+          video_id: "vid_1",
+          title: "Delete Me Demo",
+          units_deleted: 12,
+          processing_jobs_deleted: 2,
+        }),
+        {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        },
+      ),
+    ));
+
+    const result = await admin.deleteIndexedVideo("vid_1");
+
+    expect(result).toEqual({
+      ok: true,
+      videoId: "vid_1",
+      title: "Delete Me Demo",
+      unitsDeleted: 12,
+      processingJobsDeleted: 2,
+    });
+    expect(global.fetch).toHaveBeenCalledWith(
+      "/api/console/admin/videos/vid_1",
+      expect.objectContaining({
+        credentials: "include",
+        method: "DELETE",
+      }),
+    );
+
+    vi.unstubAllGlobals();
+    global.fetch = originalFetch;
   });
 });

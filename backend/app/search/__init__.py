@@ -1,29 +1,32 @@
-from app.search.broll import BrollSearchService
 from app.search.base import resolve_mmr_lambda
-from app.search.knowledge import KnowledgeSearchService
 from app.search.models import (
     BrollFilters,
     ErrorDetail,
     ErrorResponse,
     KnowledgeFilters,
     KnowledgeResult,
+    SearchImageInput,
     SearchRequest,
     SearchResponse,
     SearchResult,
+    UnifiedFilters,
     UsageResponse,
 )
+from app.search.unified import SearchExecution, UnifiedSearchService
 
 __all__ = [
     "BrollFilters",
-    "BrollSearchService",
     "ErrorDetail",
     "ErrorResponse",
     "KnowledgeFilters",
     "KnowledgeResult",
-    "KnowledgeSearchService",
     "resolve_mmr_lambda",
+    "SearchImageInput",
+    "SearchExecution",
     "SearchRequest",
     "SearchResponse",
     "SearchResult",
+    "UnifiedFilters",
+    "UnifiedSearchService",
     "UsageResponse",
 ]

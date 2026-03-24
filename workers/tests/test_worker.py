@@ -4,7 +4,7 @@ from datetime import datetime, timedelta, timezone
 from unittest.mock import AsyncMock, Mock, patch
 
 from workers.common.pipeline import PipelineContext
-from workers.worker import JobWorker
+from workers.worker import JobWorker, build_worker_ids
 
 
 def run_async(coro):
@@ -61,12 +61,43 @@ class ClaimConnection:
 class RecordingConnection:
     def __init__(self) -> None:
         self.execute_calls: list[tuple[str, tuple[object, ...]]] = []
+        self.fetchval_calls: list[tuple[str, tuple[object, ...]]] = []
         self.closed = False
 
     async def execute(self, query: str, *params: object) -> str:
         normalized = " ".join(query.split())
         self.execute_calls.append((normalized, params))
         return "OK"
+
+    async def fetchval(self, query: str, *params: object) -> object | None:
+        normalized = " ".join(query.split())
+        self.fetchval_calls.append((normalized, params))
+        return True
+
+    async def close(self) -> None:
+        self.closed = True
+
+
+class _FakeAcquireContext:
+    def __init__(self, conn: RecordingConnection) -> None:
+        self.conn = conn
+
+    async def __aenter__(self) -> RecordingConnection:
+        return self.conn
+
+    async def __aexit__(self, exc_type, exc, tb) -> bool:
+        return False
+
+
+class RecordingPool:
+    def __init__(self, conn: RecordingConnection) -> None:
+        self.conn = conn
+        self.acquire_calls = 0
+        self.closed = False
+
+    def acquire(self) -> _FakeAcquireContext:
+        self.acquire_calls += 1
+        return _FakeAcquireContext(self.conn)
 
     async def close(self) -> None:
         self.closed = True
@@ -75,6 +106,7 @@ class RecordingConnection:
 def build_job(
     job_id: str,
     *,
+    track: str = "broll",
     status: str,
     attempts: int = 0,
     max_attempts: int = 3,
@@ -84,7 +116,7 @@ def build_job(
 ) -> dict[str, object]:
     return {
         "id": job_id,
-        "track": "broll",
+        "track": track,
         "status": status,
         "attempts": attempts,
         "max_attempts": max_attempts,
@@ -107,6 +139,18 @@ def test_claim_job_picks_pending_job_and_sets_status_to_running() -> None:
     assert job["locked_by"] == "worker-a"
     assert job["attempts"] == 1
     assert "FOR UPDATE SKIP LOCKED" in conn.fetchrow_calls[0][0]
+
+
+def test_build_worker_ids_returns_base_id_for_single_slot() -> None:
+    assert build_worker_ids("worker-a", 1) == ["worker-a"]
+
+
+def test_build_worker_ids_suffixes_ids_for_multiple_slots() -> None:
+    assert build_worker_ids("worker-a", 3) == [
+        "worker-a-slot-1",
+        "worker-a-slot-2",
+        "worker-a-slot-3",
+    ]
 
 
 def test_claim_job_skips_locked_jobs() -> None:
@@ -199,12 +243,11 @@ def test_execute_job_marks_job_completed_on_pipeline_success() -> None:
     assert "status = 'completed'" in conn.execute_calls[0][0]
     assert conn.execute_calls[0][1] == ("job-1",)
     assert worker._job_contexts["job-1"] is context
-    assert pipeline.run.await_args.kwargs == {
-        "query": "city skyline",
-        "category": None,
-        "job_id": "job-1",
-        "conf": {"per_page": 20},
-    }
+    assert pipeline.run.await_args.kwargs["query"] == "city skyline"
+    assert pipeline.run.await_args.kwargs["category"] is None
+    assert pipeline.run.await_args.kwargs["job_id"] == "job-1"
+    assert pipeline.run.await_args.kwargs["conf"]["per_page"] == 20
+    assert callable(pipeline.run.await_args.kwargs["conf"]["progress_callback"])
 
 
 def test_handle_failure_sets_retrying_with_exponential_backoff() -> None:
@@ -244,6 +287,99 @@ def test_compute_retry_delay_uses_exponential_backoff_with_cap() -> None:
     assert worker.compute_retry_delay(2) == 60
     assert worker.compute_retry_delay(3) == 120
     assert worker.compute_retry_delay(20) == 3600
+
+
+def test_record_live_step_event_ignores_deleted_job() -> None:
+    worker = JobWorker("worker-a", "postgresql://example")
+    conn = RecordingConnection()
+    pool = RecordingPool(conn)
+    conn.fetchval = AsyncMock(return_value=None)  # type: ignore[method-assign]
+    context = PipelineContext(data={"job_status": "running"})
+
+    with patch("workers.worker.asyncpg.create_pool", AsyncMock(return_value=pool)):
+        run_async(
+            worker._record_live_step_event(
+                job_id="job-deleted",
+                step_name="PersistUnifiedUnitsStep",
+                status="running",
+                context=context,
+            )
+        )
+
+    assert conn.execute_calls == []
+    assert pool.acquire_calls == 1
+    assert conn.closed is False
+
+
+def test_record_live_step_event_reuses_connection_pool() -> None:
+    worker = JobWorker("worker-a", "postgresql://example")
+    conn = RecordingConnection()
+    pool = RecordingPool(conn)
+    create_pool = AsyncMock(return_value=pool)
+    context = PipelineContext(data={"job_status": "running"})
+
+    with patch("workers.worker.asyncpg.create_pool", create_pool):
+        run_async(
+            worker._record_live_step_event(
+                job_id="job-live-1",
+                step_name="BuildUnifiedRetrievalUnitsStep",
+                status="running",
+                context=context,
+            )
+        )
+        run_async(
+            worker._record_live_step_event(
+                job_id="job-live-1",
+                step_name="BuildUnifiedRetrievalUnitsStep",
+                status="completed",
+                context=context,
+            )
+        )
+
+    assert create_pool.await_count == 1
+    assert pool.acquire_calls == 2
+
+
+def test_execute_job_marks_unified_job_completed_on_pipeline_success() -> None:
+    worker = JobWorker("worker-a", "postgresql://example")
+    conn = RecordingConnection()
+    job = {
+        "id": "job-unified-1",
+        "track": "unified",
+        "attempts": 1,
+        "max_attempts": 3,
+        "input_payload": {
+            "url": "https://www.youtube.com/watch?v=abc123xyz00",
+            "source": "youtube",
+            "source_video_id": "abc123xyz00",
+            "owner_id": "user-123",
+            "video_id": "video-123",
+            "conf": {"scene_threshold": 0.2},
+        },
+    }
+    context = PipelineContext(
+        data={"job_status": "completed", "job_artifacts": {"units_created": 3}},
+        completed_steps=["BuildUnifiedRetrievalUnitsStep", "MarkUnifiedJobCompletedStep"],
+    )
+
+    pipeline = Mock()
+    pipeline.run = AsyncMock(return_value=context)
+
+    with patch("workers.worker.UnifiedIndexingPipeline", return_value=pipeline):
+        run_async(worker.execute_job(conn, job))
+
+    assert conn.execute_calls
+    assert "status = 'completed'" in conn.execute_calls[0][0]
+    assert conn.execute_calls[0][1] == ("job-unified-1",)
+    assert worker._job_contexts["job-unified-1"] is context
+    assert pipeline.run.await_args.kwargs["url"] == "https://www.youtube.com/watch?v=abc123xyz00"
+    assert pipeline.run.await_args.kwargs["source"] == "youtube"
+    assert pipeline.run.await_args.kwargs["source_video_id"] == "abc123xyz00"
+    assert pipeline.run.await_args.kwargs["owner_id"] == "user-123"
+    assert pipeline.run.await_args.kwargs["video_id"] == "video-123"
+    assert pipeline.run.await_args.kwargs["job_id"] == "job-unified-1"
+    assert pipeline.run.await_args.kwargs["conf"]["scene_threshold"] == 0.2
+    assert callable(pipeline.run.await_args.kwargs["conf"]["progress_callback"])
 
 
 def test_record_step_progress_writes_correct_step_statuses() -> None:
@@ -289,3 +425,148 @@ def test_record_step_progress_writes_correct_step_statuses() -> None:
     failed_artifacts = json.loads(conn.execute_calls[-1][1][3])
     assert failed_artifacts["embedding_count"] == 1
     assert failed_artifacts["error"] == "embedding failed"
+
+
+def test_record_step_progress_writes_unified_step_artifacts() -> None:
+    worker = JobWorker("worker-a", "postgresql://example")
+    conn = RecordingConnection()
+    context = PipelineContext(
+        data={
+            "source_video_id": "abc123xyz00",
+            "video_metadata": {
+                "title": "Unified Demo",
+                "source": "youtube",
+                "duration_seconds": 42,
+            },
+            "embedded_units": [
+                {"unit_type": "summary", "embedding": [0.1, 0.2, 0.3]},
+                {"unit_type": "visual", "embedding": [0.4, 0.5, 0.6]},
+            ],
+            "stored_unified_video": {"id": "video-123"},
+            "stored_unified_units": [
+                {"id": "unit-1"},
+                {"id": "unit-2"},
+            ],
+            "job_status": "completed",
+            "job_artifacts": {"video_id": "video-123", "units_created": 2},
+        },
+        completed_steps=[
+            "FetchUnifiedMetadataStep",
+            "BuildUnifiedRetrievalUnitsStep",
+            "EmbedUnifiedUnitsStep",
+            "PersistUnifiedUnitsStep",
+            "MarkUnifiedJobCompletedStep",
+        ],
+    )
+
+    run_async(worker.record_step_progress(conn, "job-unified-1", context))
+
+    artifacts_by_step = {
+        params[1]: json.loads(params[3])
+        for _, params in conn.execute_calls
+    }
+
+    assert artifacts_by_step["FetchUnifiedMetadataStep"] == {
+        "source_video_id": "abc123xyz00",
+        "title": "Unified Demo",
+        "source": "youtube",
+        "duration_seconds": 42,
+    }
+    assert artifacts_by_step["BuildUnifiedRetrievalUnitsStep"] == {
+        "unit_count": 2,
+        "summary_count": 1,
+        "speech_count": 0,
+        "visual_count": 1,
+    }
+    assert artifacts_by_step["EmbedUnifiedUnitsStep"] == {
+        "embedding_count": 2,
+        "embedding_dimension": 3,
+    }
+    assert artifacts_by_step["PersistUnifiedUnitsStep"] == {
+        "video_id": "video-123",
+        "indexed_unit_count": 2,
+    }
+    assert artifacts_by_step["MarkUnifiedJobCompletedStep"] == {
+        "job_status": "completed",
+        "job_artifacts": {"video_id": "video-123", "units_created": 2},
+    }
+
+
+def test_record_step_progress_includes_frame_analysis_totals() -> None:
+    worker = JobWorker("worker-a", "postgresql://example")
+    conn = RecordingConnection()
+    context = PipelineContext(
+        data={
+            "scene_analyses": [{"scene_index": 0}, {"scene_index": 1}],
+            "frame_analysis_scene_total": 4,
+            "frame_analysis_current_scene_index": 1,
+            "frame_analysis_current_scene_position": 2,
+            "frame_analysis_current_route": "annotate",
+            "frame_analysis_candidate_frame_count": 3,
+            "frame_analysis_unique_frame_count": 2,
+            "frame_analysis_selected_frame_count": 2,
+            "frame_analysis_annotation_frame_count": 1,
+            "frame_analysis_extraction_cache_hit_count": 1,
+            "frame_analysis_annotation_cache_hit_count": 1,
+            "frame_analysis_extraction_time_ms": 420,
+            "frame_analysis_dedup_time_ms": 35,
+            "frame_analysis_filter_time_ms": 18,
+            "frame_analysis_ocr_time_ms": 12,
+            "frame_analysis_prepare_time_ms": 501,
+            "frame_analysis_annotation_time_ms": 260,
+            "frame_analysis_total_candidate_frame_count": 7,
+            "frame_analysis_total_unique_frame_count": 5,
+            "frame_analysis_total_selected_frame_count": 4,
+            "frame_analysis_total_annotation_frame_count": 2,
+            "frame_analysis_total_extraction_cache_hit_count": 2,
+            "frame_analysis_total_annotation_cache_hit_count": 3,
+            "frame_analysis_total_extraction_time_ms": 910,
+            "frame_analysis_total_dedup_time_ms": 80,
+            "frame_analysis_total_filter_time_ms": 44,
+            "frame_analysis_total_ocr_time_ms": 26,
+            "frame_analysis_total_prepare_time_ms": 1080,
+            "frame_analysis_total_annotation_time_ms": 540,
+            "frame_analysis_route_counts": {"text_only": 1, "embed_only": 0, "annotate": 1},
+            "frame_analysis_annotation_timeout_count": 1,
+            "frame_analysis_annotation_error_count": 2,
+        },
+        completed_steps=["AnalyzeKnowledgeFramesStep"],
+    )
+
+    run_async(worker.record_step_progress(conn, "job-frames-1", context))
+
+    artifacts = json.loads(conn.execute_calls[0][1][3])
+    assert artifacts == {
+        "scene_analysis_count": 2,
+        "scene_total": 4,
+        "current_scene_index": 1,
+        "current_scene_position": 2,
+        "current_route": "annotate",
+        "candidate_frame_count": 3,
+        "unique_frame_count": 2,
+        "selected_frame_count": 2,
+        "annotation_frame_count": 1,
+        "extraction_cache_hit_count": 1,
+        "annotation_cache_hit_count": 1,
+        "extraction_time_ms": 420,
+        "dedup_time_ms": 35,
+        "filter_time_ms": 18,
+        "ocr_time_ms": 12,
+        "prepare_time_ms": 501,
+        "annotation_time_ms": 260,
+        "total_candidate_frame_count": 7,
+        "total_unique_frame_count": 5,
+        "total_selected_frame_count": 4,
+        "total_annotation_frame_count": 2,
+        "total_extraction_cache_hit_count": 2,
+        "total_annotation_cache_hit_count": 3,
+        "total_extraction_time_ms": 910,
+        "total_dedup_time_ms": 80,
+        "total_filter_time_ms": 44,
+        "total_ocr_time_ms": 26,
+        "total_prepare_time_ms": 1080,
+        "total_annotation_time_ms": 540,
+        "route_counts": {"text_only": 1, "embed_only": 0, "annotate": 1},
+        "annotation_timeout_count": 1,
+        "annotation_error_count": 2,
+    }

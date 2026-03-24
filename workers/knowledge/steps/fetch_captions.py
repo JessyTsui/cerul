@@ -3,7 +3,7 @@ from __future__ import annotations
 import tempfile
 from pathlib import Path
 
-from workers.common.pipeline import PipelineContext, PipelineStep
+from workers.common.pipeline import PipelineContext, PipelineStep, emit_step_log
 from workers.knowledge.runtime import (
     KnowledgeCaptionProvider,
     load_transcript_segments_from_source,
@@ -53,10 +53,22 @@ class FetchKnowledgeCaptionsStep(PipelineStep):
         if inline_segments:
             context.data["transcript_segments"] = inline_segments
             context.data["transcript_source"] = "metadata:inline"
+            await emit_step_log(
+                context,
+                self.step_name,
+                "Loaded transcript segments directly from inline source metadata.",
+                details={"segment_count": len(inline_segments)},
+            )
             return
 
         transcript_source = resolve_transcript_source(video_metadata)
         if transcript_source is not None:
+            await emit_step_log(
+                context,
+                self.step_name,
+                "Trying transcript source before caption-provider fallback.",
+                details={"transcript_source": str(transcript_source)},
+            )
             try:
                 transcript_segments = await load_transcript_segments_from_source(
                     transcript_source,
@@ -71,6 +83,12 @@ class FetchKnowledgeCaptionsStep(PipelineStep):
                 if transcript_segments:
                     context.data["transcript_segments"] = transcript_segments
                     context.data["transcript_source"] = str(transcript_source)
+                    await emit_step_log(
+                        context,
+                        self.step_name,
+                        "Loaded transcript segments from transcript source.",
+                        details={"segment_count": len(transcript_segments)},
+                    )
                     return
                 _append_caption_resolution_warning(
                     context,
@@ -88,6 +106,12 @@ class FetchKnowledgeCaptionsStep(PipelineStep):
             context.data["temp_dir"] = temp_dir
 
         try:
+            await emit_step_log(
+                context,
+                self.step_name,
+                "Falling back to caption provider resolution.",
+                details={"provider": type(caption_provider).__name__},
+            )
             transcript_segments = await caption_provider.resolve_transcript_segments(
                 video_metadata,
                 Path(str(temp_dir)),
@@ -99,3 +123,9 @@ class FetchKnowledgeCaptionsStep(PipelineStep):
         if transcript_segments:
             context.data["transcript_segments"] = list(transcript_segments)
             context.data["transcript_source"] = "captions:provider"
+            await emit_step_log(
+                context,
+                self.step_name,
+                "Resolved transcript segments from caption provider.",
+                details={"segment_count": len(transcript_segments)},
+            )

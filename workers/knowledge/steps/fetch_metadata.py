@@ -3,7 +3,7 @@ from __future__ import annotations
 from collections.abc import Mapping
 from typing import Any
 
-from workers.common.pipeline import PipelineContext, PipelineStep
+from workers.common.pipeline import PipelineContext, PipelineStep, emit_step_log
 from workers.knowledge.runtime import (
     KnowledgeMetadataClient,
     normalize_video_metadata,
@@ -29,7 +29,19 @@ class FetchKnowledgeMetadataStep(PipelineStep):
             metadata_client = self._metadata_client or context.conf.get("metadata_client")
             if metadata_client is None:
                 raise RuntimeError("A knowledge metadata client is required.")
+            await emit_step_log(
+                context,
+                self.step_name,
+                f"Fetching source metadata for video {video_id}.",
+                details={"video_id": video_id},
+            )
             raw_metadata = await metadata_client.get_video_metadata(video_id)
+        else:
+            await emit_step_log(
+                context,
+                self.step_name,
+                "Using provided source metadata from the request payload.",
+            )
 
         if not isinstance(raw_metadata, Mapping):
             raise TypeError("Knowledge metadata payload must be a mapping.")
@@ -40,3 +52,12 @@ class FetchKnowledgeMetadataStep(PipelineStep):
         )
         context.data["video_metadata"] = video_metadata
         context.data["source_video_id"] = video_metadata["source_video_id"]
+        await emit_step_log(
+            context,
+            self.step_name,
+            f"Resolved metadata for '{video_metadata['title']}'.",
+            details={
+                "source": video_metadata["source"],
+                "duration_seconds": video_metadata.get("duration_seconds"),
+            },
+        )

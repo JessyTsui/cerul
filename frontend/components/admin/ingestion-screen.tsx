@@ -1,18 +1,19 @@
 "use client";
 
-import Link from "next/link";
 import { useState } from "react";
 import { admin, type AdminRange } from "@/lib/admin-api";
-import { formatAdminDateTime, toAdminChartData } from "@/lib/admin-console";
+import { formatAdminDateTime } from "@/lib/admin-console";
 import { AdminLayout } from "./admin-layout";
 import { AdminMetricCard } from "./admin-metric-card";
 import { AdminRangePicker } from "./admin-range-picker";
-import { AdminTrendChart } from "./admin-trend-chart";
+import { VideoLibraryPanel } from "./video-library-panel";
+import { WorkerLivePanel } from "./worker-live-panel";
 import { DashboardNotice, DashboardSkeleton, DashboardState } from "@/components/dashboard/dashboard-state";
 import { useAdminResource } from "./use-admin-resource";
 
 export function AdminIngestionScreen() {
   const [range, setRange] = useState<AdminRange>("7d");
+  const [expandedJob, setExpandedJob] = useState<string | null>(null);
   const { data, error, isLoading, refresh } = useAdminResource({
     range,
     loader: admin.getIngestion,
@@ -23,13 +24,10 @@ export function AdminIngestionScreen() {
     <AdminLayout
       currentPath="/admin/ingestion"
       title="Ingestion"
-      description="Track backlog, completion rate, source health, and failure posture across the worker system."
+      description="Worker queue, source health, and failure log."
       actions={
         <>
           <AdminRangePicker value={range} onChange={setRange} />
-          <Link className="button-secondary" href="/admin/pipelines">
-            Pipeline detail
-          </Link>
           <button className="button-primary" onClick={() => void refresh()} type="button">
             Refresh
           </button>
@@ -42,7 +40,7 @@ export function AdminIngestionScreen() {
         <DashboardState
           action={
             <button className="button-primary" onClick={() => void refresh()} type="button">
-              Retry request
+              Retry
             </button>
           }
           description={error}
@@ -53,194 +51,108 @@ export function AdminIngestionScreen() {
         <>
           {error ? (
             <DashboardNotice
-              title="Showing the last successful ingestion snapshot."
+              title="Showing last successful snapshot."
               description={error}
               tone="error"
             />
           ) : null}
 
-          <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-            <AdminMetricCard
-              label="Jobs created"
-              metric={data.metrics.jobsCreated}
-              note="Processing jobs opened during the selected window."
-            />
-            <AdminMetricCard
-              label="Jobs completed"
-              metric={data.metrics.jobsCompleted}
-              note="Jobs finishing successfully in the same window."
-            />
-            <AdminMetricCard
-              label="Jobs failed"
-              metric={data.metrics.jobsFailed}
-              note="Failures updated inside the selected window."
-            />
-            <AdminMetricCard
-              label="Pending backlog"
-              metric={data.metrics.pendingBacklog}
-              note="Current queue depth across pending and in-flight jobs."
-            />
+          <WorkerLivePanel />
+
+          <VideoLibraryPanel />
+
+          <section className="grid gap-3 md:grid-cols-3">
+            <AdminMetricCard label="Jobs completed" metric={data.metrics.jobsCompleted} />
+            <AdminMetricCard label="Jobs failed" metric={data.metrics.jobsFailed} />
+            <AdminMetricCard label="Pending backlog" metric={data.metrics.pendingBacklog} />
           </section>
 
-          <section className="grid gap-4 md:grid-cols-3">
-            <AdminMetricCard
-              label="Completion rate"
-              metric={data.metrics.completionRate}
-              note="Completed / (completed + failed)."
-              kind="percent"
-            />
-            <AdminMetricCard
-              label="Failure rate"
-              metric={data.metrics.failureRate}
-              note="Failed / (completed + failed)."
-              kind="percent"
-            />
-            <AdminMetricCard
-              label="Avg processing time"
-              metric={data.metrics.averageProcessingMs}
-              note="Mean runtime for completed jobs."
-              kind="milliseconds"
-            />
-          </section>
-
-          <AdminTrendChart
-            title="Job outcomes"
-            description="If the failure bars rise faster than completions, the scheduler and worker surface may still look alive while the product quietly loses freshness."
-            data={toAdminChartData(data.dailySeries, "jobsCompleted")}
-            metricLabel="Jobs completed"
-            secondaryLabel="Requests"
-          />
-
-          <section className="grid gap-5 xl:grid-cols-2">
-            <article className="surface-elevated px-6 py-6">
-              <p className="font-mono text-xs uppercase tracking-[0.16em] text-[var(--foreground-tertiary)]">
-                Status counts
-              </p>
-              <h2 className="mt-2 text-2xl font-semibold text-white">
-                Queue posture
-              </h2>
-              <div className="mt-5 grid gap-3 sm:grid-cols-2">
-                {Object.entries(data.statusCounts).map(([key, value]) => (
-                  <div
-                    key={key}
-                    className="rounded-[18px] border border-[var(--border)] bg-[var(--surface)] px-4 py-4"
-                  >
-                    <p className="font-mono text-[11px] uppercase tracking-[0.16em] text-[var(--foreground-tertiary)]">
-                      {key}
-                    </p>
-                    <p className="mt-2 text-xl font-semibold text-white">{value}</p>
-                  </div>
-                ))}
-              </div>
-            </article>
-
-            <article className="surface-elevated overflow-hidden px-6 py-6">
-              <p className="font-mono text-xs uppercase tracking-[0.16em] text-[var(--foreground-tertiary)]">
-                Failed steps
-              </p>
-              <h2 className="mt-2 text-2xl font-semibold text-white">
-                Common breakpoints
-              </h2>
-              <div className="mt-5 overflow-x-auto">
-                <table className="min-w-full text-left text-sm">
-                  <thead className="text-[var(--foreground-tertiary)]">
-                    <tr>
-                      <th className="pb-3 pr-4 font-medium">Step</th>
-                      <th className="pb-3 pr-4 font-medium">Failures</th>
-                      <th className="pb-3 font-medium">Last seen</th>
+          <div className="grid gap-3 xl:grid-cols-2">
+            {/* Source health */}
+            <article className="surface-elevated overflow-hidden px-5 py-5">
+              <p className="mb-4 text-sm font-semibold text-white">Source health</p>
+              <table className="w-full text-left text-xs">
+                <thead>
+                  <tr className="text-[var(--foreground-tertiary)]">
+                    <th className="pb-2 pr-3 font-medium">Source</th>
+                    <th className="pb-2 pr-3 font-medium">Track</th>
+                    <th className="pb-2 pr-3 font-medium">Backlog</th>
+                    <th className="pb-2 pr-3 font-medium">Failed</th>
+                    <th className="pb-2 font-medium">Last job</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-white/5">
+                  {data.sourceHealth.map((source) => (
+                    <tr key={source.sourceId}>
+                      <td className="py-2 pr-3 text-white">{source.displayName}</td>
+                      <td className="py-2 pr-3 text-[var(--foreground-secondary)]">{source.track}</td>
+                      <td className="py-2 pr-3 text-[var(--foreground-secondary)]">{source.backlog}</td>
+                      <td className="py-2 pr-3">
+                        <span className={source.jobsFailed > 0 ? "text-red-400" : "text-[var(--foreground-secondary)]"}>
+                          {source.jobsFailed}
+                        </span>
+                      </td>
+                      <td className="py-2 text-[var(--foreground-secondary)]">{formatAdminDateTime(source.lastJobAt)}</td>
                     </tr>
-                  </thead>
-                  <tbody className="divide-y divide-white/5 text-[var(--foreground-secondary)]">
-                    {data.failedSteps.map((step) => (
-                      <tr key={step.stepName}>
-                        <td className="py-3 pr-4 text-white">{step.stepName}</td>
-                        <td className="py-3 pr-4">{step.failureCount}</td>
-                        <td className="py-3">{formatAdminDateTime(step.lastFailedAt)}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </article>
-          </section>
-
-          <section className="grid gap-5 xl:grid-cols-2">
-            <article className="surface-elevated overflow-hidden px-6 py-6">
-              <p className="font-mono text-xs uppercase tracking-[0.16em] text-[var(--foreground-tertiary)]">
-                Source health
-              </p>
-              <h2 className="mt-2 text-2xl font-semibold text-white">
-                Scheduler coverage by source
-              </h2>
-              <div className="mt-5 overflow-x-auto">
-                <table className="min-w-full text-left text-sm">
-                  <thead className="text-[var(--foreground-tertiary)]">
-                    <tr>
-                      <th className="pb-3 pr-4 font-medium">Source</th>
-                      <th className="pb-3 pr-4 font-medium">Created</th>
-                      <th className="pb-3 pr-4 font-medium">Completed</th>
-                      <th className="pb-3 pr-4 font-medium">Failed</th>
-                      <th className="pb-3 font-medium">Backlog</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-white/5 text-[var(--foreground-secondary)]">
-                    {data.sourceHealth.map((source) => (
-                      <tr key={source.sourceId}>
-                        <td className="py-3 pr-4 text-white">{source.displayName}</td>
-                        <td className="py-3 pr-4">{source.jobsCreated}</td>
-                        <td className="py-3 pr-4">{source.jobsCompleted}</td>
-                        <td className="py-3 pr-4">{source.jobsFailed}</td>
-                        <td className="py-3">{source.backlog}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+                  ))}
+                </tbody>
+              </table>
             </article>
 
-            <article className="surface-elevated overflow-hidden px-6 py-6">
-              <p className="font-mono text-xs uppercase tracking-[0.16em] text-[var(--foreground-tertiary)]">
-                Recent failed jobs
-              </p>
-              <h2 className="mt-2 text-2xl font-semibold text-white">
-                Latest failures
-              </h2>
-              <div className="mt-5 overflow-x-auto">
-                <table className="min-w-full text-left text-sm">
-                  <thead className="text-[var(--foreground-tertiary)]">
-                    <tr>
-                      <th className="pb-3 pr-4 font-medium">Job</th>
-                      <th className="pb-3 pr-4 font-medium">Track</th>
-                      <th className="pb-3 pr-4 font-medium">Attempts</th>
-                      <th className="pb-3 font-medium">Updated</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-white/5 text-[var(--foreground-secondary)]">
-                    {data.recentFailedJobs.map((job) => (
-                      <tr key={job.jobId}>
-                        <td className="py-3 pr-4 text-white">{job.jobType}</td>
-                        <td className="py-3 pr-4">{job.track}</td>
-                        <td className="py-3 pr-4">
-                          {job.attempts}/{job.maxAttempts}
-                        </td>
-                        <td className="py-3">{formatAdminDateTime(job.updatedAt)}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+            {/* Recent failed jobs */}
+            <article className="surface-elevated overflow-hidden px-5 py-5">
+              <p className="mb-4 text-sm font-semibold text-white">Recent failures</p>
+              <div className="divide-y divide-white/5">
+                {data.recentFailedJobs.length === 0 ? (
+                  <p className="py-3 text-xs text-[var(--foreground-tertiary)]">No failures in this window.</p>
+                ) : data.recentFailedJobs.map((job) => {
+                  const isExpanded = expandedJob === job.jobId;
+                  return (
+                    <div key={job.jobId} className="py-2.5">
+                      <button
+                        type="button"
+                        className="flex w-full items-start justify-between gap-2 text-left"
+                        onClick={() => setExpandedJob(isExpanded ? null : job.jobId)}
+                      >
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs font-medium text-white">{job.jobType}</span>
+                            {job.sourceId ? (
+                              <span className="text-[10px] text-[var(--foreground-tertiary)]">{job.sourceId.slice(0, 8)}</span>
+                            ) : null}
+                          </div>
+                          <p className="mt-0.5 truncate text-[11px] text-[var(--foreground-tertiary)]">
+                            {job.errorMessage
+                              ? job.errorMessage.split("\n")[0]?.slice(0, 80)
+                              : "Unknown error"}
+                          </p>
+                        </div>
+                        <div className="flex shrink-0 items-center gap-2">
+                          <span className="text-[10px] text-[var(--foreground-tertiary)]">{formatAdminDateTime(job.updatedAt)}</span>
+                          <span className="text-[10px] text-[var(--foreground-tertiary)]">{isExpanded ? "▲" : "▼"}</span>
+                        </div>
+                      </button>
+                      {isExpanded && job.errorMessage ? (
+                        <pre className="mt-2 overflow-x-auto rounded-lg bg-red-950/30 p-3 text-[10px] leading-5 text-red-300 whitespace-pre-wrap break-all">
+                          {job.errorMessage}
+                        </pre>
+                      ) : null}
+                    </div>
+                  );
+                })}
               </div>
             </article>
-          </section>
+          </div>
         </>
       ) : (
         <DashboardState
           action={
             <button className="button-primary" onClick={() => void refresh()} type="button">
-              Retry request
+              Retry
             </button>
           }
-          description="The admin API returned no ingestion payload."
-          title="No ingestion data available"
+          description="No ingestion payload returned."
+          title="No data available"
         />
       )}
     </AdminLayout>

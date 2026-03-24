@@ -116,7 +116,7 @@ class ContentScheduler:
                         )
                         VALUES ($1, $2, $3, 'pending', $4::jsonb)
                         """,
-                        source.track,
+                        "unified",
                         source.id,
                         self._get_job_type(source),
                         json.dumps(payload, default=str),
@@ -198,6 +198,12 @@ class ContentScheduler:
         if source.track == "broll" and source.source_type == "pexels":
             return await self._discover_pexels_items(source)
         if source.track == "broll" and source.source_type == "pixabay":
+            return await self._discover_pixabay_items(source)
+        if source.track == "unified" and source.source_type == "youtube":
+            return await self._discover_youtube_items(source)
+        if source.track == "unified" and source.source_type == "pexels":
+            return await self._discover_pexels_items(source)
+        if source.track == "unified" and source.source_type == "pixabay":
             return await self._discover_pixabay_items(source)
         raise ValueError(
             f"Unsupported content source '{source.slug}' "
@@ -285,38 +291,27 @@ class ContentScheduler:
         source_item_id: str,
     ) -> dict[str, Any]:
         payload: dict[str, Any] = {
-            "track": source.track,
+            "track": "unified",
+            "discovery_track": source.track,
             "source_slug": source.slug,
             "source_type": source.source_type,
             "source_item_id": source_item_id,
+            "source": source.source_type,
+            "source_video_id": source_item_id,
+            "url": self._resolve_item_url(source, item, source_item_id),
+            "owner_id": None,
             "item": dict(item),
         }
-
         if source.track == "knowledge":
-            video_id = self._coerce_string(
-                item.get("source_video_id") or item.get("video_id") or item.get("id")
-            )
-            if video_id is None:
-                raise ValueError(
-                    f"Knowledge item for source '{source.slug}' is missing video_id."
-                )
-            payload["video_id"] = video_id
             payload["source_metadata"] = dict(item)
-            return payload
-
-        payload["query"] = self._coerce_string(source.config.get("query"))
+        if source.config.get("query") is not None:
+            payload["query"] = self._coerce_string(source.config.get("query"))
         if source.config.get("category") is not None:
             payload["category"] = self._coerce_string(source.config.get("category"))
-        payload["raw_asset"] = {
-            "source": source.source_type,
-            "payload": dict(item),
-        }
         return payload
 
     def _get_job_type(self, source: ContentSource) -> str:
-        if source.track == "knowledge":
-            return "index_video"
-        return "index_asset"
+        return "index_video"
 
     def _get_latest_cursor(
         self,
@@ -390,7 +385,7 @@ class ContentScheduler:
             self._logger.warning("Skipping malformed content source row: %s", source_row)
             return None
 
-        if track not in {"broll", "knowledge"}:
+        if track not in {"broll", "knowledge", "unified"}:
             self._logger.warning(
                 "Skipping unsupported content source '%s' with track '%s'.",
                 slug,
@@ -448,6 +443,37 @@ class ContentScheduler:
         if "pixabay" in slug_lower or "pixabay" in base_url_lower:
             return "pixabay"
         return None
+
+    def _resolve_item_url(
+        self,
+        source: ContentSource,
+        item: dict[str, Any],
+        source_item_id: str,
+    ) -> str:
+        if source.source_type == "youtube":
+            return (
+                self._coerce_string(item.get("source_url"))
+                or self._coerce_string(item.get("video_url"))
+                or f"https://www.youtube.com/watch?v={source_item_id}"
+            )
+        if source.source_type == "pexels":
+            return (
+                self._coerce_string(item.get("url"))
+                or self._coerce_string(item.get("source_url"))
+                or self._coerce_string(item.get("video_url"))
+                or f"https://www.pexels.com/video/{source_item_id}/"
+            )
+        if source.source_type == "pixabay":
+            return (
+                self._coerce_string(item.get("pageURL"))
+                or self._coerce_string(item.get("source_url"))
+                or self._coerce_string(item.get("video_url"))
+                or f"https://pixabay.com/videos/id-{source_item_id}/"
+            )
+        raise ValueError(
+            f"Discovered item for source '{source.slug}' has unsupported source_type "
+            f"'{source.source_type}'."
+        )
 
     def _get_source_item_id(
         self,

@@ -19,7 +19,9 @@ from .db import close_pool, get_pool
 from .routers.admin import router as admin_router
 from .routers.dashboard import router as dashboard_router
 from .routers.health import router as health_router
+from .routers.index import router as index_router
 from .routers.search import router as search_router
+from .routers.tracking import router as tracking_router
 from .routers.usage import router as usage_router
 from .routers.webhooks import router as webhooks_router
 from .search import ErrorDetail, ErrorResponse
@@ -80,7 +82,9 @@ app.add_middleware(
 )
 
 app.include_router(health_router)
+app.include_router(index_router)
 app.include_router(search_router)
+app.include_router(tracking_router)
 app.include_router(usage_router)
 app.include_router(dashboard_router)
 app.include_router(admin_router)
@@ -128,6 +132,7 @@ async def http_exception_handler(
 
     error_code = {
         400: "invalid_request",
+        422: "invalid_request",
         401: "unauthorized",
         403: "forbidden",
         404: "not_found",

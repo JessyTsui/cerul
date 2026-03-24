@@ -3,7 +3,7 @@ from __future__ import annotations
 from collections.abc import Mapping
 from typing import Any
 
-from backend.app.embedding import EmbeddingBackend, GeminiEmbeddingBackend
+from backend.app.embedding import EmbeddingBackend, create_embedding_backend
 from workers.common.sources import YouTubeClient
 from workers.common.pipeline import PipelineContext, PipelineExecutor
 
@@ -38,6 +38,31 @@ from .steps import (
     DetectKnowledgeScenesStep,
 )
 
+DEFAULT_KNOWLEDGE_EMBEDDING_DIMENSION = 3072
+DEFAULT_KNOWLEDGE_STEP_TIMEOUTS: dict[str, float] = {
+    "FetchKnowledgeMetadataStep": 45.0,
+    "FetchKnowledgeCaptionsStep": 60.0,
+    "DownloadKnowledgeVideoStep": 480.0,
+    "TranscribeKnowledgeVideoStep": 900.0,
+    "DetectKnowledgeScenesStep": 90.0,
+    "AnalyzeKnowledgeFramesStep": 600.0,
+    "SegmentKnowledgeTranscriptStep": 90.0,
+    "EmbedKnowledgeSegmentsStep": 300.0,
+    "StoreKnowledgeSegmentsStep": 120.0,
+}
+
+DEFAULT_KNOWLEDGE_TIMEOUT_GUIDANCE: dict[str, str] = {
+    "FetchKnowledgeMetadataStep": "Metadata fetch timed out; check the source endpoint and local proxy path.",
+    "FetchKnowledgeCaptionsStep": "Caption resolution timed out; the worker can fall back to ASR, but source caption endpoints may be slow.",
+    "DownloadKnowledgeVideoStep": "Video download timed out; inspect yt-dlp, cookies, proxy settings, and source availability.",
+    "TranscribeKnowledgeVideoStep": "Transcription timed out; inspect OpenAI connectivity, chunk sizing, and provider latency.",
+    "DetectKnowledgeScenesStep": "Scene detection timed out; inspect ffmpeg health and local video readability.",
+    "AnalyzeKnowledgeFramesStep": "Frame analysis timed out; this usually means a vision-model request hung. Check Gemini reachability, proxy behavior, or lower frame volume.",
+    "SegmentKnowledgeTranscriptStep": "Transcript segmentation timed out; inspect transcript payload size and segmentation heuristics.",
+    "EmbedKnowledgeSegmentsStep": "Segment embedding timed out; inspect Gemini embedding latency and outbound connectivity.",
+    "StoreKnowledgeSegmentsStep": "Database persistence timed out; inspect Postgres health and lock contention.",
+}
+
 
 class KnowledgeIndexingPipeline:
     def __init__(
@@ -53,7 +78,9 @@ class KnowledgeIndexingPipeline:
         temp_dir_root: str | None = None,
     ) -> None:
         self._repository = repository or resolve_default_knowledge_repository()
-        self._embedding_backend = embedding_backend or GeminiEmbeddingBackend()
+        self._embedding_backend = embedding_backend or create_embedding_backend(
+            output_dimension=DEFAULT_KNOWLEDGE_EMBEDDING_DIMENSION
+        )
         self._metadata_client = metadata_client or YouTubeClient()
         self._caption_provider = caption_provider or YtDlpCaptionProvider()
         self._video_downloader = video_downloader or YtDlpVideoDownloader(
@@ -89,6 +116,14 @@ class KnowledgeIndexingPipeline:
         conf: Mapping[str, Any] | None = None,
     ) -> PipelineContext:
         runtime_conf = dict(conf or {})
+        runtime_conf["step_timeouts"] = {
+            **DEFAULT_KNOWLEDGE_STEP_TIMEOUTS,
+            **dict(runtime_conf.get("step_timeouts") or {}),
+        }
+        runtime_conf["step_timeout_guidance"] = {
+            **DEFAULT_KNOWLEDGE_TIMEOUT_GUIDANCE,
+            **dict(runtime_conf.get("step_timeout_guidance") or {}),
+        }
         runtime_conf.setdefault("repository", self._repository)
         runtime_conf.setdefault("embedding_backend", self._embedding_backend)
         runtime_conf.setdefault("metadata_client", self._metadata_client)

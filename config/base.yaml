@@ -10,10 +10,32 @@ search:
   mmr_lambda: 0.75
   clip_score_threshold: null
 
+embedding:
+  backend: gemini
+  model: gemini-embedding-2-preview
+  # Supported: 128–3072. Recommended: 768, 1536, 3072.
+  # 768 delivers near-peak quality at ¼ the storage of 3072.
+  # Note: embeddings at non-3072 dims are L2-normalised automatically (normalize: true).
+  dimension: 768
+  normalize: true
+
 knowledge:
   scene_threshold: 0.35
   rerank_top_n: 20
   rerank_prompt_template: default
+  # "openai"  → gpt-4o-mini, 20 parallel calls per search (default, no extra key needed)
+  # "cohere"  → rerank-v3.5, 1 call per search (set COHERE_API_KEY to enable)
+  rerank_backend: openai
+  rerank_model: gpt-4o-mini
+  download:
+    max_height: 480
+  transcription:
+    provider: openai_compatible
+    base_url: https://api.groq.com/openai/v1
+    model: whisper-large-v3-turbo
+    response_format: auto
+    timeout_seconds: 600
+    timestamp_granularity: segment
 
 dashboard:
   admin_emails: []

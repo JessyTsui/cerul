@@ -6,6 +6,8 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 FRONTEND_DIR="${ROOT_DIR}/frontend"
 BACKEND_DIR="${ROOT_DIR}/backend"
 BACKEND_VENV="${BACKEND_DIR}/.venv"
+WORKERS_DIR="${ROOT_DIR}/workers"
+WORKERS_VENV="${WORKERS_DIR}/.venv"
 ENV_FILE="${CERUL_ENV_FILE:-${ROOT_DIR}/.env}"
 
 FRONTEND_HOST="${FRONTEND_HOST:-127.0.0.1}"
@@ -49,6 +51,10 @@ cleanup() {
   if [ -n "${BACKEND_PID:-}" ] && kill -0 "${BACKEND_PID}" >/dev/null 2>&1; then
     kill "${BACKEND_PID}" >/dev/null 2>&1 || true
   fi
+
+  if [ -n "${WORKER_PID:-}" ] && kill -0 "${WORKER_PID}" >/dev/null 2>&1; then
+    kill "${WORKER_PID}" >/dev/null 2>&1 || true
+  fi
 }
 
 start_backend() {
@@ -80,6 +86,24 @@ start_frontend() {
   FRONTEND_PID=$!
 }
 
+start_worker() {
+  if [ ! -x "${WORKERS_VENV}/bin/python" ]; then
+    echo "[dev] Worker virtualenv is missing. Run ./rebuild.sh first." >&2
+    exit 1
+  fi
+
+  if [ -z "${DATABASE_URL:-}" ]; then
+    echo "[dev] DATABASE_URL is required to start the worker." >&2
+    exit 1
+  fi
+
+  (
+    cd "${ROOT_DIR}"
+    exec "${WORKERS_VENV}/bin/python" -m workers.worker --db-url "${DATABASE_URL}"
+  ) &
+  WORKER_PID=$!
+}
+
 watch_processes() {
   while true; do
     if ! kill -0 "${BACKEND_PID}" >/dev/null 2>&1; then
@@ -89,6 +113,11 @@ watch_processes() {
 
     if ! kill -0 "${FRONTEND_PID}" >/dev/null 2>&1; then
       wait "${FRONTEND_PID}"
+      return $?
+    fi
+
+    if ! kill -0 "${WORKER_PID}" >/dev/null 2>&1; then
+      wait "${WORKER_PID}"
       return $?
     fi
 
@@ -115,10 +144,12 @@ echo "=========================================="
 echo "[dev] env file: ${ENV_FILE}"
 echo "[dev] frontend: http://${FRONTEND_HOST}:${FRONTEND_PORT}"
 echo "[dev] backend:  http://${BACKEND_HOST}:${BACKEND_PORT}"
+echo "[dev] worker:   enabled"
 echo ""
 
 trap cleanup EXIT INT TERM
 
 start_backend
 start_frontend
+start_worker
 watch_processes

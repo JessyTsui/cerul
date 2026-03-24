@@ -22,7 +22,7 @@ export function AdminRequestsScreen() {
     <AdminLayout
       currentPath="/admin/requests"
       title="Requests"
-      description="Inspect API demand, latency, search quality, and which queries are proving or disproving the current retrieval stack."
+      description="API demand, latency, and search quality."
       actions={
         <>
           <AdminRangePicker value={range} onChange={setRange} />
@@ -38,7 +38,7 @@ export function AdminRequestsScreen() {
         <DashboardState
           action={
             <button className="button-primary" onClick={() => void refresh()} type="button">
-              Retry request
+              Retry
             </button>
           }
           description={error}
@@ -49,183 +49,115 @@ export function AdminRequestsScreen() {
         <>
           {error ? (
             <DashboardNotice
-              title="Showing the last successful request snapshot."
+              title="Showing last successful snapshot."
               description={error}
               tone="error"
             />
           ) : null}
 
-          <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-6">
-            <AdminMetricCard
-              label="Requests"
-              metric={data.metrics.totalRequests}
-              note="Successful requests recorded in usage events."
-            />
-            <AdminMetricCard
-              label="Credits"
-              metric={data.metrics.creditsUsed}
-              note="Credits consumed by those requests."
-            />
-            <AdminMetricCard
-              label="Active users"
-              metric={data.metrics.activeUsers}
-              note="Distinct accounts issuing requests."
-            />
-            <AdminMetricCard
-              label="Avg credits/request"
-              metric={data.metrics.averageCreditsPerRequest}
-              note="Useful for spotting answer-heavy workloads."
-            />
-            <AdminMetricCard
-              label="Zero-result rate"
-              metric={data.metrics.zeroResultRate}
-              note="Searches that returned no candidates."
-              kind="percent"
-            />
-            <AdminMetricCard
-              label="Answer usage"
-              metric={data.metrics.answerUsageRate}
-              note="Share of searches asking for answer synthesis."
-              kind="percent"
-            />
+          <section className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+            <AdminMetricCard label="Requests" metric={data.metrics.totalRequests} />
+            <AdminMetricCard label="Credits" metric={data.metrics.creditsUsed} />
+            <AdminMetricCard label="Zero-result rate" metric={data.metrics.zeroResultRate} kind="percent" />
+            <AdminMetricCard label="Answer usage" metric={data.metrics.answerUsageRate} kind="percent" />
           </section>
 
-          <section className="grid gap-4 md:grid-cols-3">
-            <AdminMetricCard
-              label="Latency p50"
-              metric={data.metrics.latency.p50Ms}
-              note="Median end-to-end search latency."
-              kind="milliseconds"
-            />
-            <AdminMetricCard
-              label="Latency p95"
-              metric={data.metrics.latency.p95Ms}
-              note="Tail latency for the majority of real requests."
-              kind="milliseconds"
-            />
-            <AdminMetricCard
-              label="Latency p99"
-              metric={data.metrics.latency.p99Ms}
-              note="Worst tail segment in the selected window."
-              kind="milliseconds"
-            />
-          </section>
+          {/* Latency row */}
+          <article className="surface-elevated px-5 py-4">
+            <p className="mb-3 text-xs text-[var(--foreground-tertiary)]">Latency</p>
+            <div className="grid grid-cols-3 divide-x divide-[var(--border)]">
+              {[
+                { label: "p50", value: data.metrics.latency.p50Ms },
+                { label: "p95", value: data.metrics.latency.p95Ms },
+                { label: "p99", value: data.metrics.latency.p99Ms },
+              ].map(({ label, value }) => (
+                <div key={label} className="px-4 first:pl-0 last:pr-0">
+                  <p className="text-xs text-[var(--foreground-tertiary)]">{label}</p>
+                  <p className="mt-1 text-lg font-semibold text-white">
+                    {formatAdminMetricValue(value.current, { kind: "milliseconds" })}
+                  </p>
+                  <p className="mt-0.5 text-[10px] text-[var(--foreground-tertiary)]">
+                    prev {formatAdminMetricValue(value.previous, { kind: "milliseconds" })}
+                  </p>
+                </div>
+              ))}
+            </div>
+          </article>
 
           <AdminTrendChart
-            title="Request traffic"
-            description="This is the admin-side mirror of the Cerul API skill. If request volume, credit burn, or latency drifts, the product surface and the skill surface will both feel it."
+            title="Traffic"
             data={toAdminChartData(data.dailySeries, "requests")}
             metricLabel="Requests"
             secondaryLabel="Credits"
           />
 
-          <section className="grid gap-5 xl:grid-cols-2">
-            <article className="surface-elevated px-6 py-6">
-              <p className="font-mono text-xs uppercase tracking-[0.16em] text-[var(--foreground-tertiary)]">
-                Search mix
-              </p>
-              <h2 className="mt-2 text-2xl font-semibold text-white">
-                Track distribution
-              </h2>
-              <div className="mt-5 space-y-3">
-                {data.searchTypeMix.map((item) => (
-                  <div
-                    key={item.key}
-                    className="flex items-center justify-between rounded-[18px] border border-[var(--border)] bg-[var(--surface)] px-4 py-3"
-                  >
-                    <span className="text-sm text-white">{item.label}</span>
-                    <span className="font-mono text-sm text-[var(--foreground-secondary)]">
-                      {item.count}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            </article>
-
-            <article className="surface-elevated overflow-hidden px-6 py-6">
-              <p className="font-mono text-xs uppercase tracking-[0.16em] text-[var(--foreground-tertiary)]">
-                Top queries
-              </p>
-              <h2 className="mt-2 text-2xl font-semibold text-white">
-                Highest-volume prompts
-              </h2>
-              <div className="mt-5 overflow-x-auto">
-                <table className="min-w-full text-left text-sm">
-                  <thead className="text-[var(--foreground-tertiary)]">
-                    <tr>
-                      <th className="pb-3 pr-4 font-medium">Query</th>
-                      <th className="pb-3 pr-4 font-medium">Requests</th>
-                      <th className="pb-3 pr-4 font-medium">Zero results</th>
-                      <th className="pb-3 font-medium">Avg latency</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-white/5 text-[var(--foreground-secondary)]">
-                    {data.topQueries.map((query) => (
-                      <tr key={query.queryText}>
-                        <td className="py-3 pr-4 text-white">{query.queryText}</td>
-                        <td className="py-3 pr-4">{query.requestCount}</td>
-                        <td className="py-3 pr-4">{query.zeroResultCount}</td>
-                        <td className="py-3">
-                          {query.avgLatencyMs === null
-                            ? "N/A"
-                            : formatAdminMetricValue(query.avgLatencyMs, {
-                                kind: "milliseconds",
-                              })}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </article>
-          </section>
-
-          <article className="surface-elevated overflow-hidden px-6 py-6">
-            <p className="font-mono text-xs uppercase tracking-[0.16em] text-[var(--foreground-tertiary)]">
-              Zero-result queries
-            </p>
-            <h2 className="mt-2 text-2xl font-semibold text-white">
-              Queries to inspect next
-            </h2>
-            <div className="mt-5 overflow-x-auto">
-              <table className="min-w-full text-left text-sm">
-                <thead className="text-[var(--foreground-tertiary)]">
-                  <tr>
-                    <th className="pb-3 pr-4 font-medium">Query</th>
-                    <th className="pb-3 pr-4 font-medium">Requests</th>
-                    <th className="pb-3 pr-4 font-medium">Answer usage</th>
-                    <th className="pb-3 font-medium">Avg latency</th>
+          <div className="grid gap-3 xl:grid-cols-2">
+            <article className="surface-elevated overflow-hidden px-5 py-5">
+              <p className="mb-4 text-sm font-semibold text-white">Top queries</p>
+              <table className="w-full text-left text-xs">
+                <thead>
+                  <tr className="text-[var(--foreground-tertiary)]">
+                    <th className="pb-2 pr-3 font-medium">Query</th>
+                    <th className="pb-2 pr-3 font-medium">Req</th>
+                    <th className="pb-2 pr-3 font-medium">0-result</th>
+                    <th className="pb-2 font-medium">Latency</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-white/5 text-[var(--foreground-secondary)]">
-                  {data.zeroResultQueries.map((query) => (
-                    <tr key={`${query.queryText}-zero`}>
-                      <td className="py-3 pr-4 text-white">{query.queryText}</td>
-                      <td className="py-3 pr-4">{query.requestCount}</td>
-                      <td className="py-3 pr-4">{query.answerCount}</td>
-                      <td className="py-3">
+                <tbody className="divide-y divide-white/5">
+                  {data.topQueries.map((query) => (
+                    <tr key={query.queryText}>
+                      <td className="py-2 pr-3 text-white">{query.queryText}</td>
+                      <td className="py-2 pr-3 text-[var(--foreground-secondary)]">{query.requestCount}</td>
+                      <td className="py-2 pr-3 text-[var(--foreground-secondary)]">{query.zeroResultCount}</td>
+                      <td className="py-2 text-[var(--foreground-secondary)]">
                         {query.avgLatencyMs === null
-                          ? "N/A"
-                          : formatAdminMetricValue(query.avgLatencyMs, {
-                              kind: "milliseconds",
-                            })}
+                          ? "—"
+                          : formatAdminMetricValue(query.avgLatencyMs, { kind: "milliseconds" })}
                       </td>
                     </tr>
                   ))}
                 </tbody>
               </table>
-            </div>
-          </article>
+            </article>
+
+            <article className="surface-elevated overflow-hidden px-5 py-5">
+              <p className="mb-4 text-sm font-semibold text-white">Zero-result queries</p>
+              <table className="w-full text-left text-xs">
+                <thead>
+                  <tr className="text-[var(--foreground-tertiary)]">
+                    <th className="pb-2 pr-3 font-medium">Query</th>
+                    <th className="pb-2 pr-3 font-medium">Req</th>
+                    <th className="pb-2 pr-3 font-medium">w/ answer</th>
+                    <th className="pb-2 font-medium">Latency</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-white/5">
+                  {data.zeroResultQueries.map((query) => (
+                    <tr key={`${query.queryText}-zero`}>
+                      <td className="py-2 pr-3 text-white">{query.queryText}</td>
+                      <td className="py-2 pr-3 text-[var(--foreground-secondary)]">{query.requestCount}</td>
+                      <td className="py-2 pr-3 text-[var(--foreground-secondary)]">{query.answerCount}</td>
+                      <td className="py-2 text-[var(--foreground-secondary)]">
+                        {query.avgLatencyMs === null
+                          ? "—"
+                          : formatAdminMetricValue(query.avgLatencyMs, { kind: "milliseconds" })}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </article>
+          </div>
         </>
       ) : (
         <DashboardState
           action={
             <button className="button-primary" onClick={() => void refresh()} type="button">
-              Retry request
+              Retry
             </button>
           }
-          description="The admin API returned no request payload."
-          title="No request data available"
+          description="No request payload returned."
+          title="No data available"
         />
       )}
     </AdminLayout>

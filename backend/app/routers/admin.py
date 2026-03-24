@@ -8,17 +8,25 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 
 from app.admin import (
+    AdminDeleteVideoResponse,
+    AdminIndexedVideosResponse,
     AdminSummaryResponse,
     AdminTargetsResponse,
     AdminTargetsUpsertRequest,
+    AdminWorkerLiveResponse,
+    delete_indexed_video_data,
     delete_target,
     fetch_admin_summary,
     fetch_content_summary,
     fetch_ingestion_summary,
+    fetch_indexed_videos,
     fetch_requests_summary,
     fetch_targets_summary,
     fetch_users_summary,
+    fetch_worker_live,
+    kill_job,
     require_admin_access,
+    retry_job,
     upsert_targets,
 )
 from app.admin.models import (
@@ -131,3 +139,83 @@ async def remove_admin_target(
         )
 
     return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@router.get("/worker/live", response_model=AdminWorkerLiveResponse)
+async def get_worker_live(
+    failed_limit: int = Query(default=10, ge=1, le=100),
+    failed_offset: int = Query(default=0, ge=0),
+    session: SessionContext = Depends(require_session),
+    db: Any = Depends(get_db),
+) -> AdminWorkerLiveResponse:
+    await require_admin_access(session, db)
+    return await fetch_worker_live(
+        db,
+        failed_limit=failed_limit,
+        failed_offset=failed_offset,
+    )
+
+
+@router.get("/videos", response_model=AdminIndexedVideosResponse)
+async def get_indexed_videos(
+    query: str | None = Query(default=None, max_length=400),
+    limit: int = Query(default=10, ge=1, le=100),
+    offset: int = Query(default=0, ge=0),
+    session: SessionContext = Depends(require_session),
+    db: Any = Depends(get_db),
+) -> AdminIndexedVideosResponse:
+    await require_admin_access(session, db)
+    return await fetch_indexed_videos(
+        db,
+        query=query,
+        limit=limit,
+        offset=offset,
+    )
+
+
+@router.delete("/videos/{video_id}", response_model=AdminDeleteVideoResponse)
+async def delete_indexed_video(
+    video_id: UUID,
+    session: SessionContext = Depends(require_session),
+    db: Any = Depends(get_db),
+) -> AdminDeleteVideoResponse:
+    await require_admin_access(session, db)
+    result = await delete_indexed_video_data(db, video_id=str(video_id))
+    if result is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Indexed video not found.",
+        )
+    return result
+
+
+@router.post("/jobs/{job_id}/retry")
+async def retry_failed_job(
+    job_id: UUID,
+    session: SessionContext = Depends(require_session),
+    db: Any = Depends(get_db),
+) -> dict[str, object]:
+    await require_admin_access(session, db)
+    result = await retry_job(db, job_id=str(job_id))
+    if result is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Job not found or not in failed state.",
+    )
+    return {"ok": True, "job_id": str(job_id)}
+
+
+@router.post("/jobs/{job_id}/kill")
+async def kill_failed_job(
+    job_id: UUID,
+    session: SessionContext = Depends(require_session),
+    db: Any = Depends(get_db),
+) -> dict[str, object]:
+    await require_admin_access(session, db)
+    result = await kill_job(db, job_id=str(job_id))
+    if result is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Job not found or not in failed state.",
+        )
+    return {"ok": True, "job_id": str(job_id)}

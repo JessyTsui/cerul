@@ -43,8 +43,9 @@ export default function DocsPage() {
                   Build against Cerul without reverse-engineering the product.
                 </h1>
                 <p className="mt-4 max-w-3xl text-base leading-8 text-[var(--foreground-secondary)]">
-                  Start from the search and usage APIs, learn the request and response shapes
-                  quickly, and move into implementation details only when you actually need them.
+                  Start from the index, search, and usage APIs, learn the request and response
+                  shapes quickly, and move into implementation details only when you actually need
+                  them.
                 </p>
               </div>
 
@@ -72,9 +73,12 @@ export default function DocsPage() {
   -H "Content-Type: application/json" \\
   -d '{
     "query": "Sam Altman views on AI video generation tools",
-    "search_type": "knowledge",
     "max_results": 3,
-    "include_answer": true
+    "include_answer": true,
+    "filters": {
+      "speaker": "Sam Altman",
+      "source": "youtube"
+    }
   }'`}</code>
                 </pre>
               </div>
@@ -207,7 +211,7 @@ export default function DocsPage() {
               <div className="mt-4 space-y-4">
                 {[
                   "Create a key from the dashboard.",
-                  "Test POST /v1/search with a seeded query.",
+                  "Submit a video to POST /v1/index or search the shared library directly.",
                   "Check GET /v1/usage before you automate heavy traffic.",
                 ].map((item, index) => (
                   <div

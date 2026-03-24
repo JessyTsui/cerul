@@ -104,8 +104,8 @@ export default function ApiReferencePage() {
                 Public endpoints, accurate payloads, no dashboard-only chrome.
               </h1>
               <p className="mt-5 max-w-4xl text-base leading-8 text-[var(--foreground-secondary)]">
-                Cerul’s public contract is intentionally narrow. Search and usage are the primary
-                authenticated routes, with one lightweight metadata endpoint for service checks.
+                Cerul’s public contract is intentionally narrow. Index, search, and usage are the
+                primary authenticated routes, with tracking redirects returned as public result URLs.
               </p>
               <div className="mt-6 grid gap-4 xl:grid-cols-3">
                 {[
@@ -117,7 +117,7 @@ export default function ApiReferencePage() {
                   {
                     title: "Formats",
                     value: "JSON request + response",
-                    description: "Except GET /v1/meta, all primary routes are JSON-first.",
+                    description: "Primary authenticated routes are JSON-first.",
                   },
                   {
                     title: "Auth posture",

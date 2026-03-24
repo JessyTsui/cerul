@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from datetime import date, datetime
-from typing import Literal
+from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -172,7 +172,6 @@ class AdminRequestsSummaryResponse(BaseModel):
     generated_at: datetime
     window: AdminWindow
     metrics: AdminRequestsMetrics
-    search_type_mix: list[AdminNamedCount]
     daily_series: list[AdminSummaryPoint]
     top_queries: list[AdminQueryBucket]
     zero_result_queries: list[AdminQueryBucket]
@@ -291,6 +290,112 @@ class AdminIngestionSummaryResponse(BaseModel):
     source_health: list[AdminSourceHealth]
     recent_failed_jobs: list[AdminFailedJob]
     failed_steps: list[AdminFailedStep]
+
+
+class AdminWorkerStep(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    step_name: str
+    status: str  # "pending" | "running" | "completed" | "failed"
+    artifacts: Any = Field(default_factory=dict)
+    started_at: datetime | None = None
+    completed_at: datetime | None = None
+    updated_at: datetime | None = None
+    duration_ms: int | None = None
+    guidance: str | None = None
+    logs: list[dict[str, Any]] = Field(default_factory=list)
+    error_message: str | None = None
+
+
+class AdminWorkerJob(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    job_id: str
+    track: str
+    status: str
+    source: str | None = None
+    video_id: str | None = None
+    title: str | None = None
+    started_at: datetime | None = None
+    created_at: datetime
+    last_activity_at: datetime | None = None
+    attempts: int = 0
+    max_attempts: int = 0
+    total_duration_ms: int | None = None
+    error_message: str | None = None
+    steps: list[AdminWorkerStep] = Field(default_factory=list)
+
+
+class AdminWorkerCompletedJob(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    job_id: str
+    video_id: str | None = None
+    title: str | None = None
+    segment_count: int
+    completed_at: datetime | None = None
+    total_duration_ms: int | None = None
+
+
+class AdminWorkerQueueCounts(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    pending: int
+    running: int
+    retrying: int
+    completed: int
+    failed: int
+
+
+class AdminWorkerLiveResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    generated_at: datetime
+    queue: AdminWorkerQueueCounts
+    active_jobs: list[AdminWorkerJob]
+    recent_completed: list[AdminWorkerCompletedJob]
+    failed_jobs: list[AdminWorkerJob] = Field(default_factory=list)
+    failed_jobs_total: int = 0
+    failed_jobs_limit: int = 0
+    failed_jobs_offset: int = 0
+
+
+class AdminIndexedVideo(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    video_id: str
+    source: str
+    source_video_id: str
+    title: str
+    source_url: str | None = None
+    video_url: str | None = None
+    speaker: str | None = None
+    created_at: datetime
+    updated_at: datetime
+    units_created: int
+    last_job_status: str | None = None
+    last_job_at: datetime | None = None
+
+
+class AdminIndexedVideosResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    generated_at: datetime
+    videos: list[AdminIndexedVideo] = Field(default_factory=list)
+    total: int = 0
+    limit: int = 0
+    offset: int = 0
+    query: str | None = None
+
+
+class AdminDeleteVideoResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    ok: bool
+    video_id: str
+    title: str
+    units_deleted: int = 0
+    processing_jobs_deleted: int = 0
 
 
 class AdminMetricTarget(BaseModel):

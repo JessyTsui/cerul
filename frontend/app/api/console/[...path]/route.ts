@@ -137,6 +137,11 @@ async function proxyConsoleRequest(
     }
   }
 
+  const cookieHeader = request.headers.get("cookie");
+  if (cookieHeader) {
+    headers.set("cookie", cookieHeader);
+  }
+
   const timestamp = String(Math.floor(Date.now() / 1000));
   headers.set(SESSION_PROXY_USER_ID_HEADER, session.user.id);
 

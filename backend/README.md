@@ -21,5 +21,7 @@ Cerul's API service lives in this directory.
 python3 -m venv backend/.venv
 backend/.venv/bin/python -m pip install -r backend/requirements.txt
 backend/.venv/bin/python -m uvicorn app.main:app --app-dir backend --reload --host 127.0.0.1 --port 8000
+# Tests keep the same runtime environment and only use an isolated database.
+# By default they derive <DATABASE_URL database>_test.
 backend/.venv/bin/pytest backend/tests
 ```

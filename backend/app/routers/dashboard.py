@@ -27,8 +27,8 @@ API_KEY_PREFIX_LENGTH = 16
 router = APIRouter(prefix="/dashboard", tags=["dashboard"])
 
 JobStatus = Literal["pending", "running", "retrying", "completed", "failed"]
-JobTrack = Literal["broll", "knowledge"]
-JobStepStatus = Literal["completed", "failed", "skipped"]
+JobTrack = Literal["broll", "knowledge", "unified"]
+JobStepStatus = Literal["pending", "running", "completed", "failed", "skipped"]
 
 
 class CreateApiKeyRequest(BaseModel):
@@ -111,6 +111,9 @@ class JobStepDetail(BaseModel):
     started_at: datetime | None = None
     completed_at: datetime | None = None
     updated_at: datetime
+    duration_ms: int | None = None
+    guidance: str | None = None
+    logs: list[dict[str, Any]] = Field(default_factory=list)
 
 
 class JobDetailResponse(BaseModel):
@@ -136,6 +139,7 @@ class JobDetailResponse(BaseModel):
 class JobTrackCounts(BaseModel):
     broll: int
     knowledge: int
+    unified: int
 
 
 class JobStatsResponse(BaseModel):
@@ -330,15 +334,45 @@ def _normalize_processing_job_detail(record: dict[str, Any] | None) -> dict[str,
 
 def _normalize_processing_job_step(record: dict[str, Any] | None) -> dict[str, Any]:
     payload = record or {}
+    artifacts = payload.get("artifacts") or {}
+    started_at = payload.get("started_at")
+    completed_at = payload.get("completed_at")
+    updated_at = payload.get("updated_at")
+
+    logs: list[dict[str, Any]] = []
+    if isinstance(artifacts, dict) and isinstance(artifacts.get("logs"), list):
+        for item in artifacts["logs"]:
+            if not isinstance(item, dict):
+                continue
+            message = str(item.get("message") or "").strip()
+            if not message:
+                continue
+            logs.append(
+                {
+                    "at": item.get("at"),
+                    "level": str(item.get("level") or "info"),
+                    "message": message,
+                    "details": item.get("details") if isinstance(item.get("details"), dict) else None,
+                }
+            )
+
+    duration_ms = None
+    if started_at is not None:
+        end = completed_at or updated_at or datetime.now(timezone.utc)
+        duration_ms = max(int((end - started_at).total_seconds() * 1000), 0)
+
     return {
         "id": str(payload.get("id") or ""),
         "step_name": str(payload.get("step_name") or ""),
         "status": payload.get("status"),
-        "artifacts": payload.get("artifacts") or {},
+        "artifacts": artifacts,
         "error_message": payload.get("error_message"),
-        "started_at": payload.get("started_at"),
-        "completed_at": payload.get("completed_at"),
-        "updated_at": payload.get("updated_at"),
+        "started_at": started_at,
+        "completed_at": completed_at,
+        "updated_at": updated_at,
+        "duration_ms": duration_ms,
+        "guidance": str(artifacts.get("guidance")).strip() if isinstance(artifacts, dict) and artifacts.get("guidance") else None,
+        "logs": logs,
     }
 
 
@@ -422,18 +456,29 @@ async def fetch_daily_usage_breakdown(
     return [cast(dict[str, Any], _record_to_dict(row)) for row in rows]
 
 
+def _not_cancelled_job_condition(alias: str | None = None) -> str:
+    prefix = f"{alias}." if alias else ""
+    return f"COALESCE(({prefix}input_payload->>'cancelled_by_user')::boolean, FALSE) = FALSE"
+
+
 async def count_processing_jobs(
     db: Any,
     *,
     job_status: JobStatus | None = None,
     track: JobTrack | None = None,
 ) -> int:
+    failed_clause = (
+        f" AND {_not_cancelled_job_condition()}"
+        if job_status == "failed"
+        else ""
+    )
     count = await db.fetchval(
-        """
+        f"""
         SELECT COUNT(*)
         FROM processing_jobs
         WHERE ($1::text IS NULL OR status = $1)
           AND ($2::text IS NULL OR track = $2)
+          {failed_clause}
         """,
         job_status,
         track,
@@ -449,8 +494,13 @@ async def list_processing_jobs(
     limit: int,
     offset: int,
 ) -> list[dict[str, Any]]:
+    failed_clause = (
+        f" AND {_not_cancelled_job_condition()}"
+        if job_status == "failed"
+        else ""
+    )
     rows = await db.fetch(
-        """
+        f"""
         SELECT
             id,
             track,
@@ -466,6 +516,7 @@ async def list_processing_jobs(
         FROM processing_jobs
         WHERE ($1::text IS NULL OR status = $1)
           AND ($2::text IS NULL OR track = $2)
+          {failed_clause}
         ORDER BY created_at DESC
         LIMIT $3
         OFFSET $4
@@ -550,16 +601,20 @@ async def fetch_processing_job_stats(
     db: Any,
 ) -> dict[str, int]:
     row = await db.fetchrow(
-        """
+        f"""
         SELECT
             COUNT(*) AS total,
             COUNT(*) FILTER (WHERE status = 'pending') AS pending,
             COUNT(*) FILTER (WHERE status = 'running') AS running,
             COUNT(*) FILTER (WHERE status = 'retrying') AS retrying,
             COUNT(*) FILTER (WHERE status = 'completed') AS completed,
-            COUNT(*) FILTER (WHERE status = 'failed') AS failed,
+            COUNT(*) FILTER (
+                WHERE status = 'failed'
+                  AND {_not_cancelled_job_condition()}
+            ) AS failed,
             COUNT(*) FILTER (WHERE track = 'broll') AS broll,
-            COUNT(*) FILTER (WHERE track = 'knowledge') AS knowledge
+            COUNT(*) FILTER (WHERE track = 'knowledge') AS knowledge,
+            COUNT(*) FILTER (WHERE track = 'unified') AS unified
         FROM processing_jobs
         """
     )
@@ -573,6 +628,7 @@ async def fetch_processing_job_stats(
         "failed": int(payload.get("failed", 0) or 0),
         "broll": int(payload.get("broll", 0) or 0),
         "knowledge": int(payload.get("knowledge", 0) or 0),
+        "unified": int(payload.get("unified", 0) or 0),
     }
 
 
@@ -737,6 +793,7 @@ async def get_dashboard_job_stats(
         tracks=JobTrackCounts(
             broll=stats["broll"],
             knowledge=stats["knowledge"],
+            unified=stats["unified"],
         ),
     )
 

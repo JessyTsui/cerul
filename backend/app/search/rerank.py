@@ -14,10 +14,14 @@ logger = logging.getLogger(__name__)
 
 DEFAULT_OPENAI_BASE_URL = "https://api.openai.com/v1"
 DEFAULT_RERANK_MODEL = "gpt-4o-mini"
+DEFAULT_COHERE_BASE_URL = "https://api.cohere.com/v2"
+DEFAULT_COHERE_MODEL = "rerank-v3.5"
 DEFAULT_TIMEOUT_SECONDS = 15.0
 
 
 class RerankerBackend(Protocol):
+    """Pointwise backend: scores one candidate at a time."""
+
     async def score_relevance(
         self,
         query: str,
@@ -25,7 +29,27 @@ class RerankerBackend(Protocol):
     ) -> float: ...
 
 
+class BatchRerankerBackend(Protocol):
+    """Batch backend: scores all candidates in a single API call.
+
+    Preferred over RerankerBackend when available — lower latency,
+    fewer API round-trips, and typically better quality (listwise context).
+    """
+
+    async def score_batch(
+        self,
+        query: str,
+        candidates: Sequence[Mapping[str, Any]],
+    ) -> list[float]: ...
+
+
 class OpenAICompatibleRerankerBackend:
+    """Pointwise reranker using any OpenAI-compatible chat completions API.
+
+    Makes one LLM call per candidate — suitable for small top_n values.
+    For larger candidate sets prefer CohereRerankerBackend.
+    """
+
     def __init__(
         self,
         *,
@@ -94,15 +118,88 @@ class OpenAICompatibleRerankerBackend:
         return _clamp_llm_score(float(parsed_content["score"]))
 
 
-class LLMReranker:
+class CohereRerankerBackend:
+    """Batch reranker using the Cohere Rerank API.
+
+    Scores all candidates in a single API call — lower latency than
+    the pointwise LLM approach and purpose-built for passage relevance.
+
+    Model: rerank-v3.5 (default) — Cohere's SOTA cross-encoder.
+    Pricing: ~$0.002 per search (1 call regardless of candidate count).
+
+    Requires COHERE_API_KEY env var or api_key constructor argument.
+    """
+
     def __init__(
         self,
         *,
-        backend: RerankerBackend | None = None,
+        api_key: str | None = None,
+        base_url: str = DEFAULT_COHERE_BASE_URL,
+        model_name: str = DEFAULT_COHERE_MODEL,
+        timeout_seconds: float = DEFAULT_TIMEOUT_SECONDS,
+    ) -> None:
+        self.api_key = (api_key or os.getenv("COHERE_API_KEY", "")).strip()
+        self.base_url = base_url.rstrip("/")
+        self.model_name = model_name
+        self.timeout_seconds = timeout_seconds
+
+    async def score_batch(
+        self,
+        query: str,
+        candidates: Sequence[Mapping[str, Any]],
+    ) -> list[float]:
+        if not self.api_key:
+            raise RuntimeError("COHERE_API_KEY is not set.")
+        if not candidates:
+            return []
+
+        documents = [_format_candidate_for_cohere(c) for c in candidates]
+        payload = {
+            "model": self.model_name,
+            "query": query,
+            "documents": documents,
+            "top_n": len(candidates),
+            "return_documents": False,
+        }
+
+        async with httpx.AsyncClient(timeout=self.timeout_seconds) as client:
+            response = await client.post(
+                f"{self.base_url}/rerank",
+                headers={
+                    "Authorization": f"Bearer {self.api_key}",
+                    "Content-Type": "application/json",
+                },
+                json=payload,
+            )
+
+        response.raise_for_status()
+        results = response.json().get("results", [])
+
+        # Cohere returns results sorted by score; restore original index order.
+        scores = [0.0] * len(candidates)
+        for item in results:
+            idx = item.get("index", -1)
+            if 0 <= idx < len(scores):
+                scores[idx] = float(item.get("relevance_score", 0.0))
+        return scores
+
+
+class LLMReranker:
+    """Orchestrates reranking using either a pointwise or batch backend.
+
+    Automatically uses score_batch() when the backend supports it
+    (e.g. CohereRerankerBackend), falling back to parallel score_relevance()
+    calls for pointwise backends (e.g. OpenAICompatibleRerankerBackend).
+    """
+
+    def __init__(
+        self,
+        *,
+        backend: RerankerBackend | CohereRerankerBackend | None = None,
         top_n: int | None = None,
     ) -> None:
         settings = get_settings()
-        self.backend = backend or OpenAICompatibleRerankerBackend()
+        self.backend = backend or _build_default_backend(settings)
         self.top_n = top_n or settings.knowledge.rerank_top_n
 
     async def rerank(
@@ -119,12 +216,21 @@ class LLMReranker:
         remaining_candidates = [dict(candidate) for candidate in candidates[candidate_limit:]]
 
         try:
-            llm_scores = await asyncio.gather(
-                *[
-                    self.backend.score_relevance(query, candidate)
-                    for candidate in rerank_candidates
-                ]
-            )
+            if hasattr(self.backend, "score_batch"):
+                # Batch backend: one API call for all candidates.
+                llm_scores = await self.backend.score_batch(query, rerank_candidates)
+                # Batch scores are already 0–1; normalise to match pointwise range.
+                llm_scores = [s * 10.0 for s in llm_scores]
+            else:
+                # Pointwise backend: parallel calls, one per candidate.
+                llm_scores = list(
+                    await asyncio.gather(
+                        *[
+                            self.backend.score_relevance(query, candidate)
+                            for candidate in rerank_candidates
+                        ]
+                    )
+                )
         except Exception as exc:
             logger.warning(
                 "Knowledge reranking failed; falling back to vector score ordering: %s",
@@ -159,9 +265,15 @@ def build_rerank_prompt(
         limit=2500,
     )
     visual_description = _truncate_text(
-        _coerce_text(candidate.get("visual_summary") or candidate.get("description")),
+        _coerce_text(
+            candidate.get("visual_text_content")
+            or candidate.get("visual_description")
+            or candidate.get("visual_summary")
+            or candidate.get("description")
+        ),
         limit=1000,
     )
+    visual_type = _coerce_text(candidate.get("visual_type")) or "unknown"
     video_title = _coerce_text(candidate.get("title"))
     speaker = _coerce_text(candidate.get("speaker")) or "Unknown speaker"
     segment_title = _coerce_text(candidate.get("segment_title"))
@@ -177,11 +289,55 @@ def build_rerank_prompt(
         f"Segment title: {segment_title or 'Untitled segment'}\n"
         f"Speaker: {speaker}\n"
         f"Transcript:\n{transcript_text or 'N/A'}\n\n"
-        f"Visual description:\n{visual_description or 'N/A'}\n\n"
+        f"Visual type: {visual_type}\n"
+        f"Visual evidence:\n{visual_description or 'N/A'}\n\n"
         "Score how useful this segment is for answering the search query.\n"
         "Use 0 for irrelevant and 10 for highly relevant evidence.\n"
         'Return JSON only, for example: {"score": 8.5}.'
     )
+
+
+# ---------------------------------------------------------------------------
+# Internal helpers
+# ---------------------------------------------------------------------------
+
+
+def _build_default_backend(
+    settings: Any,
+) -> RerankerBackend | CohereRerankerBackend:
+    backend_name = getattr(settings.knowledge, "rerank_backend", "openai")
+    if backend_name == "cohere":
+        configured_model = str(
+            getattr(settings.knowledge, "rerank_model", "") or ""
+        ).strip()
+        model = (
+            DEFAULT_COHERE_MODEL
+            if not configured_model or configured_model == DEFAULT_RERANK_MODEL
+            else configured_model
+        )
+        return CohereRerankerBackend(model_name=model)
+    model = getattr(settings.knowledge, "rerank_model", DEFAULT_RERANK_MODEL)
+    return OpenAICompatibleRerankerBackend(model_name=model)
+
+
+def _format_candidate_for_cohere(candidate: Mapping[str, Any]) -> str:
+    """Format a segment dict as a plain text document for Cohere Rerank."""
+    parts: list[str] = []
+    if title := _coerce_text(candidate.get("segment_title") or candidate.get("title")):
+        parts.append(f"Title: {title}")
+    if speaker := _coerce_text(candidate.get("speaker")):
+        parts.append(f"Speaker: {speaker}")
+    if transcript := _coerce_text(candidate.get("transcript_text")):
+        parts.append(f"Transcript: {_truncate_text(transcript, limit=2000)}")
+    if visual_type := _coerce_text(candidate.get("visual_type")):
+        parts.append(f"Visual type: {visual_type}")
+    if visual := _coerce_text(
+        candidate.get("visual_text_content")
+        or candidate.get("visual_description")
+        or candidate.get("visual_summary")
+    ):
+        parts.append(f"Visual: {_truncate_text(visual, limit=500)}")
+    return "\n".join(parts) or "No content available."
 
 
 def _extract_message_content(payload: Mapping[str, Any]) -> str:

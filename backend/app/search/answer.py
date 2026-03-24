@@ -125,12 +125,8 @@ def build_answer_prompt(
                     "Transcript:",
                     _truncate_text(_coerce_text(segment.get("transcript_text")), limit=3000)
                     or "N/A",
-                    "Visual description:",
-                    _truncate_text(
-                        _coerce_text(segment.get("visual_summary") or segment.get("description")),
-                        limit=1200,
-                    )
-                    or "N/A",
+                    "Visual evidence:",
+                    _build_visual_evidence_block(segment) or "N/A",
                 ]
             )
         )
@@ -193,6 +189,28 @@ def _coerce_text(value: Any) -> str:
     if value is None:
         return ""
     return str(value).strip()
+
+
+def _build_visual_evidence_block(segment: Mapping[str, Any]) -> str:
+    visual_description = _truncate_text(
+        _coerce_text(
+            segment.get("visual_description")
+            or segment.get("visual_summary")
+            or segment.get("description")
+        ),
+        limit=900,
+    )
+    visual_text_content = _truncate_text(
+        _coerce_text(segment.get("visual_text_content")),
+        limit=300,
+    )
+
+    lines: list[str] = []
+    if visual_description:
+        lines.append(f"Scene: {visual_description}")
+    if visual_text_content:
+        lines.append(f"On-screen text: {visual_text_content}")
+    return "\n".join(lines)
 
 
 def _truncate_text(value: str, *, limit: int) -> str:

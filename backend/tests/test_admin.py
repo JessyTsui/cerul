@@ -419,6 +419,97 @@ def test_admin_ingestion_summary_filters_failed_jobs_to_selected_window(
     )
 
 
+def test_admin_ingestion_summary_excludes_cancelled_jobs_from_failed_metrics(
+    admin_client: TestClient,
+    database,
+) -> None:
+    seed_admin_metrics(database)
+    source_id = database.fetchval(
+        "SELECT id FROM content_sources WHERE slug = 'youtube-openai'"
+    )
+    now = datetime.now(timezone.utc)
+    database.fetchval(
+        """
+        INSERT INTO processing_jobs (
+            track,
+            source_id,
+            job_type,
+            status,
+            input_payload,
+            error_message,
+            attempts,
+            max_attempts,
+            started_at,
+            completed_at,
+            created_at,
+            updated_at
+        )
+        VALUES (
+            'knowledge',
+            $1::uuid,
+            'index_video',
+            'failed',
+            '{"video_id":"cancelled-job","cancelled_by_user":true}'::jsonb,
+            'Cancelled by user.',
+            1,
+            3,
+            $2,
+            $2,
+            $2,
+            $2
+        )
+        RETURNING id
+        """,
+        source_id,
+        now,
+    )
+    database.fetchval(
+        """
+        INSERT INTO processing_job_steps (
+            job_id,
+            step_name,
+            status,
+            artifacts,
+            error_message,
+            started_at,
+            completed_at,
+            updated_at
+        )
+        VALUES (
+            (
+                SELECT id
+                FROM processing_jobs
+                WHERE input_payload->>'video_id' = 'cancelled-job'
+                LIMIT 1
+            ),
+            'AnalyzeKnowledgeFramesStep',
+            'failed',
+            '{}'::jsonb,
+            'Cancelled by user.',
+            $1,
+            $1,
+            $1
+        )
+        RETURNING id
+        """,
+        now,
+    )
+
+    response = admin_client.get("/admin/ingestion/summary", params={"range": "7d"})
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["metrics"]["jobs_failed"]["current"] == 1
+    assert all(
+        job["error_message"] != "Cancelled by user."
+        for job in payload["recent_failed_jobs"]
+    )
+    assert all(
+        step["step_name"] != "AnalyzeKnowledgeFramesStep"
+        for step in payload["failed_steps"]
+    )
+
+
 def test_admin_targets_can_be_upserted_and_deleted(
     admin_client: TestClient,
     database,
@@ -507,6 +598,72 @@ def test_admin_targets_return_scoped_actuals(
     assert targets[("jobs_failed", "source", "youtube-openai")]["actual_value"] == 1
 
 
+def test_admin_targets_keep_source_completed_counts_when_job_is_cancelled_later(
+    admin_client: TestClient,
+    database,
+) -> None:
+    seed_admin_metrics(database)
+    source_id = database.fetchval(
+        "SELECT id FROM content_sources WHERE slug = 'youtube-openai'"
+    )
+    now = datetime.now(timezone.utc)
+    database.fetchval(
+        """
+        INSERT INTO processing_jobs (
+            track,
+            source_id,
+            job_type,
+            status,
+            input_payload,
+            started_at,
+            completed_at,
+            created_at,
+            updated_at
+        )
+        VALUES (
+            'knowledge',
+            $1::uuid,
+            'index_video',
+            'completed',
+            '{"video_id":"cancelled-after-success","cancelled_by_user":true}'::jsonb,
+            $2,
+            $2,
+            $2,
+            $2
+        )
+        RETURNING id
+        """,
+        source_id,
+        now,
+    )
+
+    response = admin_client.put(
+        "/admin/targets",
+        params={"range": "7d"},
+        json={
+            "targets": [
+                {
+                    "metric_name": "jobs_completed",
+                    "scope_type": "source",
+                    "scope_key": "youtube-openai",
+                    "range_key": "7d",
+                    "comparison_mode": "at_least",
+                    "target_value": 1,
+                    "note": "Keep source throughput visible",
+                }
+            ]
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    target = payload["targets"][0]
+    assert target["metric_name"] == "jobs_completed"
+    assert target["scope_type"] == "source"
+    assert target["scope_key"] == "youtube-openai"
+    assert target["actual_value"] == 2
+
+
 def test_admin_targets_reject_unsupported_scope(
     admin_client: TestClient,
 ) -> None:
@@ -530,6 +687,991 @@ def test_admin_targets_reject_unsupported_scope(
 
     assert response.status_code == 400
     assert "does not support 'source' scope" in response.json()["detail"]
+
+
+def test_admin_worker_live_includes_retrying_jobs_and_steps(
+    admin_client: TestClient,
+    database,
+) -> None:
+    seed_admin_metrics(database)
+    source_id = database.fetchval(
+        "SELECT id FROM content_sources WHERE slug = 'youtube-openai'"
+    )
+    now = datetime.now(timezone.utc)
+    running_job_id = database.fetchval(
+        """
+        INSERT INTO processing_jobs (
+            track,
+            source_id,
+            job_type,
+            status,
+            input_payload,
+            started_at,
+            created_at,
+            updated_at
+        )
+        VALUES (
+            'knowledge',
+            $1::uuid,
+            'index_video',
+            'running',
+            '{"video_id":"live-running","source_metadata":{"title":"Running interview"}}'::jsonb,
+            $2,
+            $2,
+            $2
+        )
+        RETURNING id
+        """,
+        source_id,
+        now,
+    )
+    database.fetchval(
+        """
+        INSERT INTO processing_jobs (
+            track,
+            source_id,
+            job_type,
+            status,
+            input_payload,
+            started_at,
+            created_at,
+            updated_at
+        )
+        VALUES (
+            'knowledge',
+            $1::uuid,
+            'index_video',
+            'retrying',
+            '{"video_id":"live-retrying","source_metadata":{"title":"Retrying interview"}}'::jsonb,
+            $2,
+            $2,
+            $2
+        )
+        RETURNING id
+        """,
+        source_id,
+        now + timedelta(minutes=1),
+    )
+    database.fetchval(
+        """
+        INSERT INTO processing_job_steps (
+            job_id,
+            step_name,
+            status,
+            artifacts,
+            error_message,
+            started_at,
+            completed_at,
+            updated_at
+        )
+        VALUES (
+            $1::uuid,
+            'DownloadKnowledgeVideoStep',
+            'running',
+            '{"guidance":"Check yt-dlp reachability if this stays slow.","logs":[{"at":"2026-03-22T12:00:00Z","level":"info","message":"Starting source video download.","details":{"source":"youtube"}}]}'::jsonb,
+            NULL,
+            $2,
+            NULL,
+            $2
+        )
+        RETURNING id
+        """,
+        running_job_id,
+        now,
+    )
+
+    response = admin_client.get("/admin/worker/live")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["queue"]["running"] >= 1
+    assert payload["queue"]["retrying"] >= 1
+    assert any(job["status"] == "retrying" for job in payload["active_jobs"])
+    assert payload["active_jobs"][0]["source"] is None
+    assert payload["active_jobs"][0]["attempts"] == 0
+    assert payload["active_jobs"][0]["max_attempts"] == 3
+    assert payload["active_jobs"][0]["steps"][0]["step_name"] == "DownloadKnowledgeVideoStep"
+    assert payload["active_jobs"][0]["steps"][0]["guidance"] == "Check yt-dlp reachability if this stays slow."
+    assert payload["active_jobs"][0]["steps"][0]["logs"][0]["message"] == "Starting source video download."
+    assert payload["active_jobs"][0]["steps"][0]["duration_ms"] is not None
+
+
+def test_admin_worker_live_includes_failed_jobs_and_completed_duration(
+    admin_client: TestClient,
+    database,
+) -> None:
+    seed_admin_metrics(database)
+    source_id = database.fetchval(
+        "SELECT id FROM content_sources WHERE slug = 'youtube-openai'"
+    )
+    started_at = datetime.now(timezone.utc) - timedelta(minutes=12)
+    completed_job_id = database.fetchval(
+        """
+        INSERT INTO processing_jobs (
+            track,
+            source_id,
+            job_type,
+            status,
+            input_payload,
+            started_at,
+            completed_at,
+            created_at,
+            updated_at
+        )
+        VALUES (
+            'knowledge',
+            $1::uuid,
+            'index_video',
+            'completed',
+            '{"video_id":"worker-completed","source":"youtube","source_metadata":{"title":"Completed run"}}'::jsonb,
+            $2,
+            $3,
+            $2,
+            $3
+        )
+        RETURNING id
+        """,
+        source_id,
+        started_at,
+        started_at + timedelta(minutes=5),
+    )
+    failed_job_id = database.fetchval(
+        """
+        INSERT INTO processing_jobs (
+            track,
+            source_id,
+            job_type,
+            status,
+            input_payload,
+            error_message,
+            attempts,
+            max_attempts,
+            started_at,
+            completed_at,
+            created_at,
+            updated_at
+        )
+        VALUES (
+            'unified',
+            $1::uuid,
+            'index_video',
+            'failed',
+            '{"video_id":"worker-failed","source":"youtube","source_metadata":{"title":"Failed run"}}'::jsonb,
+            'Gemini timeout',
+            2,
+            3,
+            $2,
+            $3,
+            $2,
+            $3
+        )
+        RETURNING id
+        """,
+        source_id,
+        started_at,
+        started_at + timedelta(minutes=7),
+    )
+    database.fetchval(
+        """
+        INSERT INTO processing_job_steps (
+            job_id,
+            step_name,
+            status,
+            artifacts,
+            error_message,
+            started_at,
+            completed_at,
+            updated_at
+        )
+        VALUES (
+            $1::uuid,
+            'AnalyzeKnowledgeFramesStep',
+            'failed',
+            '{"guidance":"Investigate upstream vision latency."}'::jsonb,
+            'Gemini timeout',
+            $2,
+            $3,
+            $3
+        )
+        RETURNING id
+        """,
+        failed_job_id,
+        started_at + timedelta(minutes=1),
+        started_at + timedelta(minutes=7),
+    )
+
+    response = admin_client.get("/admin/worker/live")
+
+    assert response.status_code == 200
+    payload = response.json()
+    completed = next(job for job in payload["recent_completed"] if job["job_id"] == str(completed_job_id))
+    failed = next(job for job in payload["failed_jobs"] if job["job_id"] == str(failed_job_id))
+    assert payload["failed_jobs_total"] >= 1
+    assert payload["failed_jobs_limit"] == 10
+    assert payload["failed_jobs_offset"] == 0
+    assert completed["total_duration_ms"] >= 5 * 60 * 1000
+    assert failed["total_duration_ms"] >= 7 * 60 * 1000
+    assert failed["error_message"] == "Gemini timeout"
+    assert failed["steps"][0]["step_name"] == "AnalyzeKnowledgeFramesStep"
+
+
+def test_admin_worker_live_supports_failed_job_pagination(
+    admin_client: TestClient,
+    database,
+) -> None:
+    source_id = database.fetchval(
+        "SELECT id FROM content_sources WHERE slug = 'youtube-openai'"
+    )
+    failed_job_ids: list[str] = []
+    for index in range(3):
+        failed_job_ids.append(
+            str(
+                database.fetchval(
+                    """
+                    INSERT INTO processing_jobs (
+                        track,
+                        source_id,
+                        job_type,
+                        status,
+                        input_payload,
+                        error_message,
+                        attempts,
+                        max_attempts,
+                        created_at,
+                        updated_at
+                    )
+                    VALUES (
+                        'knowledge',
+                        $1::uuid,
+                        'index_video',
+                        'failed',
+                        $2::jsonb,
+                        $3,
+                        3,
+                        3,
+                        NOW() - ($4::int * INTERVAL '1 minute'),
+                        NOW() - ($4::int * INTERVAL '1 minute')
+                    )
+                    RETURNING id
+                    """,
+                    source_id,
+                    f'{{"video_id":"failed-{index}"}}',
+                    f"Failure {index}",
+                    index,
+                )
+            )
+        )
+
+    response = admin_client.get("/admin/worker/live?failed_limit=1&failed_offset=1")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["failed_jobs_total"] >= 3
+    assert payload["failed_jobs_limit"] == 1
+    assert payload["failed_jobs_offset"] == 1
+    assert len(payload["failed_jobs"]) == 1
+    assert payload["failed_jobs"][0]["job_id"] == failed_job_ids[1]
+
+
+def test_admin_worker_live_excludes_cancelled_jobs_from_failed_queue(
+    admin_client: TestClient,
+    database,
+) -> None:
+    seed_admin_metrics(database)
+    source_id = database.fetchval(
+        "SELECT id FROM content_sources WHERE slug = 'youtube-openai'"
+    )
+    now = datetime.now(timezone.utc)
+    database.fetchval(
+        """
+        INSERT INTO processing_jobs (
+            track,
+            source_id,
+            job_type,
+            status,
+            input_payload,
+            error_message,
+            attempts,
+            max_attempts,
+            created_at,
+            updated_at
+        )
+        VALUES (
+            'knowledge',
+            $1::uuid,
+            'index_video',
+            'failed',
+            '{"video_id":"cancelled-live","cancelled_by_user":true}'::jsonb,
+            'Cancelled by user.',
+            1,
+            3,
+            $2,
+            $2
+        )
+        RETURNING id
+        """,
+        source_id,
+        now,
+    )
+
+    response = admin_client.get("/admin/worker/live")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["queue"]["failed"] == 1
+    assert all(
+        job["error_message"] != "Cancelled by user."
+        for job in payload["failed_jobs"]
+    )
+
+
+def test_admin_indexed_videos_supports_query_and_pagination(
+    admin_client: TestClient,
+    database,
+) -> None:
+    first_video_id = database.fetchval(
+        """
+        INSERT INTO videos (
+            id,
+            source,
+            source_video_id,
+            source_url,
+            video_url,
+            thumbnail_url,
+            title,
+            description,
+            speaker,
+            duration_seconds,
+            metadata,
+            created_at,
+            updated_at
+        )
+        VALUES (
+            '11111111-1111-1111-1111-111111111111'::uuid,
+            'youtube',
+            'LCEmiRjPEtQ',
+            'https://www.youtube.com/watch?v=LCEmiRjPEtQ',
+            'https://www.youtube.com/watch?v=LCEmiRjPEtQ',
+            'https://img.youtube.com/vi/LCEmiRjPEtQ/hqdefault.jpg',
+            'Andrej Karpathy: Software Is Changing (Again)',
+            'Y Combinator talk.',
+            'Y Combinator',
+            2372,
+            '{}'::jsonb,
+            NOW() - INTERVAL '1 day',
+            NOW() - INTERVAL '1 day'
+        )
+        RETURNING id
+        """
+    )
+    second_video_id = database.fetchval(
+        """
+        INSERT INTO videos (
+            id,
+            source,
+            source_video_id,
+            source_url,
+            video_url,
+            thumbnail_url,
+            title,
+            description,
+            speaker,
+            duration_seconds,
+            metadata,
+            created_at,
+            updated_at
+        )
+        VALUES (
+            '22222222-2222-2222-2222-222222222222'::uuid,
+            'youtube',
+            'PromptCachingDemo',
+            'https://www.youtube.com/watch?v=PromptCachingDemo',
+            'https://www.youtube.com/watch?v=PromptCachingDemo',
+            'https://img.youtube.com/vi/PromptCachingDemo/hqdefault.jpg',
+            'Build Hour: Prompt Caching',
+            'Build Hour talk.',
+            'Builder',
+            3364,
+            '{}'::jsonb,
+            NOW(),
+            NOW()
+        )
+        RETURNING id
+        """
+    )
+    database.fetchval(
+        """
+        INSERT INTO retrieval_units (
+            video_id,
+            unit_type,
+            unit_index,
+            timestamp_start,
+            timestamp_end,
+            content_text,
+            transcript,
+            visual_desc,
+            visual_type,
+            keyframe_url,
+            metadata,
+            embedding
+        )
+        VALUES (
+            $1::uuid,
+            'speech',
+            0,
+            0,
+            10,
+            'Karpathy segment',
+            'Karpathy transcript',
+            NULL,
+            NULL,
+            'https://cdn.cerul.ai/frames/karpathy/000.jpg',
+            '{}'::jsonb,
+            $2::vector
+        )
+        RETURNING id
+        """,
+        first_video_id,
+        vector_to_literal(build_placeholder_vector("karpathy", DEFAULT_KNOWLEDGE_VECTOR_DIMENSION)),
+    )
+    database.fetchval(
+        """
+        INSERT INTO retrieval_units (
+            video_id,
+            unit_type,
+            unit_index,
+            timestamp_start,
+            timestamp_end,
+            content_text,
+            transcript,
+            visual_desc,
+            visual_type,
+            keyframe_url,
+            metadata,
+            embedding
+        )
+        VALUES (
+            $1::uuid,
+            'speech',
+            0,
+            0,
+            10,
+            'Prompt caching segment',
+            'Prompt caching transcript',
+            NULL,
+            NULL,
+            'https://cdn.cerul.ai/frames/prompt/000.jpg',
+            '{}'::jsonb,
+            $2::vector
+        )
+        RETURNING id
+        """,
+        second_video_id,
+        vector_to_literal(build_placeholder_vector("prompt-caching", DEFAULT_KNOWLEDGE_VECTOR_DIMENSION)),
+    )
+    database.fetchval(
+        """
+        INSERT INTO processing_jobs (
+            track,
+            source_id,
+            job_type,
+            status,
+            input_payload,
+            created_at,
+            updated_at
+        )
+        VALUES (
+            'unified',
+            NULL,
+            'index_video',
+            'completed',
+            $1::jsonb,
+            NOW(),
+            NOW()
+        )
+        RETURNING id
+        """,
+        f'{{"video_id":"{second_video_id}","source":"youtube"}}',
+    )
+
+    by_url = admin_client.get("/admin/videos?query=LCEmiRjPEtQ&limit=10&offset=0")
+
+    assert by_url.status_code == 200
+    url_payload = by_url.json()
+    assert url_payload["total"] == 1
+    assert url_payload["videos"][0]["video_id"] == str(first_video_id)
+    assert url_payload["videos"][0]["source_url"] == "https://www.youtube.com/watch?v=LCEmiRjPEtQ"
+
+    paged = admin_client.get("/admin/videos?limit=1&offset=1")
+
+    assert paged.status_code == 200
+    paged_payload = paged.json()
+    assert paged_payload["total"] >= 2
+    assert paged_payload["limit"] == 1
+    assert paged_payload["offset"] == 1
+    assert len(paged_payload["videos"]) == 1
+
+    by_title = admin_client.get("/admin/videos?query=Prompt%20Catching")
+
+    assert by_title.status_code == 200
+    assert by_title.json()["total"] == 0
+
+    exact_title = admin_client.get("/admin/videos?query=Prompt%20Caching")
+
+    assert exact_title.status_code == 200
+    title_payload = exact_title.json()
+    assert title_payload["total"] == 1
+    assert title_payload["videos"][0]["title"] == "Build Hour: Prompt Caching"
+    assert title_payload["videos"][0]["last_job_status"] == "completed"
+
+
+def test_admin_delete_indexed_video_removes_video_and_related_jobs(
+    admin_client: TestClient,
+    database,
+) -> None:
+    video_id = database.fetchval(
+        """
+        INSERT INTO videos (
+            id,
+            source,
+            source_video_id,
+            source_url,
+            video_url,
+            thumbnail_url,
+            title,
+            description,
+            speaker,
+            duration_seconds,
+            metadata
+        )
+        VALUES (
+            '33333333-3333-3333-3333-333333333333'::uuid,
+            'youtube',
+            'delete-me-123',
+            'https://www.youtube.com/watch?v=delete-me-123',
+            'https://www.youtube.com/watch?v=delete-me-123',
+            'https://img.youtube.com/vi/delete-me-123/hqdefault.jpg',
+            'Delete Me Demo',
+            'Delete me.',
+            'Host',
+            600,
+            '{}'::jsonb
+        )
+        RETURNING id
+        """
+    )
+    unit_id = database.fetchval(
+        """
+        INSERT INTO retrieval_units (
+            video_id,
+            unit_type,
+            unit_index,
+            timestamp_start,
+            timestamp_end,
+            content_text,
+            transcript,
+            visual_desc,
+            visual_type,
+            keyframe_url,
+            metadata,
+            embedding
+        )
+        VALUES (
+            $1::uuid,
+            'speech',
+            0,
+            0,
+            10,
+            'Delete me segment',
+            'Delete me transcript',
+            NULL,
+            NULL,
+            'https://cdn.cerul.ai/frames/delete/000.jpg',
+            '{}'::jsonb,
+            $2::vector
+        )
+        RETURNING id
+        """,
+        video_id,
+        vector_to_literal(build_placeholder_vector("delete-me", DEFAULT_KNOWLEDGE_VECTOR_DIMENSION)),
+    )
+    database.fetchval(
+        """
+        INSERT INTO video_access (
+            video_id,
+            owner_id,
+            created_at
+        )
+        VALUES (
+            $1::uuid,
+            $2,
+            NOW()
+        )
+        RETURNING video_id
+        """,
+        video_id,
+        TEST_USER_ID,
+    )
+    database.fetchval(
+        """
+        INSERT INTO tracking_links (
+            short_id,
+            request_id,
+            result_rank,
+            video_id,
+            unit_id,
+            target_url,
+            created_at
+        )
+        VALUES (
+            'delete01',
+            'req_delete_video',
+            0,
+            $1::uuid,
+            $2::uuid,
+            'https://www.youtube.com/watch?v=delete-me-123&t=0',
+            NOW()
+        )
+        RETURNING short_id
+        """,
+        video_id,
+        unit_id,
+    )
+    job_id = database.fetchval(
+        """
+        INSERT INTO processing_jobs (
+            track,
+            source_id,
+            job_type,
+            status,
+            input_payload,
+            created_at,
+            updated_at
+        )
+        VALUES (
+            'unified',
+            NULL,
+            'index_video',
+            'completed',
+            $1::jsonb,
+            NOW(),
+            NOW()
+        )
+        RETURNING id
+        """,
+        f'{{"video_id":"{video_id}","source":"youtube"}}',
+    )
+    database.fetchval(
+        """
+        INSERT INTO processing_job_steps (
+            job_id,
+            step_name,
+            status,
+            artifacts,
+            created_at,
+            updated_at
+        )
+        VALUES (
+            $1::uuid,
+            'PersistUnifiedUnitsStep',
+            'completed',
+            '{}'::jsonb,
+            NOW(),
+            NOW()
+        )
+        RETURNING id
+        """,
+        job_id,
+    )
+
+    response = admin_client.delete(f"/admin/videos/{video_id}")
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "ok": True,
+        "video_id": str(video_id),
+        "title": "Delete Me Demo",
+        "units_deleted": 1,
+        "processing_jobs_deleted": 1,
+    }
+    assert database.fetchval("SELECT COUNT(*) FROM videos WHERE id = $1::uuid", video_id) == 0
+    assert database.fetchval("SELECT COUNT(*) FROM retrieval_units WHERE video_id = $1::uuid", video_id) == 0
+    assert database.fetchval("SELECT COUNT(*) FROM processing_jobs WHERE id = $1::uuid", job_id) == 0
+    assert database.fetchval("SELECT COUNT(*) FROM processing_job_steps WHERE job_id = $1::uuid", job_id) == 0
+    assert database.fetchval("SELECT COUNT(*) FROM video_access WHERE video_id = $1::uuid", video_id) == 0
+    assert database.fetchval("SELECT COUNT(*) FROM tracking_links WHERE short_id = 'delete01'") == 1
+    assert (
+        database.fetchval(
+            """
+            SELECT target_url
+            FROM tracking_links
+            WHERE short_id = 'delete01'
+            """
+        )
+        == "https://www.youtube.com/watch?v=delete-me-123&t=0"
+    )
+
+
+def test_admin_retry_failed_job_resets_failed_state(
+    admin_client: TestClient,
+    database,
+) -> None:
+    source_id = database.fetchval(
+        "SELECT id FROM content_sources WHERE slug = 'youtube-openai'"
+    )
+    failed_job_id = database.fetchval(
+        """
+        INSERT INTO processing_jobs (
+            track,
+            source_id,
+            job_type,
+            status,
+            input_payload,
+            error_message,
+            attempts,
+            max_attempts,
+            locked_by,
+            locked_at,
+            next_retry_at,
+            created_at,
+            updated_at
+        )
+        VALUES (
+            'knowledge',
+            $1::uuid,
+            'index_video',
+            'failed',
+            '{"video_id":"retry-me"}'::jsonb,
+            'ASR timeout',
+            3,
+            3,
+            'worker-a',
+            NOW(),
+            NOW() + INTERVAL '5 minutes',
+            NOW(),
+            NOW()
+        )
+        RETURNING id
+        """,
+        source_id,
+    )
+
+    response = admin_client.post(f"/admin/jobs/{failed_job_id}/retry")
+
+    assert response.status_code == 200
+    assert response.json() == {"ok": True, "job_id": str(failed_job_id)}
+    row = database.fetchrow(
+        """
+        SELECT status, attempts, error_message, locked_by, locked_at, next_retry_at
+        FROM processing_jobs
+        WHERE id = $1::uuid
+        """,
+        failed_job_id,
+    )
+    assert row["status"] == "pending"
+    assert row["attempts"] == 0
+    assert row["error_message"] is None
+    assert row["locked_by"] is None
+    assert row["locked_at"] is None
+    assert row["next_retry_at"] is None
+
+
+def test_admin_kill_failed_job_deletes_job_and_steps(
+    admin_client: TestClient,
+    database,
+) -> None:
+    source_id = database.fetchval(
+        "SELECT id FROM content_sources WHERE slug = 'youtube-openai'"
+    )
+    failed_job_id = database.fetchval(
+        """
+        INSERT INTO processing_jobs (
+            track,
+            source_id,
+            job_type,
+            status,
+            input_payload,
+            error_message,
+            attempts,
+            max_attempts,
+            created_at,
+            updated_at
+        )
+        VALUES (
+            'knowledge',
+            $1::uuid,
+            'index_video',
+            'failed',
+            '{"video_id":"kill-me"}'::jsonb,
+            'Vision timeout',
+            3,
+            3,
+            NOW(),
+            NOW()
+        )
+        RETURNING id
+        """,
+        source_id,
+    )
+    database.fetchval(
+        """
+        INSERT INTO processing_job_steps (
+            job_id,
+            step_name,
+            status,
+            artifacts,
+            error_message,
+            created_at,
+            updated_at
+        )
+        VALUES (
+            $1::uuid,
+            'AnalyzeKnowledgeFramesStep',
+            'failed',
+            '{}'::jsonb,
+            'Vision timeout',
+            NOW(),
+            NOW()
+        )
+        RETURNING id
+        """,
+        failed_job_id,
+    )
+
+    response = admin_client.post(f"/admin/jobs/{failed_job_id}/kill")
+
+    assert response.status_code == 200
+    assert response.json() == {"ok": True, "job_id": str(failed_job_id)}
+    assert database.fetchval(
+        "SELECT COUNT(*) FROM processing_jobs WHERE id = $1::uuid",
+        failed_job_id,
+    ) == 0
+    assert database.fetchval(
+        "SELECT COUNT(*) FROM processing_job_steps WHERE job_id = $1::uuid",
+        failed_job_id,
+    ) == 0
+
+
+def test_admin_retry_failed_job_returns_not_found_for_non_failed_job(
+    admin_client: TestClient,
+    database,
+) -> None:
+    source_id = database.fetchval(
+        "SELECT id FROM content_sources WHERE slug = 'youtube-openai'"
+    )
+    running_job_id = database.fetchval(
+        """
+        INSERT INTO processing_jobs (
+            track,
+            source_id,
+            job_type,
+            status,
+            input_payload,
+            created_at,
+            updated_at
+        )
+        VALUES (
+            'knowledge',
+            $1::uuid,
+            'index_video',
+            'running',
+            '{"video_id":"still-running"}'::jsonb,
+            NOW(),
+            NOW()
+        )
+        RETURNING id
+        """,
+        source_id,
+    )
+
+    response = admin_client.post(f"/admin/jobs/{running_job_id}/retry")
+
+    assert response.status_code == 404
+    assert response.json()["detail"] == "Job not found or not in failed state."
+
+
+def test_admin_kill_failed_job_returns_not_found_for_non_failed_job(
+    admin_client: TestClient,
+    database,
+) -> None:
+    source_id = database.fetchval(
+        "SELECT id FROM content_sources WHERE slug = 'youtube-openai'"
+    )
+    running_job_id = database.fetchval(
+        """
+        INSERT INTO processing_jobs (
+            track,
+            source_id,
+            job_type,
+            status,
+            input_payload,
+            created_at,
+            updated_at
+        )
+        VALUES (
+            'knowledge',
+            $1::uuid,
+            'index_video',
+            'running',
+            '{"video_id":"still-running"}'::jsonb,
+            NOW(),
+            NOW()
+        )
+        RETURNING id
+        """,
+        source_id,
+    )
+
+    response = admin_client.post(f"/admin/jobs/{running_job_id}/kill")
+
+    assert response.status_code == 404
+    assert response.json()["detail"] == "Job not found or not in failed state."
+
+
+@pytest.mark.parametrize("action", ["retry", "kill"])
+def test_admin_failed_job_actions_ignore_cancelled_jobs(
+    admin_client: TestClient,
+    database,
+    action: str,
+) -> None:
+    source_id = database.fetchval(
+        "SELECT id FROM content_sources WHERE slug = 'youtube-openai'"
+    )
+    cancelled_job_id = database.fetchval(
+        """
+        INSERT INTO processing_jobs (
+            track,
+            source_id,
+            job_type,
+            status,
+            input_payload,
+            error_message,
+            attempts,
+            max_attempts,
+            created_at,
+            updated_at
+        )
+        VALUES (
+            'knowledge',
+            $1::uuid,
+            'index_video',
+            'failed',
+            '{"video_id":"cancelled-action","cancelled_by_user":true}'::jsonb,
+            'Cancelled by user.',
+            1,
+            3,
+            NOW(),
+            NOW()
+        )
+        RETURNING id
+        """,
+        source_id,
+    )
+
+    response = admin_client.post(f"/admin/jobs/{cancelled_job_id}/{action}")
+
+    assert response.status_code == 404
+    assert response.json()["detail"] == "Job not found or not in failed state."
 
 
 def test_admin_target_delete_rejects_invalid_uuid(

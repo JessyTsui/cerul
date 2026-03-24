@@ -16,9 +16,7 @@ import { AdminRangePicker } from "./admin-range-picker";
 import { DashboardNotice, DashboardSkeleton, DashboardState } from "@/components/dashboard/dashboard-state";
 import { useAdminResource } from "./use-admin-resource";
 
-type DraftTarget = AdminMetricTargetInput & {
-  id: string | null;
-};
+type DraftTarget = AdminMetricTargetInput & { id: string | null };
 
 const METRIC_OPTIONS = [
   "new_users",
@@ -33,10 +31,7 @@ const METRIC_OPTIONS = [
 ] as const;
 
 const COMPARISON_OPTIONS: AdminTargetComparisonMode[] = ["at_least", "at_most"];
-const METRIC_SCOPE_OPTIONS: Record<
-  (typeof METRIC_OPTIONS)[number],
-  AdminTargetScopeType[]
-> = {
+const METRIC_SCOPE_OPTIONS: Record<(typeof METRIC_OPTIONS)[number], AdminTargetScopeType[]> = {
   new_users: ["global"],
   active_users: ["global", "track"],
   requests_total: ["global", "track"],
@@ -53,15 +48,15 @@ function isMetricOption(value: string): value is (typeof METRIC_OPTIONS)[number]
 }
 
 function toDraftTargets(targets: AdminMetricTarget[]): DraftTarget[] {
-  return targets.map((target) => ({
-    id: target.id,
-    metricName: target.metricName,
-    scopeType: target.scopeType,
-    scopeKey: target.scopeKey,
-    rangeKey: target.rangeKey,
-    comparisonMode: target.comparisonMode,
-    targetValue: target.targetValue,
-    note: target.note,
+  return targets.map((t) => ({
+    id: t.id,
+    metricName: t.metricName,
+    scopeType: t.scopeType,
+    scopeKey: t.scopeKey,
+    rangeKey: t.rangeKey,
+    comparisonMode: t.comparisonMode,
+    targetValue: t.targetValue,
+    note: t.note,
   }));
 }
 
@@ -70,31 +65,16 @@ function allowedScopesForMetric(metricName: string): AdminTargetScopeType[] {
 }
 
 function normalizeDraftTarget(target: DraftTarget): DraftTarget {
-  const allowedScopes = allowedScopesForMetric(target.metricName);
-  const scopeType = allowedScopes.includes(target.scopeType)
-    ? target.scopeType
-    : allowedScopes[0];
-  return {
-    ...target,
-    scopeType,
-    scopeKey: scopeType === "global" ? "" : target.scopeKey.trim().toLowerCase(),
-  };
+  const allowed = allowedScopesForMetric(target.metricName);
+  const scopeType = allowed.includes(target.scopeType) ? target.scopeType : allowed[0];
+  return { ...target, scopeType, scopeKey: scopeType === "global" ? "" : target.scopeKey.trim().toLowerCase() };
 }
 
 function scopeKeyHint(target: DraftTarget): string {
-  if (target.scopeType === "global") {
-    return "Global scope does not need a key";
-  }
-
-  if (target.scopeType === "track") {
-    return "Use broll or knowledge";
-  }
-
-  if (target.metricName === "jobs_completed" || target.metricName === "jobs_failed") {
-    return "Use content source slug or source UUID";
-  }
-
-  return "Use provider key like youtube, pexels, or pixabay";
+  if (target.scopeType === "global") return "Global — no key needed";
+  if (target.scopeType === "track") return "broll, knowledge, or unified";
+  if (target.metricName === "jobs_completed" || target.metricName === "jobs_failed") return "Source slug or UUID";
+  return "youtube, pexels, or pixabay";
 }
 
 export function AdminSettingsScreen() {
@@ -110,64 +90,38 @@ export function AdminSettingsScreen() {
   const [isSaving, setIsSaving] = useState(false);
 
   useEffect(() => {
-    if (!data) {
-      return;
-    }
-
+    if (!data) return;
     setDraftTargets(toDraftTargets(data.targets));
   }, [data]);
 
   function addTargetRow() {
     setDraftTargets((current) => [
       ...current,
-      {
-        id: null,
-        metricName: "requests_total",
-        scopeType: "global",
-        scopeKey: "",
-        rangeKey: range,
-        comparisonMode: "at_least",
-        targetValue: 0,
-        note: null,
-      },
+      { id: null, metricName: "requests_total", scopeType: "global", scopeKey: "", rangeKey: range, comparisonMode: "at_least", targetValue: 0, note: null },
     ]);
   }
 
   function updateTarget(index: number, patch: Partial<DraftTarget>) {
     setDraftTargets((current) =>
-      current.map((target, currentIndex) =>
-        currentIndex === index
-          ? normalizeDraftTarget({ ...target, ...patch })
-          : target,
-      ),
+      current.map((t, i) => (i === index ? normalizeDraftTarget({ ...t, ...patch }) : t)),
     );
   }
 
   async function removeTarget(index: number) {
     const target = draftTargets[index];
-
-    if (!target) {
-      return;
-    }
-
+    if (!target) return;
     setSaveError(null);
     setSaveSuccess(null);
-
     if (!target.id) {
-      setDraftTargets((current) =>
-        current.filter((_item, currentIndex) => currentIndex !== index),
-      );
+      setDraftTargets((current) => current.filter((_, i) => i !== index));
       return;
     }
-
     try {
       await admin.deleteTarget(target.id);
-      setDraftTargets((current) =>
-        current.filter((_item, currentIndex) => currentIndex !== index),
-      );
+      setDraftTargets((current) => current.filter((_, i) => i !== index));
       await refresh();
-    } catch (nextError) {
-      setSaveError(getApiErrorMessage(nextError, "Failed to delete admin target."));
+    } catch (e) {
+      setSaveError(getApiErrorMessage(e, "Failed to delete target."));
     }
   }
 
@@ -175,46 +129,42 @@ export function AdminSettingsScreen() {
     setIsSaving(true);
     setSaveError(null);
     setSaveSuccess(null);
-
     try {
-      const payload = draftTargets.map((target) => ({
-        metricName: target.metricName,
-        scopeType: target.scopeType,
-        scopeKey: target.scopeKey,
+      const payload = draftTargets.map((t) => ({
+        metricName: t.metricName,
+        scopeType: t.scopeType,
+        scopeKey: t.scopeKey,
         rangeKey: range,
-        comparisonMode: target.comparisonMode,
-        targetValue: Number.isFinite(target.targetValue) ? target.targetValue : 0,
-        note: target.note,
+        comparisonMode: t.comparisonMode,
+        targetValue: Number.isFinite(t.targetValue) ? t.targetValue : 0,
+        note: t.note,
       }));
       const response = await admin.updateTargets(range, payload);
       setDraftTargets(toDraftTargets(response.targets));
-      setSaveSuccess("Targets updated.");
+      setSaveSuccess("Targets saved.");
       await refresh();
-    } catch (nextError) {
-      setSaveError(getApiErrorMessage(nextError, "Failed to save admin targets."));
+    } catch (e) {
+      setSaveError(getApiErrorMessage(e, "Failed to save targets."));
     } finally {
       setIsSaving(false);
     }
   }
 
+  const inputClass = "w-full rounded-xl border border-[var(--border)] bg-slate-950/40 px-3 py-2 text-sm text-white";
+
   return (
     <AdminLayout
       currentPath="/admin/settings"
       title="Targets"
-      description="Configure the expected operating envelope for Cerul so the console can show actuals against explicit goals instead of forcing admins to eyeball raw numbers."
+      description="Define expected operating ranges so actuals can be compared against explicit goals."
       actions={
         <>
           <AdminRangePicker value={range} onChange={setRange} />
           <button className="button-secondary" onClick={() => void addTargetRow()} type="button">
             Add target
           </button>
-          <button
-            className="button-primary"
-            disabled={isSaving}
-            onClick={() => void saveTargets()}
-            type="button"
-          >
-            {isSaving ? "Saving..." : "Save targets"}
+          <button className="button-primary" disabled={isSaving} onClick={() => void saveTargets()} type="button">
+            {isSaving ? "Saving…" : "Save"}
           </button>
         </>
       }
@@ -225,241 +175,112 @@ export function AdminSettingsScreen() {
         <DashboardState
           action={
             <button className="button-primary" onClick={() => void refresh()} type="button">
-              Retry request
+              Retry
             </button>
           }
           description={error}
-          title="Target settings could not be loaded"
+          title="Targets could not be loaded"
           tone="error"
         />
       ) : data ? (
         <>
-          {error ? (
-            <DashboardNotice
-              title="Showing the last successful target snapshot."
-              description={error}
-              tone="error"
-            />
-          ) : null}
-          {saveError ? (
-            <DashboardNotice
-              title="Target update failed"
-              description={saveError}
-              tone="error"
-            />
-          ) : null}
-          {saveSuccess ? (
-            <DashboardNotice
-              title="Targets updated"
-              description={saveSuccess}
-            />
-          ) : null}
+          {error ? <DashboardNotice title="Showing last successful snapshot." description={error} tone="error" /> : null}
+          {saveError ? <DashboardNotice title="Save failed" description={saveError} tone="error" /> : null}
+          {saveSuccess ? <DashboardNotice title="Saved" description={saveSuccess} /> : null}
 
-          <article className="surface-elevated px-6 py-6">
-            <p className="font-mono text-xs uppercase tracking-[0.16em] text-[var(--foreground-tertiary)]">
-              Target editor
+          {/* Editor */}
+          <article className="surface-elevated px-5 py-5">
+            <p className="mb-4 text-sm font-semibold text-white">
+              {range} targets{" "}
+              <span className="ml-1 text-xs font-normal text-[var(--foreground-tertiary)]">
+                ({draftTargets.length})
+              </span>
             </p>
-            <h2 className="mt-2 text-2xl font-semibold text-white">
-              {range} operating targets
-            </h2>
-            <p className="mt-2 max-w-3xl text-sm leading-6 text-[var(--foreground-secondary)]">
-              Use these targets to define what “healthy” looks like for growth,
-              content coverage, and ingestion throughput. The overview and section
-              pages will compare actuals against these rows automatically.
-            </p>
-
-            <div className="mt-6 space-y-4">
+            <div className="space-y-3">
               {draftTargets.map((target, index) => (
-                <div
-                  key={target.id ?? `draft-${index}`}
-                  className="rounded-[22px] border border-[var(--border)] bg-[var(--surface)] px-4 py-4"
-                >
-                  <div className="grid gap-4 xl:grid-cols-[1.3fr_1fr_1fr_1fr_auto]">
-                    <label className="space-y-2 text-sm text-[var(--foreground-secondary)]">
-                      <span className="block font-mono text-[11px] uppercase tracking-[0.14em] text-[var(--foreground-tertiary)]">
-                        Metric
-                      </span>
-                      <select
-                        className="w-full rounded-[14px] border border-[var(--border)] bg-slate-950/40 px-3 py-3 text-white"
-                        onChange={(event) =>
-                          updateTarget(index, {
-                            metricName: event.target.value as DraftTarget["metricName"],
-                          })
-                        }
-                        value={target.metricName}
-                      >
-                        {METRIC_OPTIONS.map((option) => (
-                          <option key={option} value={option}>
-                            {option}
-                          </option>
-                        ))}
+                <div key={target.id ?? `draft-${index}`} className="rounded-xl border border-[var(--border)] bg-[var(--surface)] px-4 py-3">
+                  <div className="grid gap-3 sm:grid-cols-[1.2fr_0.8fr_0.8fr_0.7fr_80px_auto]">
+                    <div className="space-y-1">
+                      <p className="text-[10px] text-[var(--foreground-tertiary)]">Metric</p>
+                      <select className={inputClass} value={target.metricName} onChange={(e) => updateTarget(index, { metricName: e.target.value as DraftTarget["metricName"] })}>
+                        {METRIC_OPTIONS.map((o) => <option key={o} value={o}>{o}</option>)}
                       </select>
-                    </label>
-
-                    <label className="space-y-2 text-sm text-[var(--foreground-secondary)]">
-                      <span className="block font-mono text-[11px] uppercase tracking-[0.14em] text-[var(--foreground-tertiary)]">
-                        Scope
-                      </span>
-                      <select
-                        className="w-full rounded-[14px] border border-[var(--border)] bg-slate-950/40 px-3 py-3 text-white"
-                        onChange={(event) =>
-                          updateTarget(index, {
-                            scopeType: event.target.value as AdminTargetScopeType,
-                          })
-                        }
-                        value={target.scopeType}
-                      >
-                        {allowedScopesForMetric(target.metricName).map((option) => (
-                          <option key={option} value={option}>
-                            {option}
-                          </option>
-                        ))}
+                    </div>
+                    <div className="space-y-1">
+                      <p className="text-[10px] text-[var(--foreground-tertiary)]">Scope</p>
+                      <select className={inputClass} value={target.scopeType} onChange={(e) => updateTarget(index, { scopeType: e.target.value as AdminTargetScopeType })}>
+                        {allowedScopesForMetric(target.metricName).map((o) => <option key={o} value={o}>{o}</option>)}
                       </select>
-                    </label>
-
-                    <label className="space-y-2 text-sm text-[var(--foreground-secondary)]">
-                      <span className="block font-mono text-[11px] uppercase tracking-[0.14em] text-[var(--foreground-tertiary)]">
-                        Scope key
-                      </span>
-                      <input
-                        className="w-full rounded-[14px] border border-[var(--border)] bg-slate-950/40 px-3 py-3 text-white"
-                        disabled={target.scopeType === "global"}
-                        onChange={(event) =>
-                          updateTarget(index, {
-                            scopeKey: event.target.value,
-                          })
-                        }
-                        placeholder={scopeKeyHint(target)}
-                        value={target.scopeKey}
-                      />
-                    </label>
-
-                    <label className="space-y-2 text-sm text-[var(--foreground-secondary)]">
-                      <span className="block font-mono text-[11px] uppercase tracking-[0.14em] text-[var(--foreground-tertiary)]">
-                        Comparison
-                      </span>
-                      <select
-                        className="w-full rounded-[14px] border border-[var(--border)] bg-slate-950/40 px-3 py-3 text-white"
-                        onChange={(event) =>
-                          updateTarget(index, {
-                            comparisonMode:
-                              event.target.value as AdminTargetComparisonMode,
-                          })
-                        }
-                        value={target.comparisonMode}
-                      >
-                        {COMPARISON_OPTIONS.map((option) => (
-                          <option key={option} value={option}>
-                            {option}
-                          </option>
-                        ))}
+                    </div>
+                    <div className="space-y-1">
+                      <p className="text-[10px] text-[var(--foreground-tertiary)]">Scope key</p>
+                      <input className={inputClass} disabled={target.scopeType === "global"} placeholder={scopeKeyHint(target)} value={target.scopeKey} onChange={(e) => updateTarget(index, { scopeKey: e.target.value })} />
+                    </div>
+                    <div className="space-y-1">
+                      <p className="text-[10px] text-[var(--foreground-tertiary)]">Mode</p>
+                      <select className={inputClass} value={target.comparisonMode} onChange={(e) => updateTarget(index, { comparisonMode: e.target.value as AdminTargetComparisonMode })}>
+                        {COMPARISON_OPTIONS.map((o) => <option key={o} value={o}>{o}</option>)}
                       </select>
-                    </label>
-
-                    <button
-                      className="button-secondary self-end"
-                      onClick={() => void removeTarget(index)}
-                      type="button"
-                    >
-                      Remove
+                    </div>
+                    <div className="space-y-1">
+                      <p className="text-[10px] text-[var(--foreground-tertiary)]">Value</p>
+                      <input className={inputClass} type="number" min="0" step="1" value={target.targetValue} onChange={(e) => updateTarget(index, { targetValue: Number(e.target.value) })} />
+                    </div>
+                    <button className="button-secondary self-end text-xs" onClick={() => void removeTarget(index)} type="button">
+                      ✕
                     </button>
                   </div>
-
-                  <div className="mt-4 grid gap-4 xl:grid-cols-[220px_minmax(0,1fr)]">
-                    <label className="space-y-2 text-sm text-[var(--foreground-secondary)]">
-                      <span className="block font-mono text-[11px] uppercase tracking-[0.14em] text-[var(--foreground-tertiary)]">
-                        Target value
-                      </span>
-                      <input
-                        className="w-full rounded-[14px] border border-[var(--border)] bg-slate-950/40 px-3 py-3 text-white"
-                        min="0"
-                        onChange={(event) =>
-                          updateTarget(index, {
-                            targetValue: Number(event.target.value),
-                          })
-                        }
-                        step="1"
-                        type="number"
-                        value={target.targetValue}
-                      />
-                    </label>
-
-                    <label className="space-y-2 text-sm text-[var(--foreground-secondary)]">
-                      <span className="block font-mono text-[11px] uppercase tracking-[0.14em] text-[var(--foreground-tertiary)]">
-                        Note
-                      </span>
-                      <input
-                        className="w-full rounded-[14px] border border-[var(--border)] bg-slate-950/40 px-3 py-3 text-white"
-                        onChange={(event) =>
-                          updateTarget(index, {
-                            note: event.target.value || null,
-                          })
-                        }
-                        placeholder="Optional admin note"
-                        value={target.note ?? ""}
-                      />
-                    </label>
+                  <div className="mt-2">
+                    <input className={`${inputClass} text-xs`} placeholder="Note (optional)" value={target.note ?? ""} onChange={(e) => updateTarget(index, { note: e.target.value || null })} />
                   </div>
                 </div>
               ))}
+              {draftTargets.length === 0 ? (
+                <p className="py-4 text-center text-xs text-[var(--foreground-tertiary)]">No targets configured. Click &quot;Add target&quot; to set one.</p>
+              ) : null}
             </div>
           </article>
 
-          <article className="surface-elevated overflow-hidden px-6 py-6">
-            <p className="font-mono text-xs uppercase tracking-[0.16em] text-[var(--foreground-tertiary)]">
-              Live target status
-            </p>
-            <h2 className="mt-2 text-2xl font-semibold text-white">
-              Actual vs expected
-            </h2>
-            <div className="mt-5 overflow-x-auto">
-              <table className="min-w-full text-left text-sm">
-                <thead className="text-[var(--foreground-tertiary)]">
-                  <tr>
-                    <th className="pb-3 pr-4 font-medium">Metric</th>
-                    <th className="pb-3 pr-4 font-medium">Scope</th>
-                    <th className="pb-3 pr-4 font-medium">Target</th>
-                    <th className="pb-3 pr-4 font-medium">Actual</th>
-                    <th className="pb-3 font-medium">Gap</th>
+          {/* Live status */}
+          {data.targets.length > 0 ? (
+            <article className="surface-elevated overflow-hidden px-5 py-5">
+              <p className="mb-4 text-sm font-semibold text-white">Actual vs target</p>
+              <table className="w-full text-left text-xs">
+                <thead>
+                  <tr className="text-[var(--foreground-tertiary)]">
+                    <th className="pb-2 pr-3 font-medium">Metric</th>
+                    <th className="pb-2 pr-3 font-medium">Scope</th>
+                    <th className="pb-2 pr-3 font-medium">Target</th>
+                    <th className="pb-2 pr-3 font-medium">Actual</th>
+                    <th className="pb-2 font-medium">Gap</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-white/5 text-[var(--foreground-secondary)]">
+                <tbody className="divide-y divide-white/5">
                   {data.targets.map((target) => (
                     <tr key={target.id}>
-                      <td className="py-3 pr-4 text-white">{target.metricName}</td>
-                      <td className="py-3 pr-4">
-                        {target.scopeType}
-                        {target.scopeKey ? `:${target.scopeKey}` : ""}
+                      <td className="py-2 pr-3 text-white">{target.metricName}</td>
+                      <td className="py-2 pr-3 text-[var(--foreground-secondary)]">
+                        {target.scopeType}{target.scopeKey ? `:${target.scopeKey}` : ""}
                       </td>
-                      <td className="py-3 pr-4">
-                        {formatAdminMetricValue(target.targetValue)}
+                      <td className="py-2 pr-3 text-[var(--foreground-secondary)]">{formatAdminMetricValue(target.targetValue)}</td>
+                      <td className="py-2 pr-3 text-[var(--foreground-secondary)]">
+                        {target.actualValue === null ? "—" : formatAdminMetricValue(target.actualValue)}
                       </td>
-                      <td className="py-3 pr-4">
-                        {target.actualValue === null
-                          ? "N/A"
-                          : formatAdminMetricValue(target.actualValue)}
-                      </td>
-                      <td className="py-3">
-                        {target.targetGap === null
-                          ? "N/A"
-                          : formatAdminMetricValue(target.targetGap)}
+                      <td className="py-2 text-[var(--foreground-secondary)]">
+                        {target.targetGap === null ? "—" : formatAdminMetricValue(target.targetGap)}
                       </td>
                     </tr>
                   ))}
                 </tbody>
               </table>
-            </div>
-          </article>
+            </article>
+          ) : null}
         </>
       ) : (
         <DashboardState
-          action={
-            <button className="button-primary" onClick={() => void refresh()} type="button">
-              Retry request
-            </button>
-          }
-          description="The admin API returned no target payload."
-          title="No targets available"
+          action={<button className="button-primary" onClick={() => void refresh()} type="button">Retry</button>}
+          description="No targets payload returned."
+          title="No data available"
         />
       )}
     </AdminLayout>

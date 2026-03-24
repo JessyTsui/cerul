@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Any, cast
 from uuid import uuid4
 
@@ -24,6 +24,10 @@ class DashboardDb:
         self.usage_summaries: dict[tuple[str, object, object], dict[str, object]] = {}
         self.daily_usage: list[dict[str, object]] = []
 
+    def _is_cancelled(self, job: dict[str, object]) -> bool:
+        payload = job.get("input_payload")
+        return isinstance(payload, dict) and bool(payload.get("cancelled_by_user"))
+
     def _list_jobs(
         self,
         *,
@@ -34,6 +38,8 @@ class DashboardDb:
 
         if isinstance(status_filter, str):
             items = [job for job in items if job["status"] == status_filter]
+            if status_filter == "failed":
+                items = [job for job in items if not self._is_cancelled(job)]
 
         if isinstance(track_filter, str):
             items = [job for job in items if job["track"] == track_filter]
@@ -50,15 +56,21 @@ class DashboardDb:
         raise AssertionError(f"Expected datetime, received {value!r}")
 
     def _job_stats(self) -> dict[str, int]:
+        visible_jobs = list(self.jobs)
+        genuine_failed_jobs = [
+            job
+            for job in self.jobs
+            if job["status"] == "failed" and not self._is_cancelled(job)
+        ]
         return {
-            "total": len(self.jobs),
-            "pending": sum(1 for job in self.jobs if job["status"] == "pending"),
-            "running": sum(1 for job in self.jobs if job["status"] == "running"),
-            "retrying": sum(1 for job in self.jobs if job["status"] == "retrying"),
-            "completed": sum(1 for job in self.jobs if job["status"] == "completed"),
-            "failed": sum(1 for job in self.jobs if job["status"] == "failed"),
-            "broll": sum(1 for job in self.jobs if job["track"] == "broll"),
-            "knowledge": sum(1 for job in self.jobs if job["track"] == "knowledge"),
+            "total": len(visible_jobs),
+            "pending": sum(1 for job in visible_jobs if job["status"] == "pending"),
+            "running": sum(1 for job in visible_jobs if job["status"] == "running"),
+            "retrying": sum(1 for job in visible_jobs if job["status"] == "retrying"),
+            "completed": sum(1 for job in visible_jobs if job["status"] == "completed"),
+            "failed": len(genuine_failed_jobs),
+            "broll": sum(1 for job in visible_jobs if job["track"] == "broll"),
+            "knowledge": sum(1 for job in visible_jobs if job["track"] == "knowledge"),
         }
 
     async def fetchrow(self, query: str, *params: object) -> dict[str, object] | None:
@@ -491,9 +503,9 @@ def test_job_detail_returns_steps(client: TestClient) -> None:
             "status": "completed",
             "artifacts": {"transcript_language": "en"},
             "error_message": None,
-            "started_at": now.replace(minute=max(now.minute - 1, 0)),
-            "completed_at": now.replace(minute=max(now.minute - 1, 0)),
-            "updated_at": now.replace(minute=max(now.minute - 1, 0)),
+            "started_at": now - timedelta(minutes=1),
+            "completed_at": now - timedelta(minutes=1),
+            "updated_at": now - timedelta(minutes=1),
         },
     ]
 
@@ -675,8 +687,66 @@ def test_job_stats_returns_status_and_track_counts(client: TestClient) -> None:
         "tracks": {
             "broll": 2,
             "knowledge": 3,
+            "unified": 0,
         },
     }
+
+
+def test_job_telemetry_excludes_cancelled_failed_jobs(client: TestClient) -> None:
+    db = client.app.state.test_db
+    now = datetime.now(timezone.utc)
+    db.jobs = [
+        {
+            "id": "job_failed",
+            "track": "knowledge",
+            "source_id": None,
+            "job_type": "index",
+            "status": "failed",
+            "input_payload": {},
+            "error_message": "Permanent failure",
+            "attempts": 3,
+            "max_attempts": 3,
+            "locked_by": None,
+            "locked_at": None,
+            "next_retry_at": None,
+            "created_at": now,
+            "started_at": now,
+            "completed_at": now,
+            "updated_at": now,
+        },
+        {
+            "id": "job_cancelled",
+            "track": "knowledge",
+            "source_id": None,
+            "job_type": "index",
+            "status": "failed",
+            "input_payload": {"cancelled_by_user": True},
+            "error_message": "Cancelled by user.",
+            "attempts": 1,
+            "max_attempts": 3,
+            "locked_by": None,
+            "locked_at": None,
+            "next_retry_at": None,
+            "created_at": now,
+            "started_at": now,
+            "completed_at": now,
+            "updated_at": now,
+        },
+    ]
+
+    jobs_response = client.get(
+        "/dashboard/jobs",
+        params={"status": "failed", "track": "knowledge", "limit": 10, "offset": 0},
+    )
+    stats_response = client.get("/dashboard/jobs/stats")
+
+    assert jobs_response.status_code == 200
+    assert jobs_response.json()["total_count"] == 1
+    assert [job["id"] for job in jobs_response.json()["jobs"]] == ["job_failed"]
+
+    assert stats_response.status_code == 200
+    assert stats_response.json()["failed"] == 1
+    assert stats_response.json()["total"] == 2
 
 
 @pytest.mark.parametrize(

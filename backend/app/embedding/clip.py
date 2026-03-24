@@ -45,6 +45,10 @@ class ClipEmbeddingBackend(EmbeddingBackend):
 
         return features[0].detach().cpu().tolist()
 
+    def embed_query(self, text: str) -> list[float]:
+        # CLIP does not distinguish task types; reuse embed_text.
+        return self.embed_text(text)
+
     def embed_image(self, image_path: str | Path) -> list[float]:
         self._ensure_model()
         assert self._preprocess is not None
