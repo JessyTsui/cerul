@@ -240,7 +240,7 @@ function parseDashboardSettingsFromYaml(content: string): Partial<DashboardSetti
         continue;
       }
 
-      parsed.adminEmails = parseInlineList(value);
+      parsed.adminEmails = parseYamlEmailValue(value);
       continue;
     }
 

@@ -83,4 +83,28 @@ describe("console settings helpers", () => {
 
     rmSync(tempDir, { recursive: true, force: true });
   });
+
+  it("splits quoted comma-delimited admin emails from YAML config", () => {
+    const tempDir = mkdtempSync(path.join(os.tmpdir(), "cerul-console-settings-"));
+    process.env.CERUL_CONFIG_DIR = tempDir;
+    process.env.CERUL_ENV = "production";
+    delete process.env.ADMIN_CONSOLE_EMAILS;
+    delete process.env.CERUL__DASHBOARD__ADMIN_EMAILS;
+
+    writeFileSync(
+      path.join(tempDir, "base.yaml"),
+      [
+        "dashboard:",
+        "  admin_emails: \"owner@example.com,admin@example.com\"",
+        "",
+      ].join("\n"),
+    );
+
+    expect(Array.from(getConfiguredAdminEmails()).sort()).toEqual([
+      "admin@example.com",
+      "owner@example.com",
+    ]);
+
+    rmSync(tempDir, { recursive: true, force: true });
+  });
 });
