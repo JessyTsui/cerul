@@ -78,6 +78,31 @@ class RecordingConnection:
         self.closed = True
 
 
+class _FakeAcquireContext:
+    def __init__(self, conn: RecordingConnection) -> None:
+        self.conn = conn
+
+    async def __aenter__(self) -> RecordingConnection:
+        return self.conn
+
+    async def __aexit__(self, exc_type, exc, tb) -> bool:
+        return False
+
+
+class RecordingPool:
+    def __init__(self, conn: RecordingConnection) -> None:
+        self.conn = conn
+        self.acquire_calls = 0
+        self.closed = False
+
+    def acquire(self) -> _FakeAcquireContext:
+        self.acquire_calls += 1
+        return _FakeAcquireContext(self.conn)
+
+    async def close(self) -> None:
+        self.closed = True
+
+
 def build_job(
     job_id: str,
     *,
@@ -267,10 +292,11 @@ def test_compute_retry_delay_uses_exponential_backoff_with_cap() -> None:
 def test_record_live_step_event_ignores_deleted_job() -> None:
     worker = JobWorker("worker-a", "postgresql://example")
     conn = RecordingConnection()
+    pool = RecordingPool(conn)
     conn.fetchval = AsyncMock(return_value=None)  # type: ignore[method-assign]
     context = PipelineContext(data={"job_status": "running"})
 
-    with patch("workers.worker.asyncpg.connect", AsyncMock(return_value=conn)):
+    with patch("workers.worker.asyncpg.create_pool", AsyncMock(return_value=pool)):
         run_async(
             worker._record_live_step_event(
                 job_id="job-deleted",
@@ -281,7 +307,37 @@ def test_record_live_step_event_ignores_deleted_job() -> None:
         )
 
     assert conn.execute_calls == []
-    assert conn.closed is True
+    assert pool.acquire_calls == 1
+    assert conn.closed is False
+
+
+def test_record_live_step_event_reuses_connection_pool() -> None:
+    worker = JobWorker("worker-a", "postgresql://example")
+    conn = RecordingConnection()
+    pool = RecordingPool(conn)
+    create_pool = AsyncMock(return_value=pool)
+    context = PipelineContext(data={"job_status": "running"})
+
+    with patch("workers.worker.asyncpg.create_pool", create_pool):
+        run_async(
+            worker._record_live_step_event(
+                job_id="job-live-1",
+                step_name="BuildUnifiedRetrievalUnitsStep",
+                status="running",
+                context=context,
+            )
+        )
+        run_async(
+            worker._record_live_step_event(
+                job_id="job-live-1",
+                step_name="BuildUnifiedRetrievalUnitsStep",
+                status="completed",
+                context=context,
+            )
+        )
+
+    assert create_pool.await_count == 1
+    assert pool.acquire_calls == 2
 
 
 def test_execute_job_marks_unified_job_completed_on_pipeline_success() -> None:

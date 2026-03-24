@@ -664,6 +664,24 @@ def test_resolve_source_rejects_lookalike_pixabay_host(database) -> None:
     assert exc_info.value.detail == "Unsupported URL format"
 
 
+def test_validate_direct_video_url_offloads_dns_resolution(database, monkeypatch) -> None:
+    del database
+    service = UnifiedIndexService(None)
+    captured: list[tuple[object, tuple[object, ...], dict[str, object]]] = []
+
+    async def fake_to_thread(func, *args, **kwargs):
+        captured.append((func, args, kwargs))
+        return [(None, None, None, None, ("93.184.216.34", 0))]
+
+    monkeypatch.setattr("app.indexing.service.asyncio.to_thread", fake_to_thread)
+
+    asyncio.run(service._validate_direct_video_url("https://example.com/video.mp4"))
+
+    assert captured
+    assert captured[0][0].__name__ == "getaddrinfo"
+    assert captured[0][1][0] == "example.com"
+
+
 def test_delete_indexed_video_removes_owner_access_and_video(database) -> None:
     app.dependency_overrides[require_api_key] = override_auth
 

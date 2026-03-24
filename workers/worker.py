@@ -177,6 +177,7 @@ class JobWorker:
         self.poll_interval = poll_interval
         self._shutdown_event = shutdown_event or asyncio.Event()
         self._job_contexts: dict[str, PipelineContext] = {}
+        self._live_event_pool: asyncpg.Pool | None = None
         self._signals_installed = False
         self._manage_signals = manage_signals
 
@@ -320,6 +321,7 @@ class JobWorker:
         finally:
             await self.release_locked_jobs(conn)
             await conn.close()
+            await self._close_live_event_pool()
 
     async def _ensure_connection(self, conn: asyncpg.Connection) -> asyncpg.Connection:
         """Reconnect if the existing connection has gone stale."""
@@ -488,9 +490,9 @@ class JobWorker:
         step_name: str,
         status: str,
         context: PipelineContext,
-        ) -> None:
-        conn = await asyncpg.connect(self.db_url)
-        try:
+    ) -> None:
+        pool = await self._get_live_event_pool()
+        async with pool.acquire() as conn:
             if not await self._job_is_writable(conn, job_id):
                 return
             await self._upsert_job_step(
@@ -502,8 +504,21 @@ class JobWorker:
                 error_message=context.error if status == "failed" else None,
             )
             await conn.execute(TOUCH_JOB_SQL, job_id)
-        finally:
-            await conn.close()
+
+    async def _get_live_event_pool(self) -> asyncpg.Pool:
+        if self._live_event_pool is None:
+            self._live_event_pool = await asyncpg.create_pool(
+                self.db_url,
+                min_size=1,
+                max_size=4,
+            )
+        return self._live_event_pool
+
+    async def _close_live_event_pool(self) -> None:
+        if self._live_event_pool is None:
+            return
+        await self._live_event_pool.close()
+        self._live_event_pool = None
 
     async def _job_is_writable(
         self,

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import asyncpg
 import hashlib
 import ipaddress
@@ -47,6 +48,8 @@ class UnifiedIndexService:
         await self._enforce_submit_rate_limit(auth.user_id)
 
         resolved = self.resolve_source(payload.url)
+        if resolved["source"] == "upload":
+            await self._validate_direct_video_url(payload.url)
         await self._enforce_max_duration(
             url=payload.url,
             source=resolved["source"],
@@ -423,7 +426,7 @@ class UnifiedIndexService:
             return {"source": "pixabay", "source_video_id": pixabay_match.group(1)}
 
         if path.lower().endswith(DIRECT_VIDEO_EXTENSIONS):
-            self._validate_direct_video_url(parsed)
+            self._validate_direct_video_url_structure(parsed)
             return {
                 "source": "upload",
                 "source_video_id": hashlib.sha256(url.encode("utf-8")).hexdigest()[:24],
@@ -443,7 +446,19 @@ class UnifiedIndexService:
     def generate_request_id(self) -> str:
         return f"req_{secrets.token_hex(12)}"
 
-    def _validate_direct_video_url(self, parsed: Any) -> None:
+    async def _validate_direct_video_url(self, url: str) -> None:
+        parsed = urlparse(url)
+        hostname = self._validate_direct_video_url_structure(parsed)
+        candidate_ips = await self._resolve_direct_video_host(hostname)
+        for ip_text in candidate_ips:
+            ip = ipaddress.ip_address(ip_text)
+            if not ip.is_global:
+                raise HTTPException(
+                    status_code=422,
+                    detail="Direct video URLs must resolve to public internet addresses.",
+                )
+
+    def _validate_direct_video_url_structure(self, parsed: Any) -> str:
         scheme = str(parsed.scheme or "").strip().lower()
         hostname = str(parsed.hostname or "").strip().lower()
 
@@ -467,7 +482,9 @@ class UnifiedIndexService:
                 status_code=422,
                 detail="Direct video URLs must be publicly reachable.",
             )
+        return hostname
 
+    async def _resolve_direct_video_host(self, hostname: str) -> set[str]:
         candidate_ips: set[str] = set()
         try:
             candidate_ips.add(str(ipaddress.ip_address(hostname)))
@@ -478,7 +495,12 @@ class UnifiedIndexService:
                     detail="Direct video URLs must use a public host.",
                 ) from None
             try:
-                infos = socket.getaddrinfo(hostname, None, type=socket.SOCK_STREAM)
+                infos = await asyncio.to_thread(
+                    socket.getaddrinfo,
+                    hostname,
+                    None,
+                    type=socket.SOCK_STREAM,
+                )
             except (socket.gaierror, UnicodeError) as exc:
                 raise HTTPException(
                     status_code=422,
@@ -491,14 +513,7 @@ class UnifiedIndexService:
                 status_code=422,
                 detail="Direct video host could not be resolved.",
             )
-
-        for ip_text in candidate_ips:
-            ip = ipaddress.ip_address(ip_text)
-            if not ip.is_global:
-                raise HTTPException(
-                    status_code=422,
-                    detail="Direct video URLs must resolve to public internet addresses.",
-                )
+        return candidate_ips
 
     def _normalize_video_id(self, video_id: str) -> str:
         try:
