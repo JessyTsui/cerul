@@ -179,6 +179,10 @@ export function AdminSourcesScreen() {
   // Expanded cards
   const [expandedId, setExpandedId] = useState<string | null>(null);
 
+  // Pagination
+  const PAGE_SIZE = 30;
+  const [currentPage, setCurrentPage] = useState(0);
+
   const loadSources = useCallback(async () => {
     try {
       setIsLoading(true);
@@ -630,7 +634,7 @@ export function AdminSourcesScreen() {
             </div>
           ) : (
             <div className="mt-4 space-y-3">
-              {sources.map((source) => {
+              {sources.slice(currentPage * PAGE_SIZE, (currentPage + 1) * PAGE_SIZE).map((source) => {
                 const channelId =
                   typeof source.config.channel_id === "string"
                     ? source.config.channel_id
@@ -684,52 +688,75 @@ export function AdminSourcesScreen() {
                         </p>
                       </div>
 
-                      {/* Stats summary */}
-                      <div className="hidden gap-6 text-xs sm:flex">
-                        {subscriberCount != null ? (
-                          <div className="text-center">
-                            <span className="font-semibold text-white">{formatCount(subscriberCount)}</span>
-                            <span className="ml-1 text-[var(--foreground-tertiary)]">subs</span>
-                          </div>
-                        ) : null}
+                      {/* Inline stats: subs, videos, views + analytics delta */}
+                      <div className="hidden shrink-0 gap-5 text-xs lg:flex">
+                        <div>
+                          <span className="font-semibold text-white">{formatCount(subscriberCount)}</span>
+                          <span className="ml-1 text-[var(--foreground-tertiary)]">subs</span>
+                        </div>
+                        <div>
+                          <span className="font-semibold text-white">{formatCount(videoCount)}</span>
+                          <span className="ml-1 text-[var(--foreground-tertiary)]">videos</span>
+                        </div>
+                        <div>
+                          <span className="font-semibold text-white">{formatCount(viewCount)}</span>
+                          <span className="ml-1 text-[var(--foreground-tertiary)]">views</span>
+                        </div>
                         {analytics ? (
-                          <>
-                            <div className="text-center">
-                              <span className="font-semibold text-white">{analytics.jobsCompleted}</span>
-                              <DeltaBadge current={analytics.jobsCompleted} previous={analytics.prevJobsCompleted} />
-                              <span className="ml-1 text-[var(--foreground-tertiary)]">indexed</span>
-                            </div>
+                          <div className="border-l border-[var(--border)] pl-5">
+                            <span className="font-semibold text-white">{analytics.jobsCompleted}</span>
+                            <DeltaBadge current={analytics.jobsCompleted} previous={analytics.prevJobsCompleted} />
+                            <span className="ml-1 text-[var(--foreground-tertiary)]">indexed</span>
                             {analytics.jobsFailed > 0 ? (
-                              <div className="text-center">
-                                <span className="font-semibold text-red-300">{analytics.jobsFailed}</span>
+                              <>
+                                <span className="ml-3 font-semibold text-red-300">{analytics.jobsFailed}</span>
                                 <span className="ml-1 text-[var(--foreground-tertiary)]">failed</span>
-                              </div>
+                              </>
                             ) : null}
-                          </>
+                          </div>
                         ) : null}
                       </div>
 
+                      {/* Inline tags (first 3) */}
+                      {keywords.length > 0 ? (
+                        <div className="hidden shrink-0 gap-1.5 xl:flex">
+                          {keywords.slice(0, 3).map((kw) => (
+                            <span
+                              key={kw}
+                              className="rounded-full border border-[var(--border)] bg-[rgba(255,255,255,0.04)] px-2 py-0.5 text-[10px] text-[var(--foreground-tertiary)]"
+                            >
+                              {kw}
+                            </span>
+                          ))}
+                          {keywords.length > 3 ? (
+                            <span className="py-0.5 text-[10px] text-[var(--foreground-tertiary)]">
+                              +{keywords.length - 3}
+                            </span>
+                          ) : null}
+                        </div>
+                      ) : null}
+
                       {/* Actions */}
-                      <div className="flex shrink-0 gap-2" onClick={(e) => e.stopPropagation()}>
+                      <div className="flex shrink-0 items-center gap-2" onClick={(e) => e.stopPropagation()}>
                         {channelId ? (
                           <a
                             href={getChannelUrl(channelId)}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="rounded-lg border border-[var(--border)] px-2.5 py-1 text-xs text-[var(--foreground-secondary)] transition hover:border-[var(--brand)] hover:text-white"
+                            className="inline-flex h-7 items-center rounded-lg border border-[var(--border)] px-2.5 text-xs text-[var(--foreground-secondary)] transition hover:border-[var(--brand)] hover:text-white"
                           >
                             YouTube
                           </a>
                         ) : null}
                         <button
-                          className="rounded-lg border border-[var(--border)] px-2.5 py-1 text-xs text-[var(--foreground-secondary)] transition hover:border-[var(--brand)] hover:text-white"
+                          className="inline-flex h-7 items-center rounded-lg border border-[var(--border)] px-2.5 text-xs text-[var(--foreground-secondary)] transition hover:border-[var(--brand)] hover:text-white"
                           onClick={() => openEditForm(source)}
                           type="button"
                         >
                           Edit
                         </button>
                         <button
-                          className="rounded-lg border border-[var(--border)] px-2.5 py-1 text-xs text-[var(--foreground-secondary)] transition hover:border-amber-500 hover:text-amber-300"
+                          className="inline-flex h-7 items-center rounded-lg border border-[var(--border)] px-2.5 text-xs text-[var(--foreground-secondary)] transition hover:border-amber-500 hover:text-amber-300"
                           disabled={togglingId === source.id}
                           onClick={() => void handleToggleActive(source)}
                           type="button"
@@ -741,7 +768,7 @@ export function AdminSourcesScreen() {
                               : "Resume"}
                         </button>
                         <button
-                          className="rounded-lg border border-[var(--border)] px-2.5 py-1 text-xs text-[var(--foreground-secondary)] transition hover:border-red-500 hover:text-red-300"
+                          className="inline-flex h-7 items-center rounded-lg border border-red-500/40 bg-red-500/10 px-2.5 text-xs text-red-300 transition hover:border-red-500 hover:bg-red-500/20"
                           onClick={() => setConfirmDeleteSource(source)}
                           type="button"
                         >
@@ -908,6 +935,33 @@ export function AdminSourcesScreen() {
                   </div>
                 );
               })}
+
+              {/* Pagination */}
+              {sources.length > PAGE_SIZE ? (
+                <div className="flex items-center justify-between pt-2">
+                  <p className="text-xs text-[var(--foreground-tertiary)]">
+                    Showing {currentPage * PAGE_SIZE + 1}–{Math.min((currentPage + 1) * PAGE_SIZE, sources.length)} of {sources.length}
+                  </p>
+                  <div className="flex gap-2">
+                    <button
+                      className="rounded-lg border border-[var(--border)] px-3 py-1 text-xs text-[var(--foreground-secondary)] transition hover:text-white disabled:opacity-30"
+                      type="button"
+                      disabled={currentPage === 0}
+                      onClick={() => setCurrentPage((p) => p - 1)}
+                    >
+                      Previous
+                    </button>
+                    <button
+                      className="rounded-lg border border-[var(--border)] px-3 py-1 text-xs text-[var(--foreground-secondary)] transition hover:text-white disabled:opacity-30"
+                      type="button"
+                      disabled={(currentPage + 1) * PAGE_SIZE >= sources.length}
+                      onClick={() => setCurrentPage((p) => p + 1)}
+                    >
+                      Next
+                    </button>
+                  </div>
+                </div>
+              ) : null}
             </div>
           )}
         </article>
