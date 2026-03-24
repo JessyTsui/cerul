@@ -1552,7 +1552,11 @@ class HeuristicFrameAnalyzer:
 
         image = cv2.imread(str(frame_path))
         if image is None:
-            return False
+            # Keep unreadable frames rather than dropping the whole visual path.
+            try:
+                return frame_path.stat().st_size > 0
+            except OSError:
+                return True
 
         hsv = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
         lower_skin_primary = np.array([0, 40, 60], dtype=np.uint8)
@@ -2496,18 +2500,28 @@ def _deduplicate_frame_paths(
         return list(frame_paths)
 
     unique_frames: list[Path] = []
-    hashes: list[Any] = []
+    image_hashes: list[Any] = []
+    byte_hashes: set[str] = set()
     for frame_path in frame_paths:
         try:
             with Image.open(frame_path) as image:
                 frame_hash = imagehash.phash(image)
         except Exception:
+            try:
+                frame_hash = f"sha256:{hashlib.sha256(frame_path.read_bytes()).hexdigest()}"
+            except Exception:
+                unique_frames.append(frame_path)
+                continue
+            if frame_hash in byte_hashes:
+                continue
+            unique_frames.append(frame_path)
+            byte_hashes.add(frame_hash)
             continue
 
-        if any(abs(frame_hash - existing_hash) < threshold for existing_hash in hashes):
+        if any(abs(frame_hash - existing_hash) < threshold for existing_hash in image_hashes):
             continue
         unique_frames.append(frame_path)
-        hashes.append(frame_hash)
+        image_hashes.append(frame_hash)
 
     return unique_frames
 
