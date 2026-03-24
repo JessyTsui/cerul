@@ -29,7 +29,6 @@ _LEGACY_ENV_OVERRIDES: dict[str, tuple[str, ...]] = {
     "NEXT_PUBLIC_API_BASE_URL": ("public", "api_base_url"),
     "NEXT_PUBLIC_SITE_URL": ("public", "web_base_url"),
     "DEMO_MODE": ("public", "demo_mode"),
-    "RERANK_BACKEND": ("knowledge", "rerank_backend"),
     "RERANK_MODEL": ("knowledge", "rerank_model"),
     "STRIPE_PRO_PRICE_ID": ("stripe", "pro_price_id"),
     "STRIPE_SECRET_KEY": ("stripe", "secret_key"),
@@ -127,7 +126,6 @@ class KnowledgeSettings(BaseModel):
     scene_threshold: float = Field(ge=0.0, le=1.0)
     rerank_top_n: int = Field(gt=0)
     rerank_prompt_template: str
-    rerank_backend: str = "openai"
     rerank_model: str = "gpt-4o-mini"
     download: KnowledgeDownloadSettings = Field(
         default_factory=KnowledgeDownloadSettings

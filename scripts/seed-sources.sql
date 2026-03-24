@@ -124,10 +124,7 @@ VALUES
    '{"channel_id": "UCdK2BueKxC9VxXh7e1Ne4oQ", "max_results": 30}'::jsonb, TRUE),
 
   ('mistral-ai', 'unified', 'Mistral AI', 'youtube',
-   '{"channel_id": "UCRaz_dquopKtb4ptswKcxTA", "max_results": 30}'::jsonb, TRUE),
-
-  ('cohere', 'unified', 'Cohere', 'youtube',
-   '{"channel_id": "UCAKTUy0tz47ZY02DFpxMqoQ", "max_results": 30}'::jsonb, TRUE)
+   '{"channel_id": "UCRaz_dquopKtb4ptswKcxTA", "max_results": 30}'::jsonb, TRUE)
 
 ON CONFLICT (slug) DO UPDATE SET
   track = EXCLUDED.track,

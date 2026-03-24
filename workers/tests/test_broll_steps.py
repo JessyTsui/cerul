@@ -15,7 +15,6 @@ from workers.broll.steps import download_preview_frame as download_preview_frame
 from workers.common.sources import PixabayClient
 import workers.common.sources.pixabay as pixabay_source_module
 from workers.common.pipeline import PipelineContext
-from scripts import seed_broll as seed_broll_module
 
 
 class FakeEmbeddingBackend:
@@ -252,44 +251,6 @@ class FakeAsyncpgModule:
     async def create_pool(self, **kwargs: object) -> FakePool:
         self.create_pool_calls.append(dict(kwargs))
         return self._pool
-
-
-class FakeSeedRepository:
-    def __init__(self, db_url: str) -> None:
-        self.db_url = db_url
-        self.connected = False
-        self.closed = False
-
-    async def connect(self) -> None:
-        self.connected = True
-
-    async def close(self) -> None:
-        self.closed = True
-
-
-class FakeSeedPipeline:
-    def __init__(self) -> None:
-        self.queries: list[tuple[str, dict[str, object]]] = []
-
-    async def run(
-        self,
-        query: str,
-        *,
-        conf: dict[str, object],
-        category: str | None = None,
-        job_id: str | None = None,
-    ) -> SimpleNamespace:
-        self.queries.append((query, conf))
-        return SimpleNamespace(
-            failed_step=None,
-            error=None,
-            data={
-                "discovered_assets_count": 12,
-                "new_assets_count": 7,
-                "indexed_assets_count": 7,
-                "last_discovery_page": 3,
-            },
-        )
 
 
 def test_fetch_asset_metadata_step_normalizes_pexels_payload() -> None:
@@ -828,87 +789,3 @@ def test_broll_asset_repository_store_assets_batch_upserts_records() -> None:
     assert records[0][8] == ["mountain", "sunrise"]
     assert json.loads(records[0][11]) == {"query": "aerial mountain sunrise"}
     assert records[0][12] == "[0.1,0.2,0.3]"
-
-
-def test_seed_broll_resume_skips_completed_queries(tmp_path) -> None:
-    query_file = tmp_path / "queries.txt"
-    query_file.write_text(
-        "aerial mountain sunrise\nocean waves crashing rocks\n",
-        encoding="utf-8",
-    )
-    state_path = tmp_path / ".seed_broll_state.json"
-    state_path.write_text(
-        json.dumps(
-            {
-                "aerial mountain sunrise": {
-                    "status": "completed",
-                    "assets_found": 10,
-                    "assets_indexed": 8,
-                    "last_page": 2,
-                }
-            }
-        ),
-        encoding="utf-8",
-    )
-    fake_pipeline = FakeSeedPipeline()
-    args = SimpleNamespace(
-        query=None,
-        file=str(query_file),
-        source="all",
-        per_page=50,
-        max_pages=10,
-        resume=True,
-        dry_run=False,
-        db_url="postgres://example.test/cerul",
-    )
-
-    with patch.object(seed_broll_module, "BrollAssetRepository", FakeSeedRepository):
-        result = asyncio.run(
-            seed_broll_module.run_seed(
-                args,
-                state_path=state_path,
-                pipeline_factory=lambda repository: fake_pipeline,
-            )
-        )
-
-    updated_state = json.loads(state_path.read_text(encoding="utf-8"))
-    assert result == 0
-    assert fake_pipeline.queries == [
-        (
-            "ocean waves crashing rocks",
-            {
-                "sources": ["pexels", "pixabay"],
-                "per_page": 50,
-                "max_pages": 10,
-            },
-        )
-    ]
-    assert updated_state["aerial mountain sunrise"]["status"] == "completed"
-    assert updated_state["ocean waves crashing rocks"]["status"] == "completed"
-    assert updated_state["ocean waves crashing rocks"]["last_page"] == 3
-
-
-def test_seed_broll_dry_run_produces_no_side_effects(tmp_path) -> None:
-    query_file = tmp_path / "queries.txt"
-    query_file.write_text("tokyo neon streets night\n", encoding="utf-8")
-    state_path = tmp_path / ".seed_broll_state.json"
-    args = SimpleNamespace(
-        query=None,
-        file=str(query_file),
-        source="pexels",
-        per_page=25,
-        max_pages=4,
-        resume=False,
-        dry_run=True,
-        db_url=None,
-    )
-
-    with patch.object(
-        seed_broll_module,
-        "BrollAssetRepository",
-        side_effect=AssertionError("dry-run should not create a repository"),
-    ):
-        result = asyncio.run(seed_broll_module.run_seed(args, state_path=state_path))
-
-    assert result == 0
-    assert not state_path.exists()

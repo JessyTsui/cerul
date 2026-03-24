@@ -4,7 +4,6 @@ from pathlib import Path
 from textwrap import dedent
 
 import pytest
-from pydantic import ValidationError
 
 from app.config import load_settings
 
@@ -69,14 +68,12 @@ def test_load_settings_applies_environment_variable_overrides(tmp_path: Path) ->
             "MMR_LAMBDA": "0.55",
             "R2_BUCKET_NAME": "cerul-assets",
             "R2_PUBLIC_URL": "https://cdn.example.com/",
-            "RERANK_BACKEND": "openai",
             "RERANK_MODEL": "gpt-4o-mini",
         },
     )
 
     assert settings.search.mmr_lambda == 0.55
     assert settings.knowledge.rerank_top_n == 42
-    assert settings.knowledge.rerank_backend == "openai"
     assert settings.knowledge.rerank_model == "gpt-4o-mini"
     assert settings.knowledge.download.max_height == 360
     assert settings.knowledge.transcription.model == "custom-whisper"

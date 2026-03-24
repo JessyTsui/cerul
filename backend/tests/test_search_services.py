@@ -21,9 +21,7 @@ from app.search.base import (
 )
 from app.search.models import SearchRequest
 from app.search.rerank import (
-    DEFAULT_COHERE_MODEL,
     DEFAULT_RERANK_MODEL,
-    CohereRerankerBackend,
     LLMReranker,
     OpenAICompatibleRerankerBackend,
     _build_default_backend,
@@ -635,18 +633,17 @@ def test_llm_reranker_reorders_candidates_by_llm_score(
     assert requests[0]["url"] == "https://api.openai.com/v1/chat/completions"
 
 
-def test_build_default_backend_uses_cohere_model_default_when_backend_switches() -> None:
+def test_build_default_backend_uses_configured_openai_model() -> None:
     settings = SimpleNamespace(
         knowledge=SimpleNamespace(
-            rerank_backend="cohere",
-            rerank_model=DEFAULT_RERANK_MODEL,
+            rerank_model="gpt-4.1-mini",
         )
     )
 
     backend = _build_default_backend(settings)
 
-    assert isinstance(backend, CohereRerankerBackend)
-    assert backend.model_name == DEFAULT_COHERE_MODEL
+    assert isinstance(backend, OpenAICompatibleRerankerBackend)
+    assert backend.model_name == "gpt-4.1-mini"
 
 
 def test_answer_generator_produces_answer_with_citations(
