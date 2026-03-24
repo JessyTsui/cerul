@@ -2,7 +2,7 @@ import asyncio
 import json
 from unittest.mock import AsyncMock
 
-from workers.scheduler import ContentScheduler
+from workers.scheduler import ContentScheduler, ContentSource
 
 
 class FakeDB:
@@ -61,6 +61,38 @@ class FakeDB:
         raise AssertionError(f"Unexpected SQL: {query}")
 
 
+class FakeGeminiResponse:
+    def __init__(self, text: str) -> None:
+        self.text = text
+
+
+class FakeGeminiModels:
+    def __init__(self, response_text: str) -> None:
+        self._response_text = response_text
+        self.calls: list[dict[str, object]] = []
+
+    def generate_content(
+        self,
+        *,
+        model: str,
+        contents: str,
+        config: dict[str, object] | None = None,
+    ) -> FakeGeminiResponse:
+        self.calls.append(
+            {
+                "model": model,
+                "contents": contents,
+                "config": dict(config or {}),
+            }
+        )
+        return FakeGeminiResponse(self._response_text)
+
+
+class FakeGeminiClient:
+    def __init__(self, response_text: str) -> None:
+        self.models = FakeGeminiModels(response_text)
+
+
 def make_source(
     *,
     source_id: str,
@@ -80,6 +112,25 @@ def make_source(
         "sync_cursor": sync_cursor,
         "is_active": is_active,
     }
+
+
+def make_content_source(**overrides: object) -> ContentSource:
+    values: dict[str, object] = {
+        "id": "source-yt-search",
+        "slug": "ai-agents-search",
+        "track": "unified",
+        "source_type": "youtube_search",
+        "config": {
+            "query": "AI agents",
+            "min_duration_seconds": 60,
+            "max_duration_seconds": 7200,
+        },
+        "sync_cursor": None,
+        "is_active": True,
+        "cursor_storage": "column",
+    }
+    values.update(overrides)
+    return ContentSource(**values)
 
 
 def test_run_once_creates_jobs_for_new_content_items() -> None:
@@ -171,6 +222,88 @@ def test_run_once_creates_jobs_for_new_content_items() -> None:
     )
 
 
+def test_run_once_supports_youtube_search_sources() -> None:
+    db = FakeDB(
+        sources=[
+            make_source(
+                source_id="source-yt-search",
+                slug="ai-agents-search",
+                track="unified",
+                source_type="youtube_search",
+                config={
+                    "query": "AI agents",
+                    "max_results": 5,
+                    "relevance_language": "en",
+                    "min_duration_seconds": 120,
+                    "min_view_count": 1000,
+                },
+                sync_cursor="2026-03-01T00:00:00Z",
+            )
+        ]
+    )
+    youtube_client = AsyncMock()
+    youtube_client.search_videos.return_value = [
+        {
+            "source_video_id": "video-short",
+            "video_id": "video-short",
+            "title": "Short clip",
+            "published_at": "2026-03-09T12:00:00Z",
+            "duration_seconds": 30,
+            "view_count": 5000,
+            "live_broadcast_content": "none",
+            "channel_id": "channel-good",
+        },
+        {
+            "source_video_id": "video-keep",
+            "video_id": "video-keep",
+            "title": "AI agents workflow tutorial",
+            "description": "Build practical agent systems with developer tooling.",
+            "published_at": "2026-03-10T18:30:00Z",
+            "duration_seconds": 600,
+            "view_count": 5000,
+            "live_broadcast_content": "none",
+            "channel_id": "channel-good",
+        },
+        {
+            "source_video_id": "video-live",
+            "video_id": "video-live",
+            "title": "Live coding stream",
+            "published_at": "2026-03-11T08:00:00Z",
+            "duration_seconds": 1800,
+            "view_count": 9000,
+            "live_broadcast_content": "live",
+            "channel_id": "channel-good",
+        },
+    ]
+
+    scheduler = ContentScheduler(
+        youtube_client=youtube_client,
+        pexels_client=AsyncMock(),
+        pixabay_client=AsyncMock(),
+    )
+
+    summary = asyncio.run(scheduler.run_once(db))
+
+    assert summary == {
+        "ai-agents-search": {"discovered": 1, "new_jobs": 1, "skipped": 0},
+    }
+    youtube_client.search_videos.assert_awaited_once_with(
+        "AI agents",
+        max_results=5,
+        published_after="2026-03-01T00:00:00Z",
+        relevance_language="en",
+        event_type="completed",
+    )
+    assert len(db.inserted_jobs) == 1
+    payload = db.inserted_jobs[0]["payload"]
+    assert payload["source_type"] == "youtube_search"
+    assert payload["source"] == "youtube"
+    assert payload["source_item_id"] == "video-keep"
+    assert payload["source_video_id"] == "video-keep"
+    assert payload["url"] == "https://www.youtube.com/watch?v=video-keep"
+    assert db.updated_cursors == {"source-yt-search": "2026-03-10T18:30:00Z"}
+
+
 def test_run_once_skips_existing_jobs() -> None:
     db = FakeDB(
         sources=[
@@ -200,6 +333,135 @@ def test_run_once_skips_existing_jobs() -> None:
     }
     assert db.inserted_jobs == []
     assert db.updated_cursors == {"source-pexels": "777"}
+
+
+def test_apply_youtube_search_filters_duration() -> None:
+    scheduler = ContentScheduler()
+    source = make_content_source(
+        config={
+            "query": "test",
+            "min_duration_seconds": 120,
+            "max_duration_seconds": 3600,
+        }
+    )
+    videos = [
+        {"source_video_id": "a", "duration_seconds": 30},
+        {"source_video_id": "b", "duration_seconds": 300},
+        {"source_video_id": "c", "duration_seconds": 5000},
+        {"source_video_id": "d", "duration_seconds": 600},
+    ]
+
+    result = scheduler._apply_youtube_search_filters(source, videos)
+
+    assert [video["source_video_id"] for video in result] == ["b", "d"]
+
+
+def test_apply_youtube_search_filters_live() -> None:
+    scheduler = ContentScheduler()
+    source = make_content_source()
+    videos = [
+        {
+            "source_video_id": "a",
+            "duration_seconds": 300,
+            "live_broadcast_content": "live",
+        },
+        {
+            "source_video_id": "b",
+            "duration_seconds": 300,
+            "live_broadcast_content": "none",
+        },
+        {"source_video_id": "c", "duration_seconds": 300},
+    ]
+
+    result = scheduler._apply_youtube_search_filters(source, videos)
+
+    assert [video["source_video_id"] for video in result] == ["b", "c"]
+
+
+def test_apply_youtube_search_filters_views() -> None:
+    scheduler = ContentScheduler()
+    source = make_content_source(
+        config={
+            "query": "test",
+            "min_duration_seconds": 60,
+            "max_duration_seconds": 7200,
+            "min_view_count": 1000,
+        }
+    )
+    videos = [
+        {"source_video_id": "a", "duration_seconds": 300, "view_count": 500},
+        {"source_video_id": "b", "duration_seconds": 300, "view_count": 2000},
+    ]
+
+    result = scheduler._apply_youtube_search_filters(source, videos)
+
+    assert [video["source_video_id"] for video in result] == ["b"]
+
+
+def test_apply_youtube_search_filters_channel_blocklist() -> None:
+    scheduler = ContentScheduler()
+    source = make_content_source(
+        config={
+            "query": "test",
+            "min_duration_seconds": 60,
+            "max_duration_seconds": 7200,
+            "channel_blocklist": ["bad-channel"],
+        }
+    )
+    videos = [
+        {
+            "source_video_id": "a",
+            "duration_seconds": 300,
+            "channel_id": "bad-channel",
+        },
+        {
+            "source_video_id": "b",
+            "duration_seconds": 300,
+            "channel_id": "good-channel",
+        },
+    ]
+
+    result = scheduler._apply_youtube_search_filters(source, videos)
+
+    assert [video["source_video_id"] for video in result] == ["b"]
+
+
+def test_apply_llm_relevance_filter_keeps_selected_videos() -> None:
+    gemini_client = FakeGeminiClient("2, 3")
+    scheduler = ContentScheduler(gemini_client=gemini_client)
+    source = make_content_source(
+        config={
+            "query": "AI agents",
+            "llm_filter": True,
+            "llm_filter_description": "Videos about AI agents and developer tooling",
+        }
+    )
+    videos = [
+        {
+            "source_video_id": "a",
+            "title": "Cooking vlog",
+            "description": "Dinner prep and kitchen setup.",
+        },
+        {
+            "source_video_id": "b",
+            "title": "AI agents workflow tutorial",
+            "description": "How to build multi-step agent systems.",
+        },
+        {
+            "source_video_id": "c",
+            "title": "Gemini developer tools",
+            "description": "Using LLM tooling in agent applications.",
+        },
+    ]
+
+    result = asyncio.run(scheduler._apply_llm_relevance_filter(source, videos))
+
+    assert [video["source_video_id"] for video in result] == ["b", "c"]
+    assert gemini_client.models.calls[0]["model"] == "gemini-2.0-flash"
+    assert gemini_client.models.calls[0]["config"] == {"temperature": 0}
+    assert "Videos about AI agents and developer tooling" in str(
+        gemini_client.models.calls[0]["contents"]
+    )
 
 
 def test_run_once_updates_sync_cursor_after_successful_scan() -> None:

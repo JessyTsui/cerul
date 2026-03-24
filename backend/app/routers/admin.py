@@ -10,10 +10,16 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from app.admin import (
     AdminDeleteVideoResponse,
     AdminIndexedVideosResponse,
+    AdminSource,
+    AdminSourcesResponse,
     AdminSummaryResponse,
     AdminTargetsResponse,
     AdminTargetsUpsertRequest,
     AdminWorkerLiveResponse,
+    CreateSourceRequest,
+    UpdateSourceRequest,
+    create_source,
+    delete_source,
     delete_indexed_video_data,
     delete_target,
     fetch_admin_summary,
@@ -21,12 +27,14 @@ from app.admin import (
     fetch_ingestion_summary,
     fetch_indexed_videos,
     fetch_requests_summary,
+    fetch_sources,
     fetch_targets_summary,
     fetch_users_summary,
     fetch_worker_live,
     kill_job,
     require_admin_access,
     retry_job,
+    update_source,
     upsert_targets,
 )
 from app.admin.models import (
@@ -136,6 +144,77 @@ async def remove_admin_target(
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Admin target not found.",
+        )
+
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@router.get("/sources", response_model=AdminSourcesResponse)
+async def get_admin_sources(
+    session: SessionContext = Depends(require_session),
+    db: Any = Depends(get_db),
+) -> AdminSourcesResponse:
+    await require_admin_access(session, db)
+    return await fetch_sources(db)
+
+
+@router.post(
+    "/sources",
+    response_model=AdminSource,
+    status_code=status.HTTP_201_CREATED,
+)
+async def post_admin_source(
+    payload: CreateSourceRequest,
+    session: SessionContext = Depends(require_session),
+    db: Any = Depends(get_db),
+) -> AdminSource:
+    await require_admin_access(session, db)
+    try:
+        return await create_source(db, payload=payload)
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(exc),
+        ) from exc
+
+
+@router.patch("/sources/{source_id}", response_model=AdminSource)
+async def patch_admin_source(
+    source_id: UUID,
+    payload: UpdateSourceRequest,
+    session: SessionContext = Depends(require_session),
+    db: Any = Depends(get_db),
+) -> AdminSource:
+    await require_admin_access(session, db)
+    try:
+        source = await update_source(db, source_id=str(source_id), payload=payload)
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(exc),
+        ) from exc
+
+    if source is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Content source not found.",
+        )
+
+    return source
+
+
+@router.delete("/sources/{source_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def remove_admin_source(
+    source_id: UUID,
+    session: SessionContext = Depends(require_session),
+    db: Any = Depends(get_db),
+) -> Response:
+    await require_admin_access(session, db)
+    deleted = await delete_source(db, source_id=str(source_id))
+    if not deleted:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Content source not found.",
         )
 
     return Response(status_code=status.HTTP_204_NO_CONTENT)

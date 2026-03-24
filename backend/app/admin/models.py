@@ -3,11 +3,12 @@ from __future__ import annotations
 from datetime import date, datetime
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 AdminRangeKey = Literal["today", "7d", "30d"]
 TargetScopeType = Literal["global", "track", "source"]
 TargetComparisonMode = Literal["at_least", "at_most"]
+ContentSourceTrack = Literal["broll", "knowledge", "shared", "unified"]
 
 
 class AdminWindow(BaseModel):
@@ -396,6 +397,72 @@ class AdminDeleteVideoResponse(BaseModel):
     title: str
     units_deleted: int = 0
     processing_jobs_deleted: int = 0
+
+
+class AdminSource(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    id: str
+    slug: str
+    track: ContentSourceTrack
+    source_type: str | None = None
+    display_name: str
+    base_url: str | None = None
+    is_active: bool
+    config: dict[str, Any] = Field(default_factory=dict)
+    sync_cursor: str | None = None
+    metadata: dict[str, Any] = Field(default_factory=dict)
+    created_at: datetime
+    updated_at: datetime
+
+
+class AdminSourcesResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    generated_at: datetime
+    sources: list[AdminSource] = Field(default_factory=list)
+
+
+class CreateSourceRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    slug: str = Field(min_length=1, max_length=120)
+    track: ContentSourceTrack
+    source_type: str | None = Field(default=None, min_length=1, max_length=120)
+    display_name: str = Field(min_length=1, max_length=200)
+    base_url: str | None = Field(default=None, max_length=500)
+    is_active: bool = True
+    config: dict[str, Any] = Field(default_factory=dict)
+    sync_cursor: str | None = Field(default=None, max_length=500)
+    metadata: dict[str, Any] = Field(default_factory=dict)
+
+
+class UpdateSourceRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    slug: str | None = Field(default=None, min_length=1, max_length=120)
+    track: ContentSourceTrack | None = None
+    source_type: str | None = Field(default=None, min_length=1, max_length=120)
+    display_name: str | None = Field(default=None, min_length=1, max_length=200)
+    base_url: str | None = Field(default=None, max_length=500)
+    is_active: bool | None = None
+    config: dict[str, Any] | None = None
+    sync_cursor: str | None = Field(default=None, max_length=500)
+    metadata: dict[str, Any] | None = None
+
+    @model_validator(mode="after")
+    def validate_fields(self) -> "UpdateSourceRequest":
+        if not self.model_fields_set:
+            raise ValueError("At least one field must be provided.")
+
+        for required_field in ("slug", "track", "source_type", "display_name", "is_active"):
+            if (
+                required_field in self.model_fields_set
+                and getattr(self, required_field) is None
+            ):
+                raise ValueError(f"'{required_field}' cannot be null.")
+
+        return self
 
 
 class AdminMetricTarget(BaseModel):

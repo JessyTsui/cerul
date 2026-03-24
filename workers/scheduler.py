@@ -5,8 +5,10 @@ import asyncio
 import json
 import logging
 import os
+import re
 import signal
 import sys
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
@@ -22,6 +24,24 @@ import asyncpg
 from workers.common.sources import PexelsClient, PixabayClient, YouTubeClient
 
 logger = logging.getLogger(__name__)
+
+DEFAULT_GEMINI_FLASH_MODEL = "gemini-2.0-flash"
+YOUTUBE_SEARCH_RELEVANCE_PROMPT_TEMPLATE = """You are filtering YouTube search results for a video index.
+
+Target topic:
+{description}
+
+Original search query:
+{query}
+
+Keep only videos that are clearly and substantially about the target topic based on the title and description.
+Reject videos that are generic, weakly related, or primarily about another topic.
+
+Reply with comma-separated item numbers only, like: 1,3,5
+Reply with NONE if no items are relevant.
+
+{video_list}
+"""
 
 
 @dataclass(frozen=True)
@@ -55,11 +75,15 @@ class ContentScheduler:
         youtube_client: YouTubeClient | None = None,
         pexels_client: PexelsClient | None = None,
         pixabay_client: PixabayClient | None = None,
+        gemini_client: Any | None = None,
+        gemini_model_name: str = DEFAULT_GEMINI_FLASH_MODEL,
         logger: logging.Logger | None = None,
     ) -> None:
         self._youtube_client = youtube_client or YouTubeClient()
         self._pexels_client = pexels_client or PexelsClient()
         self._pixabay_client = pixabay_client or PixabayClient()
+        self._gemini_client = gemini_client
+        self._gemini_model_name = gemini_model_name
         self._logger = logger or logging.getLogger(__name__)
         self._shutdown_event = asyncio.Event()
 
@@ -205,6 +229,8 @@ class ContentScheduler:
             return await self._discover_pexels_items(source)
         if source.track == "unified" and source.source_type == "pixabay":
             return await self._discover_pixabay_items(source)
+        if source.source_type == "youtube_search":
+            return await self._discover_youtube_search_items(source)
         raise ValueError(
             f"Unsupported content source '{source.slug}' "
             f"({source.track}/{source.source_type})."
@@ -242,6 +268,53 @@ class ContentScheduler:
             if published_at > cursor_dt:
                 filtered_videos.append(video)
         return filtered_videos
+
+    async def _discover_youtube_search_items(
+        self,
+        source: ContentSource,
+    ) -> list[dict[str, Any]]:
+        query = self._require_config_value(source, "query")
+        max_results = self._coerce_int(source.config.get("max_results"), default=20)
+        published_after = source.sync_cursor if source.sync_cursor else None
+        if (
+            published_after is not None
+            and self._parse_datetime(published_after) is None
+        ):
+            self._logger.warning(
+                "Ignoring invalid sync_cursor for source '%s': %s",
+                source.slug,
+                source.sync_cursor,
+            )
+            published_after = None
+
+        relevance_language = self._coerce_string(
+            source.config.get("relevance_language")
+        )
+        videos = await self._youtube_client.search_videos(
+            query,
+            max_results=max_results,
+            published_after=published_after,
+            relevance_language=relevance_language,
+            event_type="completed",
+        )
+
+        self._logger.info(
+            "YouTube search '%s' returned %d videos.",
+            query,
+            len(videos),
+        )
+        filtered = self._apply_youtube_search_filters(source, videos)
+        self._logger.info(
+            "After hard filter: %d/%d videos remain.",
+            len(filtered),
+            len(videos),
+        )
+
+        if self._coerce_bool(source.config.get("llm_filter")) and filtered:
+            filtered = await self._apply_llm_relevance_filter(source, filtered)
+            self._logger.info("After LLM filter: %d videos remain.", len(filtered))
+
+        return filtered
 
     async def _discover_pexels_items(
         self,
@@ -284,19 +357,176 @@ class ContentScheduler:
                 filtered_items.append(item)
         return filtered_items
 
+    def _apply_youtube_search_filters(
+        self,
+        source: ContentSource,
+        videos: list[dict[str, Any]],
+    ) -> list[dict[str, Any]]:
+        config = source.config
+        max_duration = self._coerce_int(
+            config.get("max_duration_seconds"),
+            default=4 * 60 * 60,
+        )
+        min_duration = self._coerce_int(
+            config.get("min_duration_seconds"),
+            default=60,
+        )
+        min_views = self._coerce_int(config.get("min_view_count"), default=0)
+        channel_allowlist = self._coerce_string_set(config.get("channel_allowlist"))
+        channel_blocklist = self._coerce_string_set(config.get("channel_blocklist"))
+
+        filtered: list[dict[str, Any]] = []
+        for video in videos:
+            duration = self._coerce_int(
+                video.get("duration_seconds") or video.get("duration"),
+                default=0,
+            )
+            if duration < min_duration or duration > max_duration:
+                continue
+
+            live_status = (
+                self._coerce_string(video.get("live_broadcast_content")) or "none"
+            ).lower()
+            if live_status != "none":
+                continue
+
+            view_count = self._coerce_int(video.get("view_count"), default=0)
+            if view_count < min_views:
+                continue
+
+            channel_id = self._coerce_string(video.get("channel_id")) or ""
+            if channel_blocklist and channel_id in channel_blocklist:
+                continue
+            if channel_allowlist and channel_id not in channel_allowlist:
+                continue
+
+            filtered.append(video)
+
+        return filtered
+
+    async def _apply_llm_relevance_filter(
+        self,
+        source: ContentSource,
+        videos: list[dict[str, Any]],
+    ) -> list[dict[str, Any]]:
+        client = self._gemini_client
+        if client is None:
+            api_key = os.getenv("GEMINI_API_KEY", "").strip()
+            if not api_key:
+                self._logger.warning("GEMINI_API_KEY not set, skipping LLM filter.")
+                return videos
+            try:
+                from google import genai
+            except ImportError:
+                self._logger.warning(
+                    "google-genai not installed, skipping LLM filter."
+                )
+                return videos
+
+            client = genai.Client(api_key=api_key)
+            self._gemini_client = client
+
+        description = (
+            self._coerce_string(source.config.get("llm_filter_description"))
+            or self._coerce_string(source.config.get("query"))
+            or source.slug
+        )
+        prompt = self._build_youtube_search_relevance_prompt(
+            description=description,
+            query=self._require_config_value(source, "query"),
+            videos=videos,
+        )
+
+        try:
+            response = await asyncio.to_thread(
+                client.models.generate_content,
+                model=self._gemini_model_name,
+                contents=prompt,
+                config={"temperature": 0},
+            )
+            answer = _extract_generated_text(response)
+            if answer is None:
+                self._logger.warning(
+                    "LLM relevance filter returned no text, returning all videos."
+                )
+                return videos
+
+            relevant_indices = self._parse_llm_relevant_indices(answer, len(videos))
+            if relevant_indices is None:
+                self._logger.warning(
+                    "Could not parse LLM relevance filter response %r, returning all videos.",
+                    answer,
+                )
+                return videos
+
+            return [videos[index] for index in relevant_indices]
+        except Exception:
+            self._logger.exception("LLM relevance filter failed, returning all videos.")
+            return videos
+
+    def _build_youtube_search_relevance_prompt(
+        self,
+        *,
+        description: str,
+        query: str,
+        videos: list[dict[str, Any]],
+    ) -> str:
+        video_sections: list[str] = []
+        for index, video in enumerate(videos, start=1):
+            title = self._coerce_string(video.get("title")) or "Untitled video"
+            raw_description = self._coerce_string(video.get("description")) or ""
+            video_description = raw_description[:200] or "(none)"
+            video_sections.append(
+                f"{index}. Title: {title}\n"
+                f"   Description: {video_description}"
+            )
+
+        return YOUTUBE_SEARCH_RELEVANCE_PROMPT_TEMPLATE.format(
+            description=description,
+            query=query,
+            video_list="\n\n".join(video_sections),
+        )
+
+    def _parse_llm_relevant_indices(
+        self,
+        answer: str,
+        total_videos: int,
+    ) -> list[int] | None:
+        normalized = answer.strip()
+        if not normalized:
+            return None
+
+        if re.sub(r"[^A-Za-z]+", "", normalized).upper() == "NONE":
+            return []
+
+        relevant_indices: set[int] = set()
+        for match in re.findall(r"\d+", normalized):
+            index = int(match) - 1
+            if 0 <= index < total_videos:
+                relevant_indices.add(index)
+
+        if not relevant_indices:
+            return None
+        return sorted(relevant_indices)
+
     def _build_input_payload(
         self,
         source: ContentSource,
         item: dict[str, Any],
         source_item_id: str,
     ) -> dict[str, Any]:
+        payload_source = (
+            "youtube"
+            if source.source_type == "youtube_search"
+            else source.source_type
+        )
         payload: dict[str, Any] = {
             "track": "unified",
             "discovery_track": source.track,
             "source_slug": source.slug,
             "source_type": source.source_type,
             "source_item_id": source_item_id,
-            "source": source.source_type,
+            "source": payload_source,
             "source_video_id": source_item_id,
             "url": self._resolve_item_url(source, item, source_item_id),
             "owner_id": None,
@@ -318,7 +548,7 @@ class ContentScheduler:
         source: ContentSource,
         items: list[dict[str, Any]],
     ) -> str | None:
-        if source.source_type == "youtube":
+        if source.source_type in ("youtube", "youtube_search"):
             latest_item = max(
                 items,
                 key=lambda item: self._parse_datetime(
@@ -450,7 +680,7 @@ class ContentScheduler:
         item: dict[str, Any],
         source_item_id: str,
     ) -> str:
-        if source.source_type == "youtube":
+        if source.source_type in ("youtube", "youtube_search"):
             return (
                 self._coerce_string(item.get("source_url"))
                 or self._coerce_string(item.get("video_url"))
@@ -480,7 +710,7 @@ class ContentScheduler:
         source: ContentSource,
         item: dict[str, Any],
     ) -> str:
-        if source.source_type == "youtube":
+        if source.source_type in ("youtube", "youtube_search"):
             source_item_id = self._coerce_string(
                 item.get("source_video_id") or item.get("video_id") or item.get("id")
             )
@@ -547,6 +777,34 @@ class ContentScheduler:
             return {str(key): item for key, item in decoded.items()}
         return None
 
+    def _coerce_bool(self, value: Any, *, default: bool = False) -> bool:
+        if isinstance(value, bool):
+            return value
+        if isinstance(value, (int, float)):
+            return bool(value)
+        if isinstance(value, str):
+            normalized = value.strip().lower()
+            if normalized in {"1", "true", "yes", "on"}:
+                return True
+            if normalized in {"0", "false", "no", "off"}:
+                return False
+        return default
+
+    def _coerce_string_set(self, value: Any) -> set[str]:
+        if isinstance(value, str):
+            raw_items: Sequence[Any] = value.split(",")
+        elif isinstance(value, Sequence) and not isinstance(value, (str, bytes)):
+            raw_items = value
+        else:
+            return set()
+
+        normalized_items: set[str] = set()
+        for item in raw_items:
+            normalized = self._coerce_string(item)
+            if normalized is not None:
+                normalized_items.add(normalized)
+        return normalized_items
+
     def _parse_datetime(self, value: str | None) -> datetime | None:
         if value is None:
             return None
@@ -558,6 +816,44 @@ class ContentScheduler:
         if parsed.tzinfo is None:
             return parsed.replace(tzinfo=timezone.utc)
         return parsed.astimezone(timezone.utc)
+
+
+def _extract_generated_text(response: Any) -> str | None:
+    direct_text = getattr(response, "text", None)
+    if isinstance(direct_text, str) and direct_text.strip():
+        return direct_text.strip()
+    if isinstance(response, Mapping):
+        mapping_text = response.get("text")
+        if isinstance(mapping_text, str) and mapping_text.strip():
+            return mapping_text.strip()
+
+    candidates = getattr(response, "candidates", None)
+    if candidates is None and isinstance(response, Mapping):
+        candidates = response.get("candidates")
+    if not isinstance(candidates, Sequence) or isinstance(candidates, (str, bytes)):
+        return None
+
+    parts: list[str] = []
+    for candidate in candidates:
+        content = getattr(candidate, "content", None)
+        if content is None and isinstance(candidate, Mapping):
+            content = candidate.get("content")
+        content_parts = getattr(content, "parts", None)
+        if content_parts is None and isinstance(content, Mapping):
+            content_parts = content.get("parts")
+        if not isinstance(content_parts, Sequence) or isinstance(
+            content_parts, (str, bytes)
+        ):
+            continue
+        for part in content_parts:
+            text = getattr(part, "text", None)
+            if text is None and isinstance(part, Mapping):
+                text = part.get("text")
+            if isinstance(text, str) and text.strip():
+                parts.append(text.strip())
+
+    joined = " ".join(parts).strip()
+    return joined or None
 
 
 async def main() -> None:

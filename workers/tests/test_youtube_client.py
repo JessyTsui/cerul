@@ -54,6 +54,10 @@ def test_get_video_metadata_normalizes_response() -> None:
                             "liveBroadcastContent": "none",
                         },
                         "contentDetails": {"duration": "PT1H2M3S"},
+                        "statistics": {
+                            "viewCount": "12345",
+                            "likeCount": "678",
+                        },
                         "status": {
                             "license": "youtube",
                             "privacyStatus": "public",
@@ -84,6 +88,8 @@ def test_get_video_metadata_normalizes_response() -> None:
         "published_at": "2026-03-01T10:00:00Z",
         "duration": 3723,
         "duration_seconds": 3723,
+        "view_count": 12345,
+        "like_count": 678,
         "license": "standard-youtube-license",
         "privacy_status": "public",
         "embeddable": True,
@@ -95,7 +101,7 @@ def test_get_video_metadata_normalizes_response() -> None:
             "url": "https://www.googleapis.com/youtube/v3/videos",
             "params": {
                 "id": "abc123",
-                "part": "snippet,contentDetails,status",
+                "part": "snippet,contentDetails,status,statistics",
                 "key": "test-key",
             },
         }
@@ -125,6 +131,7 @@ def test_search_channel_videos_preserves_search_order() -> None:
                             },
                         },
                         "contentDetails": {"duration": "PT10M"},
+                        "statistics": {"viewCount": "200"},
                         "status": {"license": "creativeCommon"},
                     },
                     {
@@ -139,6 +146,10 @@ def test_search_channel_videos_preserves_search_order() -> None:
                             },
                         },
                         "contentDetails": {"duration": "PT4M5S"},
+                        "statistics": {
+                            "viewCount": "400",
+                            "likeCount": "25",
+                        },
                         "status": {"license": "youtube"},
                     },
                 ]
@@ -157,7 +168,11 @@ def test_search_channel_videos_preserves_search_order() -> None:
     assert [video["source_video_id"] for video in videos] == ["video-b", "video-a"]
     assert videos[0]["title"] == "Latest upload"
     assert videos[0]["duration_seconds"] == 245
+    assert videos[0]["view_count"] == 400
+    assert videos[0]["like_count"] == 25
     assert videos[1]["license"] == "creative-commons"
+    assert videos[1]["view_count"] == 200
+    assert videos[1]["like_count"] is None
     assert client.calls == [
         {
             "url": "https://www.googleapis.com/youtube/v3/search",
@@ -174,7 +189,102 @@ def test_search_channel_videos_preserves_search_order() -> None:
             "url": "https://www.googleapis.com/youtube/v3/videos",
             "params": {
                 "id": "video-b,video-a",
-                "part": "snippet,contentDetails,status",
+                "part": "snippet,contentDetails,status,statistics",
+                "key": "test-key",
+            },
+        },
+    ]
+
+
+def test_search_videos_supports_filters_and_preserves_search_order() -> None:
+    client = RecordingAsyncClient(
+        [
+            {
+                "items": [
+                    {"id": {"videoId": "video-b"}},
+                    {"id": {"videoId": "video-a"}},
+                ]
+            },
+            {
+                "items": [
+                    {
+                        "id": "video-a",
+                        "snippet": {
+                            "title": "Agent memory systems",
+                            "channelTitle": "Cerul Labs",
+                            "channelId": "channel-42",
+                            "publishedAt": "2026-02-28T10:00:00Z",
+                            "thumbnails": {
+                                "default": {"url": "https://img.youtube.com/vi/video-a/default.jpg"}
+                            },
+                        },
+                        "contentDetails": {"duration": "PT8M"},
+                        "statistics": {"viewCount": "900"},
+                        "status": {"license": "youtube"},
+                    },
+                    {
+                        "id": "video-b",
+                        "snippet": {
+                            "title": "Latest agent demo",
+                            "channelTitle": "Cerul Labs",
+                            "channelId": "channel-42",
+                            "publishedAt": "2026-03-02T10:00:00Z",
+                            "thumbnails": {
+                                "default": {"url": "https://img.youtube.com/vi/video-b/default.jpg"}
+                            },
+                        },
+                        "contentDetails": {"duration": "PT12M34S"},
+                        "statistics": {
+                            "viewCount": "1500",
+                            "likeCount": "42",
+                        },
+                        "status": {"license": "creativeCommon"},
+                    },
+                ]
+            },
+        ]
+    )
+
+    with patch("workers.common.sources.youtube.httpx.AsyncClient", return_value=client):
+        videos = asyncio.run(
+            YouTubeClient(api_key="test-key").search_videos(
+                "  agent systems  ",
+                max_results=2,
+                published_after="2026-02-01T00:00:00Z",
+                relevance_language="en",
+                video_duration="medium",
+                event_type="completed",
+            )
+        )
+
+    assert [video["source_video_id"] for video in videos] == ["video-b", "video-a"]
+    assert videos[0]["title"] == "Latest agent demo"
+    assert videos[0]["license"] == "creative-commons"
+    assert videos[0]["view_count"] == 1500
+    assert videos[0]["like_count"] == 42
+    assert videos[1]["view_count"] == 900
+    assert videos[1]["like_count"] is None
+    assert client.calls == [
+        {
+            "url": "https://www.googleapis.com/youtube/v3/search",
+            "params": {
+                "eventType": "completed",
+                "maxResults": 2,
+                "order": "relevance",
+                "part": "snippet",
+                "publishedAfter": "2026-02-01T00:00:00Z",
+                "q": "agent systems",
+                "relevanceLanguage": "en",
+                "type": "video",
+                "videoDuration": "medium",
+                "key": "test-key",
+            },
+        },
+        {
+            "url": "https://www.googleapis.com/youtube/v3/videos",
+            "params": {
+                "id": "video-b,video-a",
+                "part": "snippet,contentDetails,status,statistics",
                 "key": "test-key",
             },
         },
@@ -258,7 +368,7 @@ def test_search_channel_videos_paginates_beyond_first_50_results() -> None:
             "url": "https://www.googleapis.com/youtube/v3/videos",
             "params": {
                 "id": ",".join(first_page_ids),
-                "part": "snippet,contentDetails,status",
+                "part": "snippet,contentDetails,status,statistics",
                 "key": "test-key",
             },
         },
@@ -266,7 +376,7 @@ def test_search_channel_videos_paginates_beyond_first_50_results() -> None:
             "url": "https://www.googleapis.com/youtube/v3/videos",
             "params": {
                 "id": ",".join(second_page_ids),
-                "part": "snippet,contentDetails,status",
+                "part": "snippet,contentDetails,status,statistics",
                 "key": "test-key",
             },
         },

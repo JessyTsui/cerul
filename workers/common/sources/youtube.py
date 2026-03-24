@@ -38,7 +38,7 @@ class YouTubeClient:
             "videos",
             {
                 "id": video_id,
-                "part": "snippet,contentDetails,status",
+                "part": "snippet,contentDetails,status,statistics",
             },
         )
         items = payload.get("items", [])
@@ -46,6 +46,35 @@ class YouTubeClient:
             raise LookupError(f"YouTube video not found: {video_id}")
 
         return self._normalize_video(items[0])
+
+    async def search_videos(
+        self,
+        query: str,
+        max_results: int = 25,
+        *,
+        published_after: str | None = None,
+        relevance_language: str | None = None,
+        video_duration: str | None = None,
+        event_type: str | None = None,
+    ) -> list[dict[str, Any]]:
+        query = query.strip()
+        if not query:
+            raise ValueError("query is required.")
+        if max_results <= 0:
+            raise ValueError("max_results must be greater than 0.")
+
+        ordered_video_ids = await self._search_video_ids(
+            {
+                "eventType": event_type,
+                "order": "relevance",
+                "publishedAfter": published_after,
+                "q": query,
+                "relevanceLanguage": relevance_language,
+                "videoDuration": video_duration,
+            },
+            max_results=max_results,
+        )
+        return await self._get_videos_by_ids(ordered_video_ids)
 
     async def search_channel_videos(
         self,
@@ -58,6 +87,21 @@ class YouTubeClient:
         if max_results <= 0:
             raise ValueError("max_results must be greater than 0.")
 
+        ordered_video_ids = await self._search_video_ids(
+            {
+                "channelId": channel_id,
+                "order": "date",
+            },
+            max_results=max_results,
+        )
+        return await self._get_videos_by_ids(ordered_video_ids)
+
+    async def _search_video_ids(
+        self,
+        params: dict[str, Any],
+        *,
+        max_results: int,
+    ) -> list[str]:
         ordered_video_ids: list[str] = []
         seen_video_ids: set[str] = set()
         next_page_token: str | None = None
@@ -67,12 +111,11 @@ class YouTubeClient:
             payload = await self._get_json(
                 "search",
                 {
-                    "channelId": channel_id,
                     "maxResults": min(remaining, 50),
-                    "order": "date",
                     "pageToken": next_page_token,
                     "part": "snippet",
                     "type": "video",
+                    **params,
                 },
             )
             items = payload.get("items", [])
@@ -89,6 +132,12 @@ class YouTubeClient:
             if next_page_token is None:
                 break
 
+        return ordered_video_ids
+
+    async def _get_videos_by_ids(
+        self,
+        ordered_video_ids: list[str],
+    ) -> list[dict[str, Any]]:
         if not ordered_video_ids:
             return []
 
@@ -100,7 +149,7 @@ class YouTubeClient:
                     "videos",
                     {
                         "id": ",".join(video_id_batch),
-                        "part": "snippet,contentDetails,status",
+                        "part": "snippet,contentDetails,status,statistics",
                     },
                 )
             ).get("items", [])
@@ -144,6 +193,7 @@ class YouTubeClient:
         snippet = payload.get("snippet") or {}
         content_details = payload.get("contentDetails") or {}
         status = payload.get("status") or {}
+        statistics = payload.get("statistics") or {}
         watch_url = self._build_watch_url(video_id)
         duration_seconds = self._parse_duration_seconds(content_details.get("duration"))
 
@@ -164,6 +214,8 @@ class YouTubeClient:
             "published_at": self._coerce_string(snippet.get("publishedAt")),
             "duration": duration_seconds,
             "duration_seconds": duration_seconds,
+            "view_count": self._coerce_int(statistics.get("viewCount")),
+            "like_count": self._coerce_int(statistics.get("likeCount")),
             "license": self._normalize_license(status.get("license")),
             "privacy_status": self._coerce_string(status.get("privacyStatus")),
             "embeddable": status.get("embeddable"),
@@ -230,6 +282,21 @@ class YouTubeClient:
             return None
         stripped = value.strip()
         return stripped or None
+
+    def _coerce_int(self, value: Any) -> int | None:
+        if isinstance(value, bool):
+            return None
+        if isinstance(value, int):
+            return value
+        if isinstance(value, str):
+            stripped = value.strip()
+            if not stripped:
+                return None
+            try:
+                return int(stripped)
+            except ValueError:
+                return None
+        return None
 
     def _build_watch_url(self, video_id: str) -> str:
         return f"https://www.youtube.com/watch?v={video_id}"
