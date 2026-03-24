@@ -378,6 +378,13 @@ export function AdminSourcesScreen() {
 
   const activeCount = sources.filter((s) => s.isActive).length;
 
+  // Sort: by subscriber count descending (biggest channels first)
+  const sortedSources = [...sources].sort((a, b) => {
+    const aSubs = getMetaInt(a.metadata, "subscriber_count") ?? 0;
+    const bSubs = getMetaInt(b.metadata, "subscriber_count") ?? 0;
+    return bSubs - aSubs;
+  });
+
   const inputClassName =
     "h-12 w-full rounded-[14px] border border-[var(--border)] bg-[var(--surface)] px-4 text-white outline-none transition focus:border-[var(--brand)]";
   const labelClassName =
@@ -634,7 +641,7 @@ export function AdminSourcesScreen() {
             </div>
           ) : (
             <div className="mt-4 space-y-3">
-              {sources.slice(currentPage * PAGE_SIZE, (currentPage + 1) * PAGE_SIZE).map((source) => {
+              {sortedSources.slice(currentPage * PAGE_SIZE, (currentPage + 1) * PAGE_SIZE).map((source) => {
                 const channelId =
                   typeof source.config.channel_id === "string"
                     ? source.config.channel_id
@@ -662,12 +669,13 @@ export function AdminSourcesScreen() {
                   >
                     {/* Main row — always visible */}
                     <div
-                      className="flex cursor-pointer items-center gap-4 p-5"
+                      className="flex cursor-pointer items-center gap-3 px-5 py-4"
                       onClick={() => setExpandedId(isExpanded ? null : source.id)}
                     >
                       <ChannelAvatar url={thumbnailUrl} name={source.displayName} />
 
-                      <div className="min-w-0 flex-1">
+                      {/* Name + description — fixed proportion */}
+                      <div className="min-w-0 w-[280px] shrink-0">
                         <div className="flex items-center gap-2">
                           <p className="truncate font-semibold text-white">
                             {source.displayName}
@@ -682,81 +690,79 @@ export function AdminSourcesScreen() {
                             {source.isActive ? "Active" : "Paused"}
                           </span>
                         </div>
-                        <p className="mt-0.5 text-xs text-[var(--foreground-tertiary)]">
+                        <p className="mt-0.5 truncate text-xs text-[var(--foreground-tertiary)]">
                           {source.slug}
-                          {description ? ` · ${description.slice(0, 80)}${description.length > 80 ? "..." : ""}` : ""}
+                          {description ? ` · ${description.slice(0, 60)}` : ""}
                         </p>
                       </div>
 
-                      {/* Inline stats: subs, videos, views + analytics delta */}
-                      <div className="hidden shrink-0 gap-5 text-xs lg:flex">
-                        <div>
-                          <span className="font-semibold text-white">{formatCount(subscriberCount)}</span>
-                          <span className="ml-1 text-[var(--foreground-tertiary)]">subs</span>
-                        </div>
-                        <div>
-                          <span className="font-semibold text-white">{formatCount(videoCount)}</span>
-                          <span className="ml-1 text-[var(--foreground-tertiary)]">videos</span>
-                        </div>
-                        <div>
-                          <span className="font-semibold text-white">{formatCount(viewCount)}</span>
-                          <span className="ml-1 text-[var(--foreground-tertiary)]">views</span>
-                        </div>
-                        {analytics ? (
-                          <div className="border-l border-[var(--border)] pl-5">
-                            <span className="font-semibold text-white">{analytics.jobsCompleted}</span>
+                      {/* Stats columns — fixed widths for alignment */}
+                      <div className="hidden shrink-0 items-center text-xs lg:flex">
+                        <span className="w-[90px] text-right font-semibold text-white">
+                          {formatCount(subscriberCount)}
+                          <span className="ml-1 font-normal text-[var(--foreground-tertiary)]">subs</span>
+                        </span>
+                        <span className="w-[90px] text-right font-semibold text-white">
+                          {formatCount(videoCount)}
+                          <span className="ml-1 font-normal text-[var(--foreground-tertiary)]">vids</span>
+                        </span>
+                        <span className="w-[100px] text-right font-semibold text-white">
+                          {formatCount(viewCount)}
+                          <span className="ml-1 font-normal text-[var(--foreground-tertiary)]">views</span>
+                        </span>
+                        <span className="ml-3 w-[100px] border-l border-[var(--border)] pl-3 text-right">
+                          <span className="font-semibold text-white">
+                            {analytics ? analytics.jobsCompleted : 0}
+                          </span>
+                          {analytics ? (
                             <DeltaBadge current={analytics.jobsCompleted} previous={analytics.prevJobsCompleted} />
-                            <span className="ml-1 text-[var(--foreground-tertiary)]">indexed</span>
-                            {analytics.jobsFailed > 0 ? (
-                              <>
-                                <span className="ml-3 font-semibold text-red-300">{analytics.jobsFailed}</span>
-                                <span className="ml-1 text-[var(--foreground-tertiary)]">failed</span>
-                              </>
+                          ) : null}
+                          <span className="ml-1 font-normal text-[var(--foreground-tertiary)]">idx</span>
+                        </span>
+                      </div>
+
+                      {/* Tags — fill remaining space */}
+                      <div className="hidden min-w-0 flex-1 xl:block">
+                        {keywords.length > 0 ? (
+                          <div className="flex flex-wrap gap-1">
+                            {keywords.slice(0, 3).map((kw) => (
+                              <span
+                                key={kw}
+                                className="truncate rounded-full border border-[var(--border)] bg-[rgba(255,255,255,0.04)] px-2 py-0.5 text-[10px] text-[var(--foreground-tertiary)]"
+                              >
+                                {kw}
+                              </span>
+                            ))}
+                            {keywords.length > 3 ? (
+                              <span className="py-0.5 text-[10px] text-[var(--foreground-tertiary)]">
+                                +{keywords.length - 3}
+                              </span>
                             ) : null}
                           </div>
                         ) : null}
                       </div>
 
-                      {/* Inline tags (first 3) */}
-                      {keywords.length > 0 ? (
-                        <div className="hidden shrink-0 gap-1.5 xl:flex">
-                          {keywords.slice(0, 3).map((kw) => (
-                            <span
-                              key={kw}
-                              className="rounded-full border border-[var(--border)] bg-[rgba(255,255,255,0.04)] px-2 py-0.5 text-[10px] text-[var(--foreground-tertiary)]"
-                            >
-                              {kw}
-                            </span>
-                          ))}
-                          {keywords.length > 3 ? (
-                            <span className="py-0.5 text-[10px] text-[var(--foreground-tertiary)]">
-                              +{keywords.length - 3}
-                            </span>
-                          ) : null}
-                        </div>
-                      ) : null}
-
-                      {/* Actions */}
-                      <div className="flex shrink-0 items-center gap-2" onClick={(e) => e.stopPropagation()}>
+                      {/* Actions — fixed width */}
+                      <div className="flex shrink-0 items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
                         {channelId ? (
                           <a
                             href={getChannelUrl(channelId)}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="inline-flex h-7 items-center rounded-lg border border-[var(--border)] px-2.5 text-xs text-[var(--foreground-secondary)] transition hover:border-[var(--brand)] hover:text-white"
+                            className="inline-flex h-7 items-center rounded-lg border border-[var(--border)] px-2 text-xs text-[var(--foreground-secondary)] transition hover:border-[var(--brand)] hover:text-white"
                           >
-                            YouTube
+                            YT
                           </a>
                         ) : null}
                         <button
-                          className="inline-flex h-7 items-center rounded-lg border border-[var(--border)] px-2.5 text-xs text-[var(--foreground-secondary)] transition hover:border-[var(--brand)] hover:text-white"
+                          className="inline-flex h-7 items-center rounded-lg border border-[var(--border)] px-2 text-xs text-[var(--foreground-secondary)] transition hover:border-[var(--brand)] hover:text-white"
                           onClick={() => openEditForm(source)}
                           type="button"
                         >
                           Edit
                         </button>
                         <button
-                          className="inline-flex h-7 items-center rounded-lg border border-[var(--border)] px-2.5 text-xs text-[var(--foreground-secondary)] transition hover:border-amber-500 hover:text-amber-300"
+                          className="inline-flex h-7 items-center rounded-lg border border-[var(--border)] px-2 text-xs text-[var(--foreground-secondary)] transition hover:border-amber-500 hover:text-amber-300"
                           disabled={togglingId === source.id}
                           onClick={() => void handleToggleActive(source)}
                           type="button"
@@ -768,16 +774,16 @@ export function AdminSourcesScreen() {
                               : "Resume"}
                         </button>
                         <button
-                          className="inline-flex h-7 items-center rounded-lg border border-red-500/40 bg-red-500/10 px-2.5 text-xs text-red-300 transition hover:border-red-500 hover:bg-red-500/20"
+                          className="inline-flex h-7 items-center rounded-lg border border-red-500/40 bg-red-500/10 px-2 text-xs text-red-300 transition hover:border-red-500 hover:bg-red-500/20"
                           onClick={() => setConfirmDeleteSource(source)}
                           type="button"
                         >
-                          Delete
+                          Del
                         </button>
                       </div>
 
                       {/* Expand indicator */}
-                      <span className="text-xs text-[var(--foreground-tertiary)]">
+                      <span className="shrink-0 text-xs text-[var(--foreground-tertiary)]">
                         {isExpanded ? "▲" : "▼"}
                       </span>
                     </div>
