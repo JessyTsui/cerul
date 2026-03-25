@@ -24,18 +24,15 @@ These tasks can be done in parallel across separate worktrees and merged afterwa
 Create a new migration file `db/migrations/010_hnsw_index.sql`:
 
 ```sql
-BEGIN;
-
 -- HNSW index for cosine similarity search on retrieval_units embeddings.
 -- With 1K-10K vectors this provides ~5-25x speedup over brute-force scan.
 -- At 100K+ vectors the speedup is 100x+.
 -- m=16 and ef_construction=200 are good defaults for recall vs speed tradeoff.
+-- CREATE INDEX CONCURRENTLY must not run inside an explicit transaction block.
 CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_retrieval_units_embedding_hnsw
 ON retrieval_units
 USING hnsw (embedding vector_cosine_ops)
 WITH (m = 16, ef_construction = 200);
-
-COMMIT;
 ```
 
 **How to run on Neon**:
@@ -44,7 +41,7 @@ COMMIT;
 psql "$DATABASE_URL" -f db/migrations/010_hnsw_index.sql
 ```
 
-Note: `CREATE INDEX CONCURRENTLY` cannot run inside a transaction block in some environments. If it fails, remove the `BEGIN;`/`COMMIT;` wrapper and run the CREATE INDEX statement alone.
+Note: `CREATE INDEX CONCURRENTLY` cannot run inside an explicit transaction block, so this migration should be executed without a `BEGIN;`/`COMMIT;` wrapper.
 
 **Verification**:
 ```sql
