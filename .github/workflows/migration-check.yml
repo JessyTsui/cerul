@@ -5,6 +5,8 @@ on:
     branches: [main]
     paths:
       - 'db/migrations/**'
+      - 'scripts/migrate-db.sh'
+      - '.github/workflows/migration-check.yml'
 
 jobs:
   validate-sql:
@@ -30,18 +32,9 @@ jobs:
 
       - name: Run migrations against test database
         env:
-          PGHOST: localhost
-          PGPORT: 5432
-          PGUSER: cerul_test
-          PGPASSWORD: cerul_test
-          PGDATABASE: cerul_test
+          DATABASE_URL: postgresql://cerul_test:cerul_test@localhost:5432/cerul_test
         run: |
-          echo "Running all migration files in order..."
-          find db/migrations -type f -name '*.sql' | sort | while IFS= read -r f; do
-            echo "==> Applying $f"
-            psql -v ON_ERROR_STOP=1 -f "$f"
-            echo "    OK"
-          done
+          ./scripts/migrate-db.sh
 
       - name: Verify schema tables exist
         env:

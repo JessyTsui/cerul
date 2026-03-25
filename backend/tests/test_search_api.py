@@ -90,10 +90,11 @@ def test_search_endpoint_records_usage_query_logs_and_tracking_links(database) -
     assert payload["credits_remaining"] == 999
     assert re.fullmatch(r"req_[a-f0-9]{24}", payload["request_id"])
     assert payload["results"][0]["id"] == TEST_UNIFIED_BROLL_UNIT_ID
-    assert payload["results"][0]["unit_type"] == "visual"
+    assert "unit_type" not in payload["results"][0]
     assert payload["results"][0]["url"].startswith(("http://localhost:3000/v/", "http://127.0.0.1:3000/v/"))
     assert database.fetchval("SELECT COUNT(*) FROM query_logs") == 1
     assert database.fetchval("SELECT COUNT(*) FROM tracking_links") == 1
+    assert database.fetchval("SELECT unit_type FROM tracking_links LIMIT 1") == "visual"
     latency_ms = database.fetchval(
         "SELECT latency_ms FROM query_logs WHERE request_id = $1",
         payload["request_id"],

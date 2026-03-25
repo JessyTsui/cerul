@@ -218,6 +218,20 @@ migration_matches_schema() {
     004_admin_console.sql)
       result="$(psql_query "SELECT CASE WHEN EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'user_profiles' AND column_name = 'console_role') AND to_regclass('public.admin_metric_targets') IS NOT NULL THEN 'true' ELSE 'false' END")"
       ;;
+    010_hnsw_index.sql)
+      local retrieval_units_embedding_type
+      retrieval_units_embedding_type="$(psql_query "SELECT format_type(a.atttypid, a.atttypmod) FROM pg_attribute a JOIN pg_class c ON c.oid = a.attrelid JOIN pg_namespace n ON n.oid = c.relnamespace WHERE n.nspname = 'public' AND c.relname = 'retrieval_units' AND a.attname = 'embedding' AND a.attnum > 0 AND NOT a.attisdropped")"
+
+      if [[ "${retrieval_units_embedding_type}" == "vector(3072)" ]]; then
+        if should_include_migration "011_rebuild_retrieval_units_hnsw_index.sql"; then
+          result="true"
+        else
+          result="$(psql_query "SELECT CASE WHEN EXISTS (SELECT 1 FROM pg_indexes WHERE schemaname = 'public' AND tablename = 'retrieval_units' AND indexname = 'idx_retrieval_units_embedding_hnsw' AND indexdef LIKE '%halfvec_cosine_ops%') THEN 'true' ELSE 'false' END")"
+        fi
+      else
+        result="false"
+      fi
+      ;;
     *)
       result="false"
       ;;

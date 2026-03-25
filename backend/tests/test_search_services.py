@@ -304,7 +304,8 @@ def test_unified_search_embeds_query_text_and_returns_tracking_url(
     assert len(execution.results) == 1
     assert execution.results[0].id == "segment_1"
     assert execution.results[0].url.path.startswith("/v/")
-    assert execution.results[0].unit_type == "speech"
+    assert "unit_type" not in execution.results[0].model_dump()
+    assert execution.tracking_links[0]["unit_type"] == "speech"
     assert embedding_backend.calls == ["agent workflows"]
     assert len(database.fetch_calls) == 1
     assert "ru.unit_type = ANY($2::text[])" in database.fetch_calls[0][0]
@@ -359,7 +360,8 @@ def test_unified_search_embeds_image_only_query(tmp_path: Path) -> None:
     )
 
     assert len(execution.results) == 1
-    assert execution.results[0].unit_type == "visual"
+    assert "unit_type" not in execution.results[0].model_dump()
+    assert execution.tracking_links[0]["unit_type"] == "visual"
     assert embedding_backend.calls == []
     assert embedding_backend.multimodal_calls == [(None, str(image_path))]
 
@@ -410,7 +412,8 @@ def test_unified_search_embeds_text_and_image_query(tmp_path: Path) -> None:
     )
 
     assert len(execution.results) == 1
-    assert execution.results[0].unit_type == "visual"
+    assert "unit_type" not in execution.results[0].model_dump()
+    assert execution.tracking_links[0]["unit_type"] == "visual"
     assert embedding_backend.calls == []
     assert embedding_backend.multimodal_calls == [("fireplace interview", str(image_path))]
 
@@ -603,7 +606,7 @@ def test_unified_search_visual_snippet_prefers_scene_description_over_ocr() -> N
         )
     )
 
-    assert execution.results[0].unit_type == "visual"
+    assert "unit_type" not in execution.results[0].model_dump()
     assert execution.results[0].snippet == "A man and a woman sit in a room with a fireplace."
 
 
@@ -656,7 +659,7 @@ def test_unified_search_merged_segment_snippet_prefers_transcript() -> None:
     )
 
     assert [result.id for result in execution.results] == ["visual_1"]
-    assert execution.results[0].unit_type == "visual"
+    assert "unit_type" not in execution.results[0].model_dump()
     assert execution.results[0].snippet == (
         "The rocket clears the tower as the countdown hits zero."
     )

@@ -166,7 +166,6 @@ class UnifiedSearchService:
                     speaker=row.get("speaker"),
                     timestamp_start=self._coerce_optional_float(row.get("timestamp_start")),
                     timestamp_end=self._coerce_optional_float(row.get("timestamp_end")),
-                    unit_type=str(row.get("unit_type") or "speech"),  # type: ignore[arg-type]
                 )
             )
 
@@ -232,6 +231,11 @@ class UnifiedSearchService:
             conditions.append(f"v.source = ${len(params)}")
 
         params.append(limit)
+        distance_sql = (
+            f"(ru.embedding::halfvec({DEFAULT_KNOWLEDGE_VECTOR_DIMENSION}) <=> "
+            f"($1::vector({DEFAULT_KNOWLEDGE_VECTOR_DIMENSION}))"
+            f"::halfvec({DEFAULT_KNOWLEDGE_VECTOR_DIMENSION}))"
+        )
         sql = f"""
             SELECT
                 ru.id::text AS id,
@@ -249,7 +253,7 @@ class UnifiedSearchService:
                 ru.timestamp_start,
                 ru.timestamp_end,
                 ru.embedding::text AS embedding,
-                1 - (ru.embedding <=> $1::vector) AS score,
+                1 - {distance_sql} AS score,
                 v.title,
                 v.description,
                 v.source,
@@ -265,7 +269,7 @@ class UnifiedSearchService:
             JOIN videos AS v
                 ON v.id = ru.video_id
             WHERE {' AND '.join(conditions)}
-            ORDER BY ru.embedding <=> $1::vector
+            ORDER BY {distance_sql}
             LIMIT ${len(params)}
         """
         return [dict(row) for row in await self.db.fetch(sql, *params)]

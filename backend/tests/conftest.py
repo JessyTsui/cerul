@@ -186,6 +186,34 @@ def _run_migration(database_url: str, migration_file: Path) -> None:
         )
 
 
+async def _should_skip_migration(database_url: str, migration_name: str) -> bool:
+    if migration_name != "010_hnsw_index.sql":
+        return False
+
+    connection = await asyncpg.connect(database_url)
+    try:
+        embedding_type = await connection.fetchval(
+            """
+            SELECT format_type(a.atttypid, a.atttypmod)
+            FROM pg_attribute AS a
+            JOIN pg_class AS c
+                ON c.oid = a.attrelid
+            JOIN pg_namespace AS n
+                ON n.oid = c.relnamespace
+            WHERE n.nspname = 'public'
+              AND c.relname = 'retrieval_units'
+              AND a.attname = 'embedding'
+              AND a.attnum > 0
+              AND NOT a.attisdropped
+            """
+        )
+    finally:
+        await connection.close()
+
+    # Migration 011 replaces the incompatible 3072-dim HNSW definition.
+    return embedding_type == "vector(3072)"
+
+
 async def _ensure_schema(database_url: str) -> None:
     migration_files = sorted(MIGRATIONS_DIR.glob("*.sql"))
     if not migration_files:
@@ -205,9 +233,13 @@ async def _ensure_schema(database_url: str) -> None:
         for migration_file in migration_files:
             if migration_file.name.startswith("001_"):
                 continue
+            if await _should_skip_migration(database_url, migration_file.name):
+                continue
             _run_migration(database_url, migration_file)
     else:
         for migration_file in migration_files:
+            if await _should_skip_migration(database_url, migration_file.name):
+                continue
             _run_migration(database_url, migration_file)
 
 
