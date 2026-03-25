@@ -11,14 +11,25 @@ from app.admin import (
     AdminDeleteVideoResponse,
     AdminIndexedVideosResponse,
     AdminSource,
+    AdminSourcesAnalyticsResponse,
+    AdminSourcesRecentVideosResponse,
     AdminSourcesResponse,
     AdminSummaryResponse,
     AdminTargetsResponse,
     AdminTargetsUpsertRequest,
+    AdminVideoJobStatus,
     AdminWorkerLiveResponse,
+    CreateSourceFromUrlRequest,
+    CreateSourceFromUrlResponse,
     CreateSourceRequest,
+    SubmitVideoRequest,
+    SubmitVideoResponse,
+    SyncSourceResponse,
+    TriggerSearchRequest,
+    TriggerSearchResponse,
     UpdateSourceRequest,
     create_source,
+    create_source_from_url,
     delete_source,
     delete_indexed_video_data,
     delete_target,
@@ -28,12 +39,18 @@ from app.admin import (
     fetch_indexed_videos,
     fetch_requests_summary,
     fetch_sources,
+    fetch_sources_analytics,
+    fetch_sources_recent_videos,
     fetch_targets_summary,
     fetch_users_summary,
     fetch_worker_live,
+    get_video_job_status,
     kill_job,
     require_admin_access,
     retry_job,
+    submit_video,
+    sync_source,
+    trigger_youtube_search,
     update_source,
     upsert_targets,
 )
@@ -43,6 +60,7 @@ from app.admin.models import (
     AdminRangeKey,
     AdminRequestsSummaryResponse,
     AdminUsersSummaryResponse,
+    SourceAnalyticsRangeKey,
 )
 from app.auth import SessionContext, require_session
 from app.db import get_db
@@ -156,6 +174,106 @@ async def get_admin_sources(
 ) -> AdminSourcesResponse:
     await require_admin_access(session, db)
     return await fetch_sources(db)
+
+
+@router.get("/sources/analytics", response_model=AdminSourcesAnalyticsResponse)
+async def get_sources_analytics(
+    range_key: SourceAnalyticsRangeKey | None = Query(default="7d", alias="range"),
+    session: SessionContext = Depends(require_session),
+    db: Any = Depends(get_db),
+) -> AdminSourcesAnalyticsResponse:
+    await require_admin_access(session, db)
+    return await fetch_sources_analytics(db, range_key=range_key or "7d")
+
+
+@router.get("/sources/recent-videos", response_model=AdminSourcesRecentVideosResponse)
+async def get_sources_recent_videos(
+    limit: int = Query(default=3, ge=1, le=10),
+    session: SessionContext = Depends(require_session),
+    db: Any = Depends(get_db),
+) -> AdminSourcesRecentVideosResponse:
+    await require_admin_access(session, db)
+    return await fetch_sources_recent_videos(db, limit=limit)
+
+
+@router.post("/sources/{source_id}/sync", response_model=SyncSourceResponse)
+async def post_sync_source(
+    source_id: UUID,
+    session: SessionContext = Depends(require_session),
+    db: Any = Depends(get_db),
+) -> SyncSourceResponse:
+    await require_admin_access(session, db)
+    try:
+        return await sync_source(db, source_id=str(source_id))
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(exc),
+        ) from exc
+
+
+@router.post("/sources/from-url", response_model=CreateSourceFromUrlResponse)
+async def post_create_source_from_url(
+    payload: CreateSourceFromUrlRequest,
+    session: SessionContext = Depends(require_session),
+    db: Any = Depends(get_db),
+) -> CreateSourceFromUrlResponse:
+    await require_admin_access(session, db)
+    try:
+        return await create_source_from_url(db, url=payload.url)
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(exc),
+        ) from exc
+
+
+@router.post("/search/trigger", response_model=TriggerSearchResponse)
+async def post_trigger_search(
+    payload: TriggerSearchRequest,
+    session: SessionContext = Depends(require_session),
+    db: Any = Depends(get_db),
+) -> TriggerSearchResponse:
+    await require_admin_access(session, db)
+    try:
+        return await trigger_youtube_search(
+            db,
+            query=payload.query,
+            max_results=payload.max_results,
+            min_view_count=payload.min_view_count,
+            min_duration_seconds=payload.min_duration_seconds,
+        )
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(exc),
+        ) from exc
+
+
+@router.post("/videos/submit", response_model=SubmitVideoResponse)
+async def post_submit_video(
+    payload: SubmitVideoRequest,
+    session: SessionContext = Depends(require_session),
+    db: Any = Depends(get_db),
+) -> SubmitVideoResponse:
+    await require_admin_access(session, db)
+    try:
+        return await submit_video(db, url=payload.url)
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(exc),
+        ) from exc
+
+
+@router.get("/videos/job-status/{video_id}", response_model=list[AdminVideoJobStatus])
+async def get_video_job_status_route(
+    video_id: str,
+    session: SessionContext = Depends(require_session),
+    db: Any = Depends(get_db),
+) -> list[AdminVideoJobStatus]:
+    await require_admin_access(session, db)
+    return await get_video_job_status(db, video_id=video_id)
 
 
 @router.post(

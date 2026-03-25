@@ -7,6 +7,11 @@ from typing import Any
 
 import asyncpg
 
+import os
+import re as _re
+
+import httpx
+
 from .models import (
     AdminActiveUser,
     AdminContentSummaryResponse,
@@ -23,6 +28,11 @@ from .models import (
     AdminMetricTarget,
     AdminMetricTargetUpsert,
     AdminMetricValue,
+    AdminVideoJobStatus,
+    CreateSourceFromUrlResponse,
+    SubmitVideoResponse,
+    SyncSourceResponse,
+    TriggerSearchResponse,
     AdminNamedCount,
     AdminNotice,
     AdminOverviewMetrics,
@@ -30,9 +40,14 @@ from .models import (
     AdminRequestsMetrics,
     AdminRequestsSummaryResponse,
     AdminSource,
+    AdminSourceAnalytics,
     AdminSourceFreshness,
     AdminSourceGrowth,
     AdminSourceHealth,
+    AdminSourceRecentVideo,
+    AdminSourceRecentVideosEntry,
+    AdminSourcesAnalyticsResponse,
+    AdminSourcesRecentVideosResponse,
     AdminSourcesResponse,
     AdminSummaryPoint,
     AdminSummaryResponse,
@@ -2605,4 +2620,862 @@ async def fetch_worker_live(
         failed_jobs_total=failed_jobs_total,
         failed_jobs_limit=failed_limit,
         failed_jobs_offset=failed_offset,
+    )
+
+
+def _resolve_source_analytics_window(range_key: str) -> TimeWindow:
+    """Like resolve_time_window but supports 24h, 3d, 7d, 15d, 30d."""
+    now = _utc_now()
+    today_start = datetime.combine(now.date(), time.min, tzinfo=UTC)
+    days_map = {"24h": 1, "3d": 3, "7d": 7, "15d": 15, "30d": 30}
+    days = days_map.get(range_key, 7)
+    current_start = today_start - timedelta(days=days - 1)
+    current_end = now
+    duration = current_end - current_start
+    previous_end = current_start
+    previous_start = previous_end - duration
+    return TimeWindow(
+        range_key=range_key,
+        current_start=current_start,
+        current_end=current_end,
+        previous_start=previous_start,
+        previous_end=previous_end,
+    )
+
+
+async def fetch_sources_analytics(
+    db: Any,
+    *,
+    range_key: str = "7d",
+) -> AdminSourcesAnalyticsResponse:
+    window = _resolve_source_analytics_window(range_key)
+    not_cancelled = _not_cancelled_job_condition("pj")
+
+    rows = await db.fetch(
+        f"""
+        SELECT
+            cs.id::text AS source_id,
+            cs.slug,
+            cs.display_name,
+            COUNT(pj.id) FILTER (
+                WHERE pj.created_at >= $1 AND pj.created_at < $2
+            ) AS jobs_created,
+            COUNT(pj.id) FILTER (
+                WHERE pj.status = 'completed'
+                  AND pj.updated_at >= $1 AND pj.updated_at < $2
+            ) AS jobs_completed,
+            COUNT(pj.id) FILTER (
+                WHERE pj.status = 'failed'
+                  AND {not_cancelled}
+                  AND pj.updated_at >= $1 AND pj.updated_at < $2
+            ) AS jobs_failed,
+            COUNT(pj.id) FILTER (
+                WHERE pj.created_at >= $3 AND pj.created_at < $4
+            ) AS prev_jobs_created,
+            COUNT(pj.id) FILTER (
+                WHERE pj.status = 'completed'
+                  AND pj.updated_at >= $3 AND pj.updated_at < $4
+            ) AS prev_jobs_completed,
+            COUNT(pj.id) FILTER (
+                WHERE pj.status = 'failed'
+                  AND {not_cancelled}
+                  AND pj.updated_at >= $3 AND pj.updated_at < $4
+            ) AS prev_jobs_failed
+        FROM content_sources AS cs
+        LEFT JOIN processing_jobs AS pj ON pj.source_id = cs.id
+        WHERE cs.is_active = TRUE
+        GROUP BY cs.id, cs.slug, cs.display_name
+        ORDER BY cs.display_name
+        """,
+        window.current_start,
+        window.current_end,
+        window.previous_start,
+        window.previous_end,
+    )
+
+    sources = [
+        AdminSourceAnalytics(
+            source_id=str(row["source_id"]),
+            slug=str(row["slug"]),
+            display_name=str(row["display_name"]),
+            jobs_created=int(row["jobs_created"]),
+            jobs_completed=int(row["jobs_completed"]),
+            jobs_failed=int(row["jobs_failed"]),
+            prev_jobs_created=int(row["prev_jobs_created"]),
+            prev_jobs_completed=int(row["prev_jobs_completed"]),
+            prev_jobs_failed=int(row["prev_jobs_failed"]),
+        )
+        for row in rows
+    ]
+
+    return AdminSourcesAnalyticsResponse(
+        generated_at=_utc_now(),
+        range_key=window.range_key,
+        current_start=window.current_start,
+        current_end=window.current_end,
+        sources=sources,
+    )
+
+
+async def fetch_sources_recent_videos(
+    db: Any,
+    *,
+    limit: int = 3,
+) -> AdminSourcesRecentVideosResponse:
+    rows = await db.fetch(
+        """
+        WITH ranked AS (
+            SELECT
+                pj.source_id,
+                cs.slug,
+                pj.input_payload->>'source_item_id' AS video_id,
+                COALESCE(
+                    pj.input_payload->'item'->>'title',
+                    pj.input_payload->>'title',
+                    ''
+                ) AS title,
+                pj.input_payload->'item'->>'thumbnail_url' AS thumbnail_url,
+                pj.input_payload->'item'->>'view_count' AS view_count,
+                pj.input_payload->'item'->>'duration_seconds' AS duration_seconds,
+                pj.input_payload->'item'->>'published_at' AS published_at,
+                ROW_NUMBER() OVER (
+                    PARTITION BY pj.source_id
+                    ORDER BY pj.created_at DESC
+                ) AS rn
+            FROM processing_jobs AS pj
+            JOIN content_sources AS cs ON cs.id = pj.source_id
+            WHERE cs.is_active = TRUE
+              AND cs.source_type = 'youtube'
+        )
+        SELECT * FROM ranked WHERE rn <= $1
+        ORDER BY slug, rn
+        """,
+        limit,
+    )
+
+    sources_map: dict[str, AdminSourceRecentVideosEntry] = {}
+    for row in rows:
+        sid = str(row["source_id"])
+        if sid not in sources_map:
+            sources_map[sid] = AdminSourceRecentVideosEntry(
+                source_id=sid,
+                slug=str(row["slug"]),
+            )
+
+        view_count_raw = row["view_count"]
+        duration_raw = row["duration_seconds"]
+
+        sources_map[sid].videos.append(
+            AdminSourceRecentVideo(
+                video_id=str(row["video_id"] or ""),
+                title=str(row["title"] or ""),
+                thumbnail_url=row["thumbnail_url"],
+                view_count=int(view_count_raw) if view_count_raw is not None else None,
+                duration_seconds=int(float(duration_raw)) if duration_raw is not None else None,
+                published_at=row["published_at"],
+            )
+        )
+
+    return AdminSourcesRecentVideosResponse(
+        generated_at=_utc_now(),
+        sources=list(sources_map.values()),
+    )
+
+
+_YT_CHANNEL_ID_RE = _re.compile(r"UC[\w-]{20,}")
+
+
+def _extract_channel_id_from_url(url: str) -> tuple[str | None, str | None]:
+    """Extract channel ID or handle from a YouTube URL.
+    Returns (channel_id, handle). At least one will be set if valid."""
+    url = url.strip()
+    if _YT_CHANNEL_ID_RE.fullmatch(url):
+        return url, None
+
+    try:
+        from urllib.parse import urlparse
+        parsed = urlparse(url if url.startswith("http") else f"https://{url}")
+        if "youtube.com" not in parsed.hostname or "":
+            return None, None
+        parts = [p for p in parsed.path.split("/") if p]
+        if not parts:
+            return None, None
+        if parts[0] == "channel" and len(parts) > 1:
+            return parts[1], None
+        if parts[0].startswith("@"):
+            return None, parts[0][1:]
+        if parts[0] in ("c", "user") and len(parts) > 1:
+            return None, parts[1]
+    except Exception:
+        pass
+    return None, None
+
+
+async def _resolve_channel_id(handle: str) -> str | None:
+    """Resolve a YouTube handle to a channel ID via the API."""
+    api_key = os.getenv("YOUTUBE_API_KEY", "").strip()
+    if not api_key:
+        return None
+    async with httpx.AsyncClient(timeout=15.0) as client:
+        resp = await client.get(
+            "https://www.googleapis.com/youtube/v3/channels",
+            params={"key": api_key, "forHandle": handle, "part": "id"},
+        )
+        if resp.status_code != 200:
+            return None
+        items = resp.json().get("items", [])
+        return items[0]["id"] if items else None
+
+
+async def _fetch_channel_metadata(channel_id: str) -> dict[str, Any]:
+    """Fetch channel info for creating a source."""
+    api_key = os.getenv("YOUTUBE_API_KEY", "").strip()
+    if not api_key:
+        raise ValueError("YOUTUBE_API_KEY is not configured.")
+
+    async with httpx.AsyncClient(timeout=15.0) as client:
+        resp = await client.get(
+            "https://www.googleapis.com/youtube/v3/channels",
+            params={
+                "key": api_key,
+                "id": channel_id,
+                "part": "snippet,statistics,brandingSettings",
+            },
+        )
+        resp.raise_for_status()
+        data = resp.json()
+
+    items = data.get("items", [])
+    if not items:
+        raise ValueError(f"YouTube channel not found: {channel_id}")
+
+    item = items[0]
+    snippet = item.get("snippet") or {}
+    stats = item.get("statistics") or {}
+    branding = (item.get("brandingSettings") or {}).get("channel") or {}
+
+    thumbs = snippet.get("thumbnails") or {}
+    thumb_url = None
+    for key in ("high", "medium", "default"):
+        t = thumbs.get(key)
+        if isinstance(t, dict) and t.get("url"):
+            thumb_url = t["url"]
+            break
+
+    # Parse keywords
+    keywords: list[str] = []
+    raw_kw = branding.get("keywords", "")
+    if raw_kw:
+        for m in _re.finditer(r'"([^"]+)"|(\S+)', raw_kw):
+            kw = (m.group(1) or m.group(2) or "").strip()
+            if kw:
+                keywords.append(kw)
+
+    title = snippet.get("title", channel_id)
+    return {
+        "title": title,
+        "description": (snippet.get("description") or "").strip(),
+        "thumbnail_url": thumb_url,
+        "custom_url": snippet.get("customUrl"),
+        "country": snippet.get("country"),
+        "subscriber_count": int(stats["subscriberCount"]) if stats.get("subscriberCount") else None,
+        "video_count": int(stats["videoCount"]) if stats.get("videoCount") else None,
+        "view_count": int(stats["viewCount"]) if stats.get("viewCount") else None,
+        "keywords": keywords,
+    }
+
+
+def _slugify(name: str) -> str:
+    slug = _re.sub(r"[^a-z0-9]+", "-", name.lower()).strip("-")
+    return slug or "channel"
+
+
+async def create_source_from_url(
+    db: Any,
+    *,
+    url: str,
+) -> CreateSourceFromUrlResponse:
+    """Resolve a YouTube channel URL/ID, fetch metadata, and create a source."""
+    channel_id, handle = _extract_channel_id_from_url(url)
+
+    if not channel_id and handle:
+        channel_id = await _resolve_channel_id(handle)
+
+    if not channel_id:
+        raise ValueError(
+            "Could not resolve channel. Please provide a channel URL "
+            "(youtube.com/channel/UC... or youtube.com/@handle) or a channel ID."
+        )
+
+    # Check if already exists
+    existing = await db.fetchrow(
+        "SELECT id FROM content_sources WHERE config->>'channel_id' = $1",
+        channel_id,
+    )
+    if existing:
+        source = await db.fetchrow(
+            """SELECT id, slug, track, source_type, display_name, base_url,
+                      is_active, config, sync_cursor, metadata, created_at, updated_at
+               FROM content_sources WHERE id = $1""",
+            existing["id"],
+        )
+        return CreateSourceFromUrlResponse(
+            ok=True,
+            source=_serialize_admin_source(source),
+            already_exists=True,
+        )
+
+    # Fetch channel metadata from YouTube
+    meta = await _fetch_channel_metadata(channel_id)
+    slug = _slugify(meta["title"])
+    display_name = meta["title"]
+
+    # Ensure unique slug
+    slug_exists = await db.fetchval(
+        "SELECT 1 FROM content_sources WHERE slug = $1", slug
+    )
+    if slug_exists:
+        slug = f"{slug}-{channel_id[-6:].lower()}"
+
+    config = json.dumps({"channel_id": channel_id, "max_results": 30})
+    metadata = json.dumps({
+        "thumbnail_url": meta["thumbnail_url"],
+        "description": meta["description"],
+        "custom_url": meta["custom_url"],
+        "country": meta["country"],
+        "subscriber_count": meta["subscriber_count"],
+        "video_count": meta["video_count"],
+        "view_count": meta["view_count"],
+        "keywords": meta["keywords"],
+    })
+
+    row = await db.fetchrow(
+        """
+        INSERT INTO content_sources (
+            id, slug, track, source_type, display_name,
+            is_active, config, sync_cursor, metadata
+        )
+        VALUES (gen_random_uuid(), $1, 'unified', 'youtube', $2,
+                TRUE, $3::jsonb, NULL, $4::jsonb)
+        RETURNING id, slug, track, source_type, display_name, base_url,
+                  is_active, config, sync_cursor, metadata, created_at, updated_at
+        """,
+        slug,
+        display_name,
+        config,
+        metadata,
+    )
+
+    return CreateSourceFromUrlResponse(
+        ok=True,
+        source=_serialize_admin_source(row),
+        already_exists=False,
+    )
+
+
+async def trigger_youtube_search(
+    db: Any,
+    *,
+    query: str,
+    max_results: int = 20,
+    min_view_count: int = 5000,
+    min_duration_seconds: int = 180,
+) -> TriggerSearchResponse:
+    """Run an ad-hoc YouTube search and create processing jobs for results."""
+    api_key = os.getenv("YOUTUBE_API_KEY", "").strip()
+    if not api_key:
+        raise ValueError("YOUTUBE_API_KEY is not configured.")
+
+    # Search YouTube
+    async with httpx.AsyncClient(timeout=30.0) as client:
+        resp = await client.get(
+            "https://www.googleapis.com/youtube/v3/search",
+            params={
+                "key": api_key,
+                "q": query,
+                "type": "video",
+                "part": "snippet",
+                "maxResults": min(max_results, 50),
+                "order": "relevance",
+                "relevanceLanguage": "en",
+            },
+        )
+        resp.raise_for_status()
+        search_data = resp.json()
+
+    video_ids = [
+        item["id"]["videoId"]
+        for item in search_data.get("items", [])
+        if isinstance(item.get("id"), dict) and item["id"].get("videoId")
+    ]
+
+    if not video_ids:
+        return TriggerSearchResponse(ok=True, jobs_created=0, videos_found=0, videos_filtered=0)
+
+    # Fetch full metadata
+    async with httpx.AsyncClient(timeout=30.0) as client:
+        resp = await client.get(
+            "https://www.googleapis.com/youtube/v3/videos",
+            params={
+                "key": api_key,
+                "id": ",".join(video_ids),
+                "part": "snippet,contentDetails,statistics",
+            },
+        )
+        resp.raise_for_status()
+        videos_data = resp.json()
+
+    videos_found = len(videos_data.get("items", []))
+    jobs_created = 0
+    videos_filtered = 0
+
+    for item in videos_data.get("items", []):
+        vid = item.get("id", "")
+        snippet = item.get("snippet") or {}
+        stats = item.get("statistics") or {}
+        content = item.get("contentDetails") or {}
+
+        # Parse duration
+        duration = 0
+        dur_match = _re.fullmatch(r"PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?", content.get("duration", ""))
+        if dur_match:
+            h, m, s = (int(v or 0) for v in dur_match.groups())
+            duration = h * 3600 + m * 60 + s
+
+        views = int(stats.get("viewCount", 0) or 0)
+        live = (snippet.get("liveBroadcastContent") or "none").lower()
+
+        # Filter
+        if duration < min_duration_seconds or live != "none" or views < min_view_count:
+            videos_filtered += 1
+            continue
+
+        # Check duplicate
+        exists = await db.fetchval(
+            """SELECT 1 FROM processing_jobs
+               WHERE input_payload->>'source_video_id' = $1 LIMIT 1""",
+            vid,
+        )
+        if exists:
+            continue
+
+        # Pick thumbnail
+        thumbs = snippet.get("thumbnails") or {}
+        thumb_url = None
+        for key in ("maxres", "standard", "high", "medium", "default"):
+            t = thumbs.get(key)
+            if isinstance(t, dict) and t.get("url"):
+                thumb_url = t["url"]
+                break
+
+        meta = {
+            "source": "youtube",
+            "source_video_id": vid,
+            "video_id": vid,
+            "source_url": f"https://www.youtube.com/watch?v={vid}",
+            "video_url": f"https://www.youtube.com/watch?v={vid}",
+            "thumbnail_url": thumb_url,
+            "title": snippet.get("title", ""),
+            "description": snippet.get("description", ""),
+            "channel_title": snippet.get("channelTitle"),
+            "channel_id": snippet.get("channelId"),
+            "published_at": snippet.get("publishedAt"),
+            "duration_seconds": duration,
+            "view_count": views,
+        }
+
+        payload = json.dumps({
+            "track": "unified",
+            "discovery_track": "unified",
+            "source_slug": "manual-search",
+            "source_type": "youtube_search",
+            "source_item_id": vid,
+            "source": "youtube",
+            "source_video_id": vid,
+            "url": meta["video_url"],
+            "owner_id": None,
+            "item": meta,
+            "source_metadata": meta,
+            "manual_search": True,
+            "search_query": query,
+        }, default=str)
+
+        await db.execute(
+            """INSERT INTO processing_jobs (track, source_id, job_type, status, input_payload)
+               VALUES ('unified', NULL, 'index_video', 'pending', $1::jsonb)""",
+            payload,
+        )
+        jobs_created += 1
+
+    return TriggerSearchResponse(
+        ok=True,
+        jobs_created=jobs_created,
+        videos_found=videos_found,
+        videos_filtered=videos_filtered,
+    )
+
+
+_YT_VIDEO_ID_RE = _re.compile(
+    r"(?:youtube\.com/watch\?.*v=|youtu\.be/|youtube\.com/embed/|youtube\.com/shorts/)"
+    r"([A-Za-z0-9_-]{11})"
+)
+
+
+def _extract_youtube_video_id(url: str) -> str | None:
+    """Extract video ID from various YouTube URL formats."""
+    url = url.strip()
+    if _re.fullmatch(r"[A-Za-z0-9_-]{11}", url):
+        return url
+    match = _YT_VIDEO_ID_RE.search(url)
+    return match.group(1) if match else None
+
+
+async def _fetch_youtube_video_metadata(video_id: str) -> dict[str, Any]:
+    """Fetch video metadata from YouTube Data API v3."""
+    api_key = os.getenv("YOUTUBE_API_KEY", "").strip()
+    if not api_key:
+        raise ValueError("YOUTUBE_API_KEY is not configured.")
+
+    async with httpx.AsyncClient(timeout=15.0) as client:
+        resp = await client.get(
+            "https://www.googleapis.com/youtube/v3/videos",
+            params={
+                "key": api_key,
+                "id": video_id,
+                "part": "snippet,contentDetails,statistics",
+            },
+        )
+        resp.raise_for_status()
+        data = resp.json()
+
+    items = data.get("items", [])
+    if not items:
+        raise ValueError(f"YouTube video not found: {video_id}")
+
+    item = items[0]
+    snippet = item.get("snippet") or {}
+    stats = item.get("statistics") or {}
+    content = item.get("contentDetails") or {}
+
+    # Parse duration
+    duration_seconds = 0
+    raw_dur = content.get("duration", "")
+    dur_match = _re.fullmatch(
+        r"PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?", raw_dur
+    )
+    if dur_match:
+        h, m, s = (int(v or 0) for v in dur_match.groups())
+        duration_seconds = h * 3600 + m * 60 + s
+
+    # Pick best thumbnail
+    thumbs = snippet.get("thumbnails") or {}
+    thumbnail_url = None
+    for key in ("maxres", "standard", "high", "medium", "default"):
+        t = thumbs.get(key)
+        if isinstance(t, dict) and t.get("url"):
+            thumbnail_url = t["url"]
+            break
+
+    return {
+        "source": "youtube",
+        "source_video_id": video_id,
+        "video_id": video_id,
+        "source_url": f"https://www.youtube.com/watch?v={video_id}",
+        "video_url": f"https://www.youtube.com/watch?v={video_id}",
+        "thumbnail_url": thumbnail_url,
+        "title": snippet.get("title", ""),
+        "description": snippet.get("description", ""),
+        "channel_title": snippet.get("channelTitle"),
+        "channel_id": snippet.get("channelId"),
+        "published_at": snippet.get("publishedAt"),
+        "duration_seconds": duration_seconds,
+        "view_count": int(stats["viewCount"]) if stats.get("viewCount") else None,
+        "like_count": int(stats["likeCount"]) if stats.get("likeCount") else None,
+    }
+
+
+async def submit_video(db: Any, *, url: str) -> SubmitVideoResponse:
+    """Submit a YouTube video URL for indexing. Creates a processing job."""
+    video_id = _extract_youtube_video_id(url)
+    if not video_id:
+        raise ValueError(
+            "Invalid YouTube URL. Supported formats: "
+            "youtube.com/watch?v=..., youtu.be/..., or a bare video ID."
+        )
+
+    # Check if job already exists
+    existing = await db.fetchrow(
+        """
+        SELECT id::text AS job_id, status
+        FROM processing_jobs
+        WHERE input_payload->>'source_video_id' = $1
+        ORDER BY created_at DESC
+        LIMIT 1
+        """,
+        video_id,
+    )
+
+    # Fetch metadata from YouTube
+    meta = await _fetch_youtube_video_metadata(video_id)
+
+    if existing:
+        return SubmitVideoResponse(
+            ok=True,
+            job_id=existing["job_id"],
+            video_id=video_id,
+            title=meta.get("title", ""),
+            thumbnail_url=meta.get("thumbnail_url"),
+            duration_seconds=meta.get("duration_seconds"),
+            channel_title=meta.get("channel_title"),
+            already_exists=True,
+        )
+
+    # Create processing job
+    payload = json.dumps({
+        "track": "unified",
+        "discovery_track": "unified",
+        "source_slug": "manual",
+        "source_type": "youtube",
+        "source_item_id": video_id,
+        "source": "youtube",
+        "source_video_id": video_id,
+        "url": meta["video_url"],
+        "owner_id": None,
+        "item": meta,
+        "source_metadata": meta,
+        "manual_submit": True,
+    }, default=str)
+
+    job_id = await db.fetchval(
+        """
+        INSERT INTO processing_jobs (track, source_id, job_type, status, input_payload)
+        VALUES ('unified', NULL, 'index_video', 'pending', $1::jsonb)
+        RETURNING id::text
+        """,
+        payload,
+    )
+
+    return SubmitVideoResponse(
+        ok=True,
+        job_id=job_id,
+        video_id=video_id,
+        title=meta.get("title", ""),
+        thumbnail_url=meta.get("thumbnail_url"),
+        duration_seconds=meta.get("duration_seconds"),
+        channel_title=meta.get("channel_title"),
+        already_exists=False,
+    )
+
+
+async def get_video_job_status(
+    db: Any,
+    *,
+    video_id: str,
+) -> list[AdminVideoJobStatus]:
+    """Get processing job status for a video ID."""
+    rows = await db.fetch(
+        """
+        SELECT
+            id::text AS job_id,
+            COALESCE(
+                input_payload->>'source_video_id',
+                input_payload->>'video_id'
+            ) AS video_id,
+            COALESCE(
+                input_payload->'item'->>'title',
+                input_payload->>'title'
+            ) AS title,
+            status,
+            created_at,
+            started_at,
+            completed_at,
+            error_message,
+            attempts
+        FROM processing_jobs
+        WHERE input_payload->>'source_video_id' = $1
+           OR input_payload->>'video_id' = $1
+        ORDER BY created_at DESC
+        LIMIT 5
+        """,
+        video_id,
+    )
+
+    return [
+        AdminVideoJobStatus(
+            job_id=str(row["job_id"]),
+            video_id=str(row["video_id"] or video_id),
+            title=row["title"],
+            status=str(row["status"]),
+            created_at=row["created_at"],
+            started_at=row.get("started_at"),
+            completed_at=row.get("completed_at"),
+            error_message=row.get("error_message"),
+            attempts=int(row.get("attempts") or 0),
+        )
+        for row in rows
+    ]
+
+
+async def sync_source(db: Any, *, source_id: str) -> SyncSourceResponse:
+    """Manually trigger discovery + job creation for a single source."""
+    row = await db.fetchrow(
+        """SELECT id, slug, track, source_type, config, sync_cursor, metadata
+           FROM content_sources WHERE id = $1""",
+        source_id,
+    )
+    if not row:
+        raise ValueError("Source not found.")
+
+    raw_config = _coerce_json_value(row.get("config"))
+    config = raw_config if isinstance(raw_config, dict) else {}
+    slug = str(row["slug"])
+    source_type = str(row.get("source_type") or "")
+
+    if source_type != "youtube":
+        raise ValueError(f"Manual sync only supported for YouTube sources (got {source_type}).")
+
+    channel_id = config.get("channel_id")
+    if not channel_id:
+        raise ValueError("Source is missing channel_id in config.")
+
+    max_results = int(config.get("max_results", 30))
+
+    api_key = os.getenv("YOUTUBE_API_KEY", "").strip()
+    if not api_key:
+        raise ValueError("YOUTUBE_API_KEY is not configured.")
+
+    # Step 1: Search channel videos
+    all_video_ids: list[str] = []
+    next_page: str | None = None
+    while len(all_video_ids) < max_results:
+        remaining = max_results - len(all_video_ids)
+        params: dict[str, Any] = {
+            "key": api_key,
+            "channelId": channel_id,
+            "type": "video",
+            "part": "snippet",
+            "order": "date",
+            "maxResults": min(remaining, 50),
+        }
+        if next_page:
+            params["pageToken"] = next_page
+
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            resp = await client.get(
+                "https://www.googleapis.com/youtube/v3/search", params=params,
+            )
+            resp.raise_for_status()
+            data = resp.json()
+
+        for item in data.get("items", []):
+            vid = (item.get("id") or {}).get("videoId")
+            if vid and vid not in all_video_ids:
+                all_video_ids.append(vid)
+
+        next_page = data.get("nextPageToken")
+        if not next_page:
+            break
+
+    if not all_video_ids:
+        return SyncSourceResponse(
+            ok=True, source_id=source_id, slug=slug,
+            videos_discovered=0, jobs_created=0, skipped=0,
+        )
+
+    # Step 2: Fetch full metadata
+    videos_meta: list[dict[str, Any]] = []
+    for i in range(0, len(all_video_ids), 50):
+        batch = all_video_ids[i:i + 50]
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            resp = await client.get(
+                "https://www.googleapis.com/youtube/v3/videos",
+                params={
+                    "key": api_key, "id": ",".join(batch),
+                    "part": "snippet,contentDetails,statistics",
+                },
+            )
+            resp.raise_for_status()
+            vdata = resp.json()
+
+        for item in vdata.get("items", []):
+            vid = item.get("id", "")
+            snippet = item.get("snippet") or {}
+            stats = item.get("statistics") or {}
+            content = item.get("contentDetails") or {}
+
+            duration = 0
+            dur_match = _re.fullmatch(
+                r"PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?",
+                content.get("duration", ""),
+            )
+            if dur_match:
+                h, m, s = (int(v or 0) for v in dur_match.groups())
+                duration = h * 3600 + m * 60 + s
+
+            thumbs = snippet.get("thumbnails") or {}
+            thumb = None
+            for key in ("maxres", "standard", "high", "medium", "default"):
+                t = thumbs.get(key)
+                if isinstance(t, dict) and t.get("url"):
+                    thumb = t["url"]
+                    break
+
+            videos_meta.append({
+                "source": "youtube", "source_video_id": vid, "video_id": vid,
+                "source_url": f"https://www.youtube.com/watch?v={vid}",
+                "video_url": f"https://www.youtube.com/watch?v={vid}",
+                "thumbnail_url": thumb,
+                "title": snippet.get("title", ""),
+                "description": snippet.get("description", ""),
+                "channel_title": snippet.get("channelTitle"),
+                "channel_id": snippet.get("channelId"),
+                "published_at": snippet.get("publishedAt"),
+                "duration_seconds": duration,
+                "view_count": int(stats["viewCount"]) if stats.get("viewCount") else None,
+                "like_count": int(stats["likeCount"]) if stats.get("likeCount") else None,
+            })
+
+    # Step 3: Create jobs, skip duplicates
+    jobs_created = 0
+    skipped = 0
+    for meta in videos_meta:
+        vid = meta["source_video_id"]
+        exists = await db.fetchval(
+            """SELECT 1 FROM processing_jobs
+               WHERE source_id = $1 AND input_payload->>'source_item_id' = $2 LIMIT 1""",
+            source_id, vid,
+        )
+        if exists:
+            skipped += 1
+            continue
+
+        payload = json.dumps({
+            "track": "unified", "discovery_track": "unified",
+            "source_slug": slug, "source_type": "youtube",
+            "source_item_id": vid, "source": "youtube",
+            "source_video_id": vid, "url": meta["video_url"],
+            "owner_id": None, "item": meta, "source_metadata": meta,
+        }, default=str)
+
+        await db.execute(
+            """INSERT INTO processing_jobs (track, source_id, job_type, status, input_payload)
+               VALUES ('unified', $1, 'index_video', 'pending', $2::jsonb)""",
+            source_id, payload,
+        )
+        jobs_created += 1
+
+    # Step 4: Update sync cursor
+    if videos_meta:
+        latest = max(
+            (m.get("published_at") or "" for m in videos_meta), default=None,
+        )
+        if latest:
+            await db.execute(
+                "UPDATE content_sources SET sync_cursor = $1 WHERE id = $2",
+                latest, source_id,
+            )
+
+    return SyncSourceResponse(
+        ok=True, source_id=source_id, slug=slug,
+        videos_discovered=len(videos_meta), jobs_created=jobs_created, skipped=skipped,
     )

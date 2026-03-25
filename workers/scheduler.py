@@ -20,8 +20,10 @@ if str(ROOT_DIR) not in sys.path:
     sys.path.insert(0, str(ROOT_DIR))
 
 import asyncpg
+import httpx
 
 from workers.common.sources import PexelsClient, PixabayClient, YouTubeClient
+from workers.common.storage import R2FrameUploader
 
 logger = logging.getLogger(__name__)
 
@@ -169,6 +171,11 @@ class ContentScheduler:
                 )
                 continue
 
+        try:
+            await self._backfill_youtube_channel_metadata(db)
+        except Exception:
+            self._logger.exception("Failed to backfill YouTube channel metadata.")
+
         return summary
 
     async def run_loop(self, db: Any, interval_seconds: int = 300) -> None:
@@ -216,6 +223,130 @@ class ContentScheduler:
     def request_shutdown(self) -> None:
         self._shutdown_event.set()
 
+    async def _backfill_youtube_channel_metadata(self, db: Any) -> None:
+        """Auto-fill thumbnail, description, stats, and keywords for YouTube
+        sources that are missing metadata.thumbnail_url. Downloads avatars to
+        R2 CDN so they don't depend on yt3.ggpht.com. Runs once per scheduler
+        cycle, only fetches for sources that need it."""
+        rows = await db.fetch(
+            """
+            SELECT id, slug, config, metadata
+            FROM content_sources
+            WHERE source_type = 'youtube'
+              AND is_active = TRUE
+              AND (
+                  metadata IS NULL
+                  OR metadata = '{}'::jsonb
+                  OR NOT (metadata ? 'thumbnail_url')
+                  OR metadata->>'thumbnail_url' IS NULL
+                  OR metadata->>'thumbnail_url' = ''
+              )
+            """
+        )
+        if not rows:
+            return
+
+        # Collect channel IDs that need backfilling
+        needs_backfill: list[tuple[str, str, str, dict]] = []
+        channel_ids: list[str] = []
+        for row in rows:
+            raw_config = row.get("config")
+            config = raw_config if isinstance(raw_config, dict) else {}
+            if isinstance(raw_config, str):
+                try:
+                    config = json.loads(row["config"])
+                except (json.JSONDecodeError, TypeError):
+                    config = {}
+            channel_id = config.get("channel_id", "")
+            if channel_id:
+                existing_meta = row.get("metadata") if isinstance(row.get("metadata"), dict) else {}
+                needs_backfill.append((row["id"], row["slug"], channel_id, existing_meta))
+                if channel_id not in channel_ids:
+                    channel_ids.append(channel_id)
+
+        if not channel_ids:
+            return
+
+        self._logger.info(
+            "Backfilling YouTube channel metadata for %d source(s).",
+            len(needs_backfill),
+        )
+        channels_info = await self._youtube_client.get_channels_info(channel_ids)
+
+        # Set up R2 uploader for avatar mirroring
+        r2: R2FrameUploader | None = None
+        try:
+            uploader = R2FrameUploader()
+            if uploader.available():
+                r2 = uploader
+        except Exception:
+            self._logger.debug("R2 not available, will use original thumbnail URLs.")
+
+        for source_id, slug, channel_id, existing_meta in needs_backfill:
+            info = channels_info.get(channel_id)
+            if not info:
+                self._logger.warning(
+                    "Channel %s for source '%s' not found on YouTube.",
+                    channel_id,
+                    slug,
+                )
+                continue
+
+            # Download avatar to R2 if possible
+            avatar_url = info["thumbnail_url"]
+            if r2 and avatar_url:
+                try:
+                    cdn_url = await self._mirror_avatar_to_r2(
+                        r2, channel_id, avatar_url
+                    )
+                    avatar_url = cdn_url
+                except Exception:
+                    self._logger.warning(
+                        "Failed to mirror avatar for '%s', using original URL.",
+                        slug,
+                    )
+
+            merged = dict(existing_meta) if isinstance(existing_meta, dict) else {}
+            merged["thumbnail_url"] = avatar_url
+            merged["description"] = info["description"]
+            merged["custom_url"] = info["custom_url"]
+            merged["country"] = info["country"]
+            merged["subscriber_count"] = info["subscriber_count"]
+            merged["video_count"] = info["video_count"]
+            merged["view_count"] = info["view_count"]
+            merged["keywords"] = info.get("keywords", [])
+
+            await db.execute(
+                """
+                UPDATE content_sources
+                SET metadata = $1::jsonb, updated_at = now()
+                WHERE id = $2
+                """,
+                json.dumps(merged, default=str),
+                source_id,
+            )
+            self._logger.info(
+                "Backfilled metadata for source '%s' (subs=%s, videos=%s).",
+                slug,
+                info.get("subscriber_count"),
+                info.get("video_count"),
+            )
+
+    async def _mirror_avatar_to_r2(
+        self,
+        r2: R2FrameUploader,
+        channel_id: str,
+        source_url: str,
+    ) -> str:
+        """Download a channel avatar and upload it to R2 CDN."""
+        async with httpx.AsyncClient(timeout=15.0) as client:
+            response = await client.get(source_url)
+            response.raise_for_status()
+        content_type = response.headers.get("content-type", "image/jpeg")
+        ext = "png" if "png" in content_type else "jpg"
+        key = f"avatars/channels/{channel_id}.{ext}"
+        return await r2.upload_bytes(key, response.content, content_type)
+
     async def _discover_items(self, source: ContentSource) -> list[dict[str, Any]]:
         if source.track == "knowledge" and source.source_type == "youtube":
             return await self._discover_youtube_items(source)
@@ -242,6 +373,23 @@ class ContentScheduler:
     ) -> list[dict[str, Any]]:
         channel_id = self._require_config_value(source, "channel_id")
         max_results = self._coerce_int(source.config.get("max_results"), default=25)
+
+        # For existing channels (already synced), use free RSS feed to discover
+        # new videos, then fetch full metadata via videos.list (1 unit vs 100).
+        if source.sync_cursor is not None:
+            try:
+                videos = await self._discover_youtube_items_via_rss(
+                    source, channel_id
+                )
+                if videos is not None:
+                    return videos
+            except Exception:
+                self._logger.warning(
+                    "RSS discovery failed for '%s', falling back to search API.",
+                    source.slug,
+                )
+
+        # For new channels or RSS fallback, use the search API
         videos = await self._youtube_client.search_channel_videos(
             channel_id,
             max_results=max_results,
@@ -268,6 +416,44 @@ class ContentScheduler:
             if published_at > cursor_dt:
                 filtered_videos.append(video)
         return filtered_videos
+
+    async def _discover_youtube_items_via_rss(
+        self,
+        source: ContentSource,
+        channel_id: str,
+    ) -> list[dict[str, Any]] | None:
+        """Use the free YouTube RSS feed to discover new videos.
+        Returns None if RSS should be skipped (caller falls back to search)."""
+        rss_video_ids = await self._youtube_client.get_rss_video_ids(channel_id)
+        if not isinstance(rss_video_ids, list) or not rss_video_ids:
+            return [] if isinstance(rss_video_ids, list) else None
+
+        # Fetch full metadata for RSS-discovered videos (1 unit per 50 IDs)
+        videos = await self._youtube_client._get_videos_by_ids(rss_video_ids)
+        if not isinstance(videos, list):
+            return None
+
+        cursor_dt = self._parse_datetime(source.sync_cursor)
+        if cursor_dt is None:
+            return videos
+
+        filtered: list[dict[str, Any]] = []
+        for video in videos:
+            published_at = self._parse_datetime(
+                self._coerce_string(video.get("published_at"))
+            )
+            if published_at is None:
+                continue
+            if published_at > cursor_dt:
+                filtered.append(video)
+
+        self._logger.info(
+            "RSS discovery for '%s': %d from feed, %d new after cursor.",
+            source.slug,
+            len(rss_video_ids),
+            len(filtered),
+        )
+        return filtered
 
     async def _discover_youtube_search_items(
         self,

@@ -152,10 +152,7 @@ export function ConsoleFrame({
               </nav>
             </div>
 
-            <div className="flex flex-wrap items-center gap-2 xl:max-w-[420px] xl:justify-end">
-              <span className="inline-flex min-h-10 items-center rounded-full border border-[var(--border)] bg-[rgba(8,12,20,0.72)] px-4 text-sm text-[var(--foreground-secondary)]">
-                {getRoleLabel(viewer)}
-              </span>
+            <div className="flex flex-wrap items-center justify-end gap-2">
               {actions}
               <button
                 type="button"

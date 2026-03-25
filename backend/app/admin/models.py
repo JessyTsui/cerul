@@ -6,6 +6,7 @@ from typing import Any, Literal
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 AdminRangeKey = Literal["today", "7d", "30d"]
+SourceAnalyticsRangeKey = Literal["24h", "3d", "7d", "15d", "30d"]
 TargetScopeType = Literal["global", "track", "source"]
 TargetComparisonMode = Literal["at_least", "at_most"]
 ContentSourceTrack = Literal["broll", "knowledge", "shared", "unified"]
@@ -463,6 +464,132 @@ class UpdateSourceRequest(BaseModel):
                 raise ValueError(f"'{required_field}' cannot be null.")
 
         return self
+
+
+class AdminSourceAnalytics(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    source_id: str
+    slug: str
+    display_name: str
+    jobs_created: int
+    jobs_completed: int
+    jobs_failed: int
+    prev_jobs_created: int
+    prev_jobs_completed: int
+    prev_jobs_failed: int
+
+
+class AdminSourcesAnalyticsResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    generated_at: datetime
+    range_key: str
+    current_start: datetime
+    current_end: datetime
+    sources: list[AdminSourceAnalytics] = Field(default_factory=list)
+
+
+class AdminSourceRecentVideo(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    video_id: str
+    title: str
+    thumbnail_url: str | None = None
+    view_count: int | None = None
+    duration_seconds: int | None = None
+    published_at: str | None = None
+
+
+class AdminSourceRecentVideosEntry(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    source_id: str
+    slug: str
+    videos: list[AdminSourceRecentVideo] = Field(default_factory=list)
+
+
+class AdminSourcesRecentVideosResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    generated_at: datetime
+    sources: list[AdminSourceRecentVideosEntry] = Field(default_factory=list)
+
+
+class CreateSourceFromUrlRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    url: str = Field(min_length=1, max_length=500)
+
+
+class CreateSourceFromUrlResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    ok: bool
+    source: AdminSource
+    already_exists: bool = False
+
+
+class TriggerSearchRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    query: str = Field(min_length=1, max_length=500)
+    max_results: int = Field(default=20, ge=1, le=100)
+    min_view_count: int = Field(default=5000, ge=0)
+    min_duration_seconds: int = Field(default=180, ge=0)
+
+
+class TriggerSearchResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    ok: bool
+    jobs_created: int
+    videos_found: int
+    videos_filtered: int
+
+
+class SyncSourceResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    ok: bool
+    source_id: str
+    slug: str
+    videos_discovered: int
+    jobs_created: int
+    skipped: int
+
+
+class SubmitVideoRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    url: str = Field(min_length=1, max_length=500)
+
+
+class SubmitVideoResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    ok: bool
+    job_id: str
+    video_id: str
+    title: str
+    thumbnail_url: str | None = None
+    duration_seconds: int | None = None
+    channel_title: str | None = None
+    already_exists: bool = False
+
+
+class AdminVideoJobStatus(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    job_id: str
+    video_id: str
+    title: str | None = None
+    status: str
+    created_at: datetime
+    started_at: datetime | None = None
+    completed_at: datetime | None = None
+    error_message: str | None = None
+    attempts: int = 0
 
 
 class AdminMetricTarget(BaseModel):

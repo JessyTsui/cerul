@@ -91,7 +91,7 @@ class EmbeddingSettings(BaseModel):
 
     backend: str = "gemini"
     model: str = "gemini-embedding-2-preview"
-    dimension: int = Field(default=768, ge=128, le=3072)
+    dimension: int = Field(default=3072, ge=128, le=3072)
     normalize: bool = True
 
     @field_validator("backend", mode="before")

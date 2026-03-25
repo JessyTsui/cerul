@@ -129,7 +129,10 @@ export function SiteHeaderAuthActions({
   return (
     <>
       {showAdminLink ? (
-        <Link href={"/admin" as Route} className="button-secondary focus-ring">
+        <Link
+          href={"/admin" as Route}
+          className="focus-ring rounded-lg px-3 py-2 text-sm text-[var(--foreground-tertiary)] transition hover:text-white"
+        >
           Admin
         </Link>
       ) : null}

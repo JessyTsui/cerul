@@ -1,5 +1,6 @@
 import os
 import re
+import xml.etree.ElementTree as ET
 from collections.abc import Sequence
 from typing import Any
 
@@ -28,6 +29,46 @@ class YouTubeClient:
         self._api_key = api_key or os.getenv("YOUTUBE_API_KEY")
         self._timeout = timeout
         self._proxy = proxy or os.getenv("YTDLP_PROXY") or os.getenv("HTTPS_PROXY") or os.getenv("HTTP_PROXY") or None
+
+    async def get_channels_info(
+        self,
+        channel_ids: list[str],
+    ) -> dict[str, dict[str, Any]]:
+        """Batch-fetch channel snippet + statistics for a list of channel IDs.
+
+        Returns a dict keyed by channel_id with thumbnail_url, description,
+        custom_url, country, subscriber_count, video_count, view_count.
+        """
+        result: dict[str, dict[str, Any]] = {}
+        for batch in self._chunked(channel_ids, 50):
+            payload = await self._get_json(
+                "channels",
+                {
+                    "id": ",".join(batch),
+                    "part": "snippet,statistics,brandingSettings",
+                },
+            )
+            for item in payload.get("items", []):
+                cid = item.get("id", "")
+                snippet = item.get("snippet") or {}
+                statistics = item.get("statistics") or {}
+                branding = item.get("brandingSettings") or {}
+                branding_channel = branding.get("channel") or {}
+                thumbnail_url = self._pick_thumbnail_url(snippet.get("thumbnails"))
+                keywords = self._parse_channel_keywords(
+                    branding_channel.get("keywords")
+                )
+                result[cid] = {
+                    "thumbnail_url": thumbnail_url,
+                    "description": (self._coerce_string(snippet.get("description")) or ""),
+                    "custom_url": self._coerce_string(snippet.get("customUrl")),
+                    "country": self._coerce_string(snippet.get("country")),
+                    "subscriber_count": self._coerce_int(statistics.get("subscriberCount")),
+                    "video_count": self._coerce_int(statistics.get("videoCount")),
+                    "view_count": self._coerce_int(statistics.get("viewCount")),
+                    "keywords": keywords,
+                }
+        return result
 
     async def get_video_metadata(self, video_id: str) -> dict[str, Any]:
         video_id = video_id.strip()
@@ -300,6 +341,33 @@ class YouTubeClient:
 
     def _build_watch_url(self, video_id: str) -> str:
         return f"https://www.youtube.com/watch?v={video_id}"
+
+    async def get_rss_video_ids(self, channel_id: str) -> list[str]:
+        """Fetch the latest video IDs from a channel's RSS feed (free, no quota)."""
+        url = f"https://www.youtube.com/feeds/videos.xml?channel_id={channel_id}"
+        async with httpx.AsyncClient(timeout=self._timeout, proxy=self._proxy) as client:
+            response = await client.get(url)
+        response.raise_for_status()
+        root = ET.fromstring(response.text)
+
+        ns = {"atom": "http://www.w3.org/2005/Atom", "yt": "http://www.youtube.com/xml/schemas/2015"}
+        video_ids: list[str] = []
+        for entry in root.findall("atom:entry", ns):
+            vid_el = entry.find("yt:videoId", ns)
+            if vid_el is not None and vid_el.text:
+                video_ids.append(vid_el.text.strip())
+        return video_ids
+
+    def _parse_channel_keywords(self, raw: Any) -> list[str]:
+        """Parse YouTube channel keywords string into a list."""
+        if not isinstance(raw, str) or not raw.strip():
+            return []
+        keywords: list[str] = []
+        for match in re.finditer(r'"([^"]+)"|(\S+)', raw):
+            keyword = (match.group(1) or match.group(2) or "").strip()
+            if keyword:
+                keywords.append(keyword)
+        return keywords
 
     def _chunked(self, values: list[str], size: int) -> list[list[str]]:
         return [values[index : index + size] for index in range(0, len(values), size)]
