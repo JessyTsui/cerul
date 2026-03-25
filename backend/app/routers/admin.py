@@ -24,6 +24,7 @@ from app.admin import (
     CreateSourceRequest,
     SubmitVideoRequest,
     SubmitVideoResponse,
+    SyncSourceResponse,
     TriggerSearchRequest,
     TriggerSearchResponse,
     UpdateSourceRequest,
@@ -48,6 +49,7 @@ from app.admin import (
     require_admin_access,
     retry_job,
     submit_video,
+    sync_source,
     trigger_youtube_search,
     update_source,
     upsert_targets,
@@ -192,6 +194,22 @@ async def get_sources_recent_videos(
 ) -> AdminSourcesRecentVideosResponse:
     await require_admin_access(session, db)
     return await fetch_sources_recent_videos(db, limit=limit)
+
+
+@router.post("/sources/{source_id}/sync", response_model=SyncSourceResponse)
+async def post_sync_source(
+    source_id: UUID,
+    session: SessionContext = Depends(require_session),
+    db: Any = Depends(get_db),
+) -> SyncSourceResponse:
+    await require_admin_access(session, db)
+    try:
+        return await sync_source(db, source_id=str(source_id))
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(exc),
+        ) from exc
 
 
 @router.post("/sources/from-url", response_model=CreateSourceFromUrlResponse)

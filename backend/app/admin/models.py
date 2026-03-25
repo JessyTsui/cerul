@@ -548,6 +548,17 @@ class TriggerSearchResponse(BaseModel):
     videos_filtered: int
 
 
+class SyncSourceResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    ok: bool
+    source_id: str
+    slug: str
+    videos_discovered: int
+    jobs_created: int
+    skipped: int
+
+
 class SubmitVideoRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 

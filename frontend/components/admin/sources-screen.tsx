@@ -135,6 +135,8 @@ export function AdminSourcesScreen() {
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [confirmDeleteSource, setConfirmDeleteSource] = useState<AdminSource | null>(null);
   const [togglingId, setTogglingId] = useState<string | null>(null);
+  const [syncingId, setSyncingId] = useState<string | null>(null);
+  const [syncResult, setSyncResult] = useState<{ id: string; msg: string } | null>(null);
 
   // Modals
   const [showAddSourceModal, setShowAddSourceModal] = useState(false);
@@ -375,6 +377,26 @@ export function AdminSourcesScreen() {
       setActionError(getApiErrorMessage(err, "Failed to delete source."));
     } finally {
       setDeletingId(null);
+    }
+  }
+
+  async function handleSync(source: AdminSource) {
+    setSyncingId(source.id);
+    setSyncResult(null);
+    try {
+      const result = await admin.syncSource(source.id);
+      setSyncResult({
+        id: source.id,
+        msg: `Discovered ${result.videosDiscovered}, created ${result.jobsCreated} jobs, skipped ${result.skipped}`,
+      });
+      void loadAnalytics(analyticsRange);
+    } catch (err) {
+      setSyncResult({
+        id: source.id,
+        msg: getApiErrorMessage(err, "Sync failed."),
+      });
+    } finally {
+      setSyncingId(null);
     }
   }
 
@@ -1026,6 +1048,14 @@ export function AdminSourcesScreen() {
                           </a>
                         ) : null}
                         <button
+                          className="inline-flex h-7 items-center rounded-lg border border-[var(--border)] px-2.5 text-xs text-[var(--foreground-secondary)] transition hover:border-emerald-500 hover:text-emerald-300"
+                          disabled={syncingId === source.id}
+                          onClick={() => void handleSync(source)}
+                          type="button"
+                        >
+                          {syncingId === source.id ? "Syncing..." : "Sync"}
+                        </button>
+                        <button
                           className="inline-flex h-7 items-center rounded-lg border border-[var(--border)] px-2.5 text-xs text-[var(--foreground-secondary)] transition hover:border-[var(--brand)] hover:text-white"
                           onClick={() => openEditForm(source)}
                           type="button"
@@ -1058,6 +1088,13 @@ export function AdminSourcesScreen() {
                         {isExpanded ? "▲" : "▼"}
                       </span>
                     </div>
+
+                    {/* Sync result toast */}
+                    {syncResult?.id === source.id ? (
+                      <div className="border-t border-[var(--border)] px-5 py-2 text-xs text-[var(--foreground-secondary)]">
+                        {syncResult.msg}
+                      </div>
+                    ) : null}
 
                     {/* Expanded detail section */}
                     {isExpanded ? (

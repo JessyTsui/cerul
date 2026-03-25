@@ -437,6 +437,15 @@ export type CreateSourceFromUrlResult = {
   alreadyExists: boolean;
 };
 
+export type SyncSourceResult = {
+  ok: boolean;
+  sourceId: string;
+  slug: string;
+  videosDiscovered: number;
+  jobsCreated: number;
+  skipped: number;
+};
+
 export type TriggerSearchResult = {
   ok: boolean;
   jobsCreated: number;
@@ -1450,6 +1459,22 @@ export const admin = {
         attempts: isFiniteNumber(v.attempts) ? v.attempts : 0,
       };
     });
+  },
+
+  async syncSource(sourceId: string): Promise<SyncSourceResult> {
+    const payload = await fetchWithAuth<unknown>(
+      `/admin/sources/${sourceId}/sync`,
+      { method: "POST" },
+    );
+    const v = ensureObject(payload, "Invalid sync source response.");
+    return {
+      ok: v.ok === true,
+      sourceId: typeof v.source_id === "string" ? v.source_id : "",
+      slug: typeof v.slug === "string" ? v.slug : "",
+      videosDiscovered: isFiniteNumber(v.videos_discovered) ? v.videos_discovered : 0,
+      jobsCreated: isFiniteNumber(v.jobs_created) ? v.jobs_created : 0,
+      skipped: isFiniteNumber(v.skipped) ? v.skipped : 0,
+    };
   },
 
   async createSourceFromUrl(url: string): Promise<CreateSourceFromUrlResult> {

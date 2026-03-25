@@ -31,6 +31,7 @@ from .models import (
     AdminVideoJobStatus,
     CreateSourceFromUrlResponse,
     SubmitVideoResponse,
+    SyncSourceResponse,
     TriggerSearchResponse,
     AdminNamedCount,
     AdminNotice,
@@ -3313,3 +3314,168 @@ async def get_video_job_status(
         )
         for row in rows
     ]
+
+
+async def sync_source(db: Any, *, source_id: str) -> SyncSourceResponse:
+    """Manually trigger discovery + job creation for a single source."""
+    row = await db.fetchrow(
+        """SELECT id, slug, track, source_type, config, sync_cursor, metadata
+           FROM content_sources WHERE id = $1""",
+        source_id,
+    )
+    if not row:
+        raise ValueError("Source not found.")
+
+    raw_config = _coerce_json_value(row.get("config"))
+    config = raw_config if isinstance(raw_config, dict) else {}
+    slug = str(row["slug"])
+    source_type = str(row.get("source_type") or "")
+
+    if source_type != "youtube":
+        raise ValueError(f"Manual sync only supported for YouTube sources (got {source_type}).")
+
+    channel_id = config.get("channel_id")
+    if not channel_id:
+        raise ValueError("Source is missing channel_id in config.")
+
+    max_results = int(config.get("max_results", 30))
+
+    api_key = os.getenv("YOUTUBE_API_KEY", "").strip()
+    if not api_key:
+        raise ValueError("YOUTUBE_API_KEY is not configured.")
+
+    # Step 1: Search channel videos
+    all_video_ids: list[str] = []
+    next_page: str | None = None
+    while len(all_video_ids) < max_results:
+        remaining = max_results - len(all_video_ids)
+        params: dict[str, Any] = {
+            "key": api_key,
+            "channelId": channel_id,
+            "type": "video",
+            "part": "snippet",
+            "order": "date",
+            "maxResults": min(remaining, 50),
+        }
+        if next_page:
+            params["pageToken"] = next_page
+
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            resp = await client.get(
+                "https://www.googleapis.com/youtube/v3/search", params=params,
+            )
+            resp.raise_for_status()
+            data = resp.json()
+
+        for item in data.get("items", []):
+            vid = (item.get("id") or {}).get("videoId")
+            if vid and vid not in all_video_ids:
+                all_video_ids.append(vid)
+
+        next_page = data.get("nextPageToken")
+        if not next_page:
+            break
+
+    if not all_video_ids:
+        return SyncSourceResponse(
+            ok=True, source_id=source_id, slug=slug,
+            videos_discovered=0, jobs_created=0, skipped=0,
+        )
+
+    # Step 2: Fetch full metadata
+    videos_meta: list[dict[str, Any]] = []
+    for i in range(0, len(all_video_ids), 50):
+        batch = all_video_ids[i:i + 50]
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            resp = await client.get(
+                "https://www.googleapis.com/youtube/v3/videos",
+                params={
+                    "key": api_key, "id": ",".join(batch),
+                    "part": "snippet,contentDetails,statistics",
+                },
+            )
+            resp.raise_for_status()
+            vdata = resp.json()
+
+        for item in vdata.get("items", []):
+            vid = item.get("id", "")
+            snippet = item.get("snippet") or {}
+            stats = item.get("statistics") or {}
+            content = item.get("contentDetails") or {}
+
+            duration = 0
+            dur_match = _re.fullmatch(
+                r"PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?",
+                content.get("duration", ""),
+            )
+            if dur_match:
+                h, m, s = (int(v or 0) for v in dur_match.groups())
+                duration = h * 3600 + m * 60 + s
+
+            thumbs = snippet.get("thumbnails") or {}
+            thumb = None
+            for key in ("maxres", "standard", "high", "medium", "default"):
+                t = thumbs.get(key)
+                if isinstance(t, dict) and t.get("url"):
+                    thumb = t["url"]
+                    break
+
+            videos_meta.append({
+                "source": "youtube", "source_video_id": vid, "video_id": vid,
+                "source_url": f"https://www.youtube.com/watch?v={vid}",
+                "video_url": f"https://www.youtube.com/watch?v={vid}",
+                "thumbnail_url": thumb,
+                "title": snippet.get("title", ""),
+                "description": snippet.get("description", ""),
+                "channel_title": snippet.get("channelTitle"),
+                "channel_id": snippet.get("channelId"),
+                "published_at": snippet.get("publishedAt"),
+                "duration_seconds": duration,
+                "view_count": int(stats["viewCount"]) if stats.get("viewCount") else None,
+                "like_count": int(stats["likeCount"]) if stats.get("likeCount") else None,
+            })
+
+    # Step 3: Create jobs, skip duplicates
+    jobs_created = 0
+    skipped = 0
+    for meta in videos_meta:
+        vid = meta["source_video_id"]
+        exists = await db.fetchval(
+            """SELECT 1 FROM processing_jobs
+               WHERE source_id = $1 AND input_payload->>'source_item_id' = $2 LIMIT 1""",
+            source_id, vid,
+        )
+        if exists:
+            skipped += 1
+            continue
+
+        payload = json.dumps({
+            "track": "unified", "discovery_track": "unified",
+            "source_slug": slug, "source_type": "youtube",
+            "source_item_id": vid, "source": "youtube",
+            "source_video_id": vid, "url": meta["video_url"],
+            "owner_id": None, "item": meta, "source_metadata": meta,
+        }, default=str)
+
+        await db.execute(
+            """INSERT INTO processing_jobs (track, source_id, job_type, status, input_payload)
+               VALUES ('unified', $1, 'index_video', 'pending', $2::jsonb)""",
+            source_id, payload,
+        )
+        jobs_created += 1
+
+    # Step 4: Update sync cursor
+    if videos_meta:
+        latest = max(
+            (m.get("published_at") or "" for m in videos_meta), default=None,
+        )
+        if latest:
+            await db.execute(
+                "UPDATE content_sources SET sync_cursor = $1 WHERE id = $2",
+                latest, source_id,
+            )
+
+    return SyncSourceResponse(
+        ok=True, source_id=source_id, slug=slug,
+        videos_discovered=len(videos_meta), jobs_created=jobs_created, skipped=skipped,
+    )
