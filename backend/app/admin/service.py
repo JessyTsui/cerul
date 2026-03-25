@@ -2559,7 +2559,7 @@ async def fetch_worker_live(
             pj.started_at,
             pj.created_at,
             pj.updated_at,
-            COUNT(ru.id)                                            AS segment_count
+            COUNT(ru.id) FILTER (WHERE ru.unit_type = 'speech')     AS segment_count
         FROM processing_jobs pj
         LEFT JOIN content_sources cs
             ON cs.id = pj.source_id

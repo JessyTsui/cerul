@@ -1336,6 +1336,122 @@ def test_admin_worker_live_completed_jobs_match_videos_by_source(
     assert matching_jobs[0]["segment_count"] == 1
 
 
+def test_admin_worker_live_completed_jobs_count_only_speech_units(
+    admin_client: TestClient,
+    database,
+) -> None:
+    seed_admin_metrics(database)
+    source_id = database.fetchval(
+        "SELECT id FROM content_sources WHERE slug = 'youtube-openai'"
+    )
+    started_at = datetime.now(timezone.utc) - timedelta(minutes=6)
+    source_video_id = "speech-only-count"
+    completed_job_id = database.fetchval(
+        """
+        INSERT INTO processing_jobs (
+            track,
+            source_id,
+            job_type,
+            status,
+            input_payload,
+            started_at,
+            completed_at,
+            created_at,
+            updated_at
+        )
+        VALUES (
+            'knowledge',
+            $1::uuid,
+            'index_video',
+            'completed',
+            $2::jsonb,
+            $3,
+            $4,
+            $3,
+            $4
+        )
+        RETURNING id
+        """,
+        source_id,
+        json.dumps(
+            {
+                "source": "youtube",
+                "source_video_id": source_video_id,
+                "source_metadata": {"title": "Count speech only"},
+            }
+        ),
+        started_at,
+        started_at + timedelta(minutes=2),
+    )
+    video_id = database.fetchval(
+        """
+        INSERT INTO videos (
+            source,
+            source_video_id,
+            source_url,
+            video_url,
+            title,
+            description,
+            duration_seconds,
+            metadata
+        )
+        VALUES (
+            'youtube',
+            $1,
+            'https://www.youtube.com/watch?v=speech-only-count',
+            'https://www.youtube.com/watch?v=speech-only-count',
+            'Count speech only',
+            'Worker live segment count should ignore non-speech units.',
+            240,
+            '{}'::jsonb
+        )
+        RETURNING id
+        """,
+        source_video_id,
+    )
+    for unit_type, unit_index in [("summary", 0), ("speech", 0), ("visual", 0)]:
+        database.fetchval(
+            """
+            INSERT INTO retrieval_units (
+                video_id,
+                unit_type,
+                unit_index,
+                content_text,
+                metadata,
+                embedding
+            )
+            VALUES (
+                $1::uuid,
+                $2,
+                $3,
+                $4,
+                '{}'::jsonb,
+                $5::vector
+            )
+            RETURNING id
+            """,
+            video_id,
+            unit_type,
+            unit_index,
+            f"{unit_type} unit",
+            vector_to_literal(
+                build_placeholder_vector(
+                    f"worker live count {unit_type}",
+                    DEFAULT_KNOWLEDGE_VECTOR_DIMENSION,
+                )
+            ),
+        )
+
+    response = admin_client.get("/admin/worker/live")
+
+    assert response.status_code == 200
+    payload = response.json()
+    completed = next(
+        job for job in payload["recent_completed"] if job["job_id"] == str(completed_job_id)
+    )
+    assert completed["segment_count"] == 1
+
+
 def test_admin_worker_live_supports_failed_job_pagination(
     admin_client: TestClient,
     database,
