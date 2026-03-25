@@ -38,6 +38,7 @@ from app.search.base import (
     DEFAULT_KNOWLEDGE_VECTOR_DIMENSION,
     vector_to_literal,
 )
+from app.search.rerank import LLMReranker
 
 BENCHMARK_PATH = REPO_ROOT / "eval" / "search_benchmark.json"
 RESULTS_PATH = REPO_ROOT / "eval" / "results.tsv"
@@ -112,9 +113,9 @@ def dedupe_by_video(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
     seen: dict[str, dict[str, Any]] = {}
     for row in rows:
         vid = row["source_video_id"]
-        if vid not in seen or row["score"] > seen[vid]["score"]:
+        if vid not in seen or _row_rank_score(row) > _row_rank_score(seen[vid]):
             seen[vid] = row
-    return sorted(seen.values(), key=lambda r: r["score"], reverse=True)
+    return sorted(seen.values(), key=_row_rank_score, reverse=True)
 
 
 # ---------------------------------------------------------------------------
@@ -130,7 +131,7 @@ def dcg(relevances: list[float], k: int) -> float:
 
 def ndcg_at_k(ranked_video_ids: list[str], relevant_ids: set[str], k: int) -> float:
     relevances = [1.0 if vid in relevant_ids else 0.0 for vid in ranked_video_ids[:k]]
-    ideal = sorted(relevances, reverse=True)
+    ideal = [1.0] * min(k, len(relevant_ids))
     idcg = dcg(ideal, k)
     if idcg == 0:
         return 0.0
@@ -146,6 +147,34 @@ def reciprocal_rank(ranked_video_ids: list[str], relevant_ids: set[str]) -> floa
 
 def hit_at_k(ranked_video_ids: list[str], relevant_ids: set[str], k: int) -> bool:
     return bool(relevant_ids & set(ranked_video_ids[:k]))
+
+
+def _row_rank_score(row: dict[str, Any]) -> float:
+    rerank_score = row.get("rerank_score")
+    if rerank_score is not None:
+        return float(rerank_score)
+    return float(row.get("score", 0.0) or 0.0)
+
+
+async def rank_candidate_rows(
+    *,
+    mode: str,
+    query_text: str,
+    candidate_rows: list[dict[str, Any]],
+    reranker: LLMReranker | None = None,
+) -> list[dict[str, Any]]:
+    if mode == "rerank":
+        active_reranker = reranker or LLMReranker()
+        return await active_reranker.rerank(
+            query_text,
+            candidate_rows,
+            top_n=len(candidate_rows),
+        )
+    return sorted(
+        [dict(row) for row in candidate_rows],
+        key=_row_rank_score,
+        reverse=True,
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -164,6 +193,7 @@ async def run_eval(mode: str, top_k: int) -> dict[str, Any]:
     embedder = create_embedding_backend(
         output_dimension=DEFAULT_KNOWLEDGE_VECTOR_DIMENSION
     )
+    reranker = LLMReranker() if mode == "rerank" else None
 
     ndcg_scores: list[float] = []
     mrr_scores: list[float] = []
@@ -186,7 +216,13 @@ async def run_eval(mode: str, top_k: int) -> dict[str, Any]:
 
         # Search.
         candidate_rows = await vector_search(conn, embedding, limit=top_k * 8)
-        deduped = dedupe_by_video(candidate_rows)
+        ranked_rows = await rank_candidate_rows(
+            mode=mode,
+            query_text=query_text,
+            candidate_rows=candidate_rows,
+            reranker=reranker,
+        )
+        deduped = dedupe_by_video(ranked_rows)
         ranked_ids = [r["source_video_id"] for r in deduped[:top_k]]
 
         elapsed_ms = (time.perf_counter() - t0) * 1000
@@ -225,7 +261,7 @@ async def run_eval(mode: str, top_k: int) -> dict[str, Any]:
     await conn.close()
 
     # Aggregate metrics.
-    n = len(queries)
+    n = len(per_query)
     avg_ndcg = sum(ndcg_scores) / n if n else 0
     avg_mrr = sum(mrr_scores) / n if n else 0
     avg_hit3 = sum(hit3_scores) / n if n else 0
@@ -272,6 +308,7 @@ async def run_eval(mode: str, top_k: int) -> dict[str, Any]:
         "mrr": avg_mrr,
         "hit3": avg_hit3,
         "avg_latency_ms": avg_latency,
+        "evaluated_queries": n,
     }
 
 

@@ -1163,6 +1163,179 @@ def test_admin_worker_live_includes_failed_jobs_and_completed_duration(
     assert failed["steps"][0]["step_name"] == "AnalyzeKnowledgeFramesStep"
 
 
+def test_admin_worker_live_completed_jobs_match_videos_by_source(
+    admin_client: TestClient,
+    database,
+) -> None:
+    seed_admin_metrics(database)
+    source_id = database.fetchval(
+        "SELECT id FROM content_sources WHERE slug = 'youtube-openai'"
+    )
+    started_at = datetime.now(timezone.utc) - timedelta(minutes=9)
+    source_video_id = "shared-source-video"
+    completed_job_id = database.fetchval(
+        """
+        INSERT INTO processing_jobs (
+            track,
+            source_id,
+            job_type,
+            status,
+            input_payload,
+            started_at,
+            completed_at,
+            created_at,
+            updated_at
+        )
+        VALUES (
+            'knowledge',
+            $1::uuid,
+            'index_video',
+            'completed',
+            $2::jsonb,
+            $3,
+            $4,
+            $3,
+            $4
+        )
+        RETURNING id
+        """,
+        source_id,
+        json.dumps(
+            {
+                "source": "youtube",
+                "source_video_id": source_video_id,
+                "source_metadata": {"title": "Source-aware completed run"},
+            }
+        ),
+        started_at,
+        started_at + timedelta(minutes=4),
+    )
+    youtube_video_id = database.fetchval(
+        """
+        INSERT INTO videos (
+            source,
+            source_video_id,
+            source_url,
+            video_url,
+            title,
+            description,
+            duration_seconds,
+            metadata
+        )
+        VALUES (
+            'youtube',
+            $1,
+            'https://www.youtube.com/watch?v=shared-source-video',
+            'https://www.youtube.com/watch?v=shared-source-video',
+            'YouTube match',
+            'Expected completed video.',
+            120,
+            '{}'::jsonb
+        )
+        RETURNING id
+        """,
+        source_video_id,
+    )
+    pexels_video_id = database.fetchval(
+        """
+        INSERT INTO videos (
+            source,
+            source_video_id,
+            source_url,
+            video_url,
+            title,
+            description,
+            duration_seconds,
+            metadata
+        )
+        VALUES (
+            'pexels',
+            $1,
+            'https://www.pexels.com/video/shared-source-video/',
+            'https://videos.pexels.com/video-files/shared-source-video/demo.mp4',
+            'Pexels collision',
+            'Different provider with the same external id.',
+            12,
+            '{}'::jsonb
+        )
+        RETURNING id
+        """,
+        source_video_id,
+    )
+    database.fetchval(
+        """
+        INSERT INTO retrieval_units (
+            video_id,
+            unit_type,
+            unit_index,
+            content_text,
+            metadata,
+            embedding
+        )
+        VALUES (
+            $1::uuid,
+            'speech',
+            0,
+            'Expected YouTube unit',
+            '{}'::jsonb,
+            $2::vector
+        )
+        RETURNING id
+        """,
+        youtube_video_id,
+        vector_to_literal(
+            build_placeholder_vector(
+                "admin worker youtube match",
+                DEFAULT_KNOWLEDGE_VECTOR_DIMENSION,
+            )
+        ),
+    )
+    for unit_index in range(2):
+        database.fetchval(
+            """
+            INSERT INTO retrieval_units (
+                video_id,
+                unit_type,
+                unit_index,
+                content_text,
+                metadata,
+                embedding
+            )
+            VALUES (
+                $1::uuid,
+                'speech',
+                $2,
+                $3,
+                '{}'::jsonb,
+                $4::vector
+            )
+            RETURNING id
+            """,
+            pexels_video_id,
+            unit_index,
+            f"Pexels collision unit {unit_index}",
+            vector_to_literal(
+                build_placeholder_vector(
+                    f"admin worker pexels collision {unit_index}",
+                    DEFAULT_KNOWLEDGE_VECTOR_DIMENSION,
+                )
+            ),
+        )
+
+    response = admin_client.get("/admin/worker/live")
+
+    assert response.status_code == 200
+    payload = response.json()
+    matching_jobs = [
+        job
+        for job in payload["recent_completed"]
+        if job["job_id"] == str(completed_job_id)
+    ]
+    assert len(matching_jobs) == 1
+    assert matching_jobs[0]["title"] == "YouTube match"
+    assert matching_jobs[0]["segment_count"] == 1
+
+
 def test_admin_worker_live_supports_failed_job_pagination(
     admin_client: TestClient,
     database,
