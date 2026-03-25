@@ -329,6 +329,7 @@ def test_unified_search_embeds_image_only_query(tmp_path: Path) -> None:
                     unit_type="visual",
                     score=0.91,
                     embedding=query_vector,
+                    transcript_text="",
                     visual_summary="A man and a woman sit in a room with a fireplace.",
                 )
             ]
@@ -378,6 +379,7 @@ def test_unified_search_embeds_text_and_image_query(tmp_path: Path) -> None:
                     unit_type="visual",
                     score=0.91,
                     embedding=query_vector,
+                    transcript_text="",
                     visual_summary="A man and a woman sit in a room with a fireplace.",
                 )
             ]
@@ -519,6 +521,50 @@ def test_unified_search_can_include_summary_results_when_requested() -> None:
     assert database.fetch_calls[0][1][-1] == 72
 
 
+def test_dedupe_rows_merges_same_segment_results_across_unit_types() -> None:
+    query_vector = build_placeholder_vector(
+        "rocket launch",
+        DEFAULT_KNOWLEDGE_VECTOR_DIMENSION,
+    )
+    service = UnifiedSearchService(
+        FakeDatabase({}),
+        embedding_backend=FakeEmbeddingBackend(query_vector),
+        reranker=StaticReranker(),
+    )
+
+    deduped = service._dedupe_rows(
+        [
+            build_unified_row(
+                row_id="speech_1",
+                unit_type="speech",
+                score=0.84,
+                embedding=query_vector,
+                transcript_text="The rocket clears the tower as the countdown hits zero.",
+                visual_summary="",
+            ),
+            build_unified_row(
+                row_id="visual_1",
+                unit_type="visual",
+                score=0.93,
+                embedding=query_vector,
+                transcript_text="",
+                visual_summary="A rocket lifts off in a bright plume of smoke and flame.",
+            ),
+        ]
+    )
+
+    assert len(deduped) == 1
+    assert deduped[0]["id"] == "visual_1"
+    assert deduped[0]["unit_type"] == "visual"
+    assert deduped[0]["score"] == pytest.approx(0.93)
+    assert deduped[0]["transcript_text"] == (
+        "The rocket clears the tower as the countdown hits zero."
+    )
+    assert deduped[0]["visual_description"] == (
+        "A rocket lifts off in a bright plume of smoke and flame."
+    )
+
+
 def test_unified_search_visual_snippet_prefers_scene_description_over_ocr() -> None:
     query_vector = build_placeholder_vector(
         "fireplace interview",
@@ -532,6 +578,7 @@ def test_unified_search_visual_snippet_prefers_scene_description_over_ocr() -> N
                     unit_type="visual",
                     score=0.91,
                     embedding=query_vector,
+                    transcript_text="",
                     visual_summary="A man and a woman sit in a room with a fireplace.",
                 )
             ]
@@ -560,6 +607,61 @@ def test_unified_search_visual_snippet_prefers_scene_description_over_ocr() -> N
     assert execution.results[0].snippet == "A man and a woman sit in a room with a fireplace."
 
 
+def test_unified_search_merged_segment_snippet_prefers_transcript() -> None:
+    query_vector = build_placeholder_vector(
+        "rocket launch",
+        DEFAULT_KNOWLEDGE_VECTOR_DIMENSION,
+    )
+    database = FakeDatabase(
+        {
+            "speech": [
+                build_unified_row(
+                    row_id="speech_1",
+                    unit_type="speech",
+                    score=0.84,
+                    embedding=query_vector,
+                    transcript_text="The rocket clears the tower as the countdown hits zero.",
+                    visual_summary="",
+                )
+            ],
+            "visual": [
+                build_unified_row(
+                    row_id="visual_1",
+                    unit_type="visual",
+                    score=0.93,
+                    embedding=query_vector,
+                    transcript_text="",
+                    visual_summary="A rocket lifts off in a bright plume of smoke and flame.",
+                )
+            ],
+        }
+    )
+    service = UnifiedSearchService(
+        database,
+        embedding_backend=FakeEmbeddingBackend(query_vector),
+        reranker=StaticReranker(),
+    )
+
+    execution = asyncio.run(
+        service.search(
+            SearchRequest.model_validate(
+                {
+                    "query": "rocket launch",
+                    "max_results": 5,
+                }
+            ),
+            user_id="user_stub",
+            request_id="req_123",
+        )
+    )
+
+    assert [result.id for result in execution.results] == ["visual_1"]
+    assert execution.results[0].unit_type == "visual"
+    assert execution.results[0].snippet == (
+        "The rocket clears the tower as the countdown hits zero."
+    )
+
+
 def test_unified_search_rerank_mode_keeps_embedding_score_and_exposes_rerank_score() -> None:
     query_vector = build_placeholder_vector(
         "agent workflows",
@@ -573,12 +675,16 @@ def test_unified_search_rerank_mode_keeps_embedding_score_and_exposes_rerank_sco
                     unit_type="speech",
                     score=0.72,
                     embedding=query_vector,
+                    timestamp_start=120.0,
+                    timestamp_end=178.5,
                 ),
                 build_unified_row(
                     row_id="segment_2",
                     unit_type="speech",
                     score=0.61,
                     embedding=query_vector,
+                    timestamp_start=180.0,
+                    timestamp_end=238.5,
                 ),
             ]
         }

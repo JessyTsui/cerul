@@ -1,6 +1,7 @@
 from fastapi.testclient import TestClient
 
 from app.main import app
+import app.routers.tracking as tracking_router
 from conftest import (
     TEST_KNOWLEDGE_VIDEO_ID,
     TEST_UNIFIED_KNOWLEDGE_UNIT_ID,
@@ -105,6 +106,18 @@ def test_tracking_not_found_returns_branded_404() -> None:
 
     assert response.status_code == 404
     assert "Cerul tracking link not found." in response.text
+
+
+def test_tracking_snippet_prefers_transcript_for_merged_visual_results() -> None:
+    snippet = tracking_router._build_snippet(
+        {
+            "unit_type": "visual",
+            "transcript": "The rocket clears the tower as the countdown hits zero.",
+            "visual_desc": "A rocket lifts off in a bright plume of smoke and flame.",
+        }
+    )
+
+    assert snippet == "The rocket clears the tower as the countdown hits zero."
 
 
 def test_tracking_links_keep_working_after_video_and_unit_are_removed(database) -> None:

@@ -143,8 +143,11 @@ class UnifiedSearchService:
                     "unit_type": str(row.get("unit_type") or "speech"),
                     "timestamp_start": self._coerce_optional_float(row.get("timestamp_start")),
                     "timestamp_end": self._coerce_optional_float(row.get("timestamp_end")),
-                    "transcript": row.get("transcript"),
-                    "visual_desc": row.get("visual_desc"),
+                    "transcript": row.get("transcript_text"),
+                    "visual_desc": (
+                        row.get("visual_description")
+                        or row.get("visual_summary")
+                    ),
                     "keyframe_url": row.get("keyframe_url"),
                 }
             )
@@ -287,15 +290,55 @@ class UnifiedSearchService:
         )
 
     def _dedupe_rows(self, rows: Sequence[dict[str, Any]]) -> list[dict[str, Any]]:
-        deduped: list[dict[str, Any]] = []
-        seen_ids: set[str] = set()
+        by_id: dict[str, dict[str, Any]] = {}
         for row in rows:
             row_id = str(row.get("id") or "")
-            if not row_id or row_id in seen_ids:
+            if not row_id or row_id in by_id:
                 continue
-            seen_ids.add(row_id)
-            deduped.append(row)
-        return deduped
+            by_id[row_id] = dict(row)
+
+        segment_key_map: dict[str, dict[str, Any]] = {}
+        for row in by_id.values():
+            video_id = str(row.get("video_id") or "")
+            timestamp_start = row.get("timestamp_start")
+            timestamp_end = row.get("timestamp_end")
+            if video_id and timestamp_start is not None and timestamp_end is not None:
+                segment_key = (
+                    f"{video_id}:{float(timestamp_start):.2f}-{float(timestamp_end):.2f}"
+                )
+            else:
+                segment_key = str(row.get("id") or "")
+
+            existing = segment_key_map.get(segment_key)
+            if existing is None:
+                segment_key_map[segment_key] = row
+                continue
+
+            existing_score = float(existing.get("score", 0.0) or 0.0)
+            new_score = float(row.get("score", 0.0) or 0.0)
+            if new_score > existing_score:
+                merged = dict(row)
+                self._merge_segment_fields(merged, existing)
+                segment_key_map[segment_key] = merged
+                continue
+
+            self._merge_segment_fields(existing, row)
+
+        return list(segment_key_map.values())
+
+    def _merge_segment_fields(
+        self,
+        target: dict[str, Any],
+        source: dict[str, Any],
+    ) -> None:
+        if not target.get("transcript_text") and source.get("transcript_text"):
+            target["transcript_text"] = source["transcript_text"]
+        if not target.get("visual_description") and source.get("visual_description"):
+            target["visual_description"] = source["visual_description"]
+        if not target.get("visual_summary") and source.get("visual_summary"):
+            target["visual_summary"] = source["visual_summary"]
+        if not target.get("visual_text_content") and source.get("visual_text_content"):
+            target["visual_text_content"] = source["visual_text_content"]
 
     def _cap_per_video(
         self,
@@ -338,18 +381,15 @@ class UnifiedSearchService:
         return target_url
 
     def _build_snippet(self, row: dict[str, Any]) -> str:
-        unit_type = str(row.get("unit_type") or "speech")
-        if unit_type == "visual":
+        value = row.get("transcript_text")
+        if not value:
             value = (
                 row.get("visual_description")
                 or row.get("visual_summary")
                 or row.get("visual_text_content")
                 or row.get("content_text")
+                or row.get("description")
             )
-        elif unit_type == "summary":
-            value = row.get("content_text") or row.get("description")
-        else:
-            value = row.get("transcript_text") or row.get("content_text") or row.get("description")
         return self._truncate_text(str(value or "").strip(), limit=220)
 
     def _coerce_optional_float(self, value: Any) -> float | None:

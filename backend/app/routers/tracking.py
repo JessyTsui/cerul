@@ -92,11 +92,7 @@ async def _record_tracking_event(
 
 
 def _build_snippet(tracking_row: dict[str, Any]) -> str:
-    unit_type = str(tracking_row.get("unit_type") or "")
-    if unit_type == "visual":
-        value = tracking_row.get("visual_desc")
-    else:
-        value = tracking_row.get("transcript") or tracking_row.get("visual_desc")
+    value = tracking_row.get("transcript") or tracking_row.get("visual_desc")
     text = str(value or "").strip()
     if len(text) <= 240:
         return text
