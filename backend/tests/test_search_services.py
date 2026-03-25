@@ -65,7 +65,13 @@ class FakeDatabase:
 
     async def fetch(self, sql: str, *params: object) -> list[dict[str, object]]:
         self.fetch_calls.append((sql, params))
-        unit_type = str(params[1])
+        requested_types = params[1]
+        if isinstance(requested_types, (list, tuple)):
+            rows: list[dict[str, object]] = []
+            for unit_type in requested_types:
+                rows.extend(self.rows_by_unit_type.get(str(unit_type), []))
+            return rows
+        unit_type = str(requested_types)
         return self.rows_by_unit_type.get(unit_type, [])
 
 
@@ -300,7 +306,10 @@ def test_unified_search_embeds_query_text_and_returns_tracking_url(
     assert execution.results[0].url.path.startswith("/v/")
     assert execution.results[0].unit_type == "speech"
     assert embedding_backend.calls == ["agent workflows"]
+    assert len(database.fetch_calls) == 1
+    assert "ru.unit_type = ANY($2::text[])" in database.fetch_calls[0][0]
     assert database.fetch_calls[0][1][0] == vector_to_literal(query_vector)
+    assert database.fetch_calls[0][1][1] == ["speech", "visual"]
     assert "Resolved unified query vector with 3072 dimensions via fake-gemini" in caplog.text
 
 
@@ -503,6 +512,9 @@ def test_unified_search_can_include_summary_results_when_requested() -> None:
 
     assert [result.id for result in execution.results] == ["summary_1"]
     assert execution.results[0].timestamp_start is None
+    assert len(database.fetch_calls) == 1
+    assert "ru.unit_type = ANY($2::text[])" in database.fetch_calls[0][0]
+    assert database.fetch_calls[0][1][1] == ["summary", "speech", "visual"]
 
 
 def test_unified_search_visual_snippet_prefers_scene_description_over_ocr() -> None:

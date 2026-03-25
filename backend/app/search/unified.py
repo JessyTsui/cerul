@@ -74,16 +74,14 @@ class UnifiedSearchService:
             allowed_unit_types.insert(0, "summary")
 
         candidate_limit = min(max(request.max_results * 8, 24), 120)
-        candidate_rows: list[dict[str, Any]] = []
-        for unit_type in allowed_unit_types:
-            rows = await self._fetch_unit_rows(
-                filters=request.filters,
-                query_vector=resolved_query_vector,
-                unit_type=unit_type,
-                user_id=user_id,
-                limit=candidate_limit,
-            )
-            candidate_rows.extend(rows)
+        candidate_rows = await self._fetch_unit_rows(
+            filters=request.filters,
+            query_vector=resolved_query_vector,
+            unit_type=None,
+            user_id=user_id,
+            limit=candidate_limit,
+            allowed_unit_types=allowed_unit_types,
+        )
 
         candidate_rows = self._dedupe_rows(candidate_rows)
         if not candidate_rows:
@@ -179,25 +177,35 @@ class UnifiedSearchService:
         *,
         filters: UnifiedFilters | None,
         query_vector: Sequence[float],
-        unit_type: str,
+        unit_type: str | None,
         user_id: str,
         limit: int,
+        allowed_unit_types: Sequence[str] | None = None,
     ) -> list[dict[str, Any]]:
-        params: list[Any] = [
-            vector_to_literal(query_vector),
-            unit_type,
-            user_id,
-        ]
-        conditions = [
-            "ru.unit_type = $2",
-            (
-                "EXISTS ("
-                "SELECT 1 FROM video_access AS va "
-                "WHERE va.video_id = ru.video_id "
-                "AND (va.owner_id IS NULL OR va.owner_id = $3)"
-                ")"
-            ),
-        ]
+        params: list[Any] = [vector_to_literal(query_vector)]
+        conditions: list[str] = []
+
+        if allowed_unit_types is not None:
+            normalized_unit_types = [value for value in allowed_unit_types if value]
+            if not normalized_unit_types:
+                raise ValueError("allowed_unit_types must contain at least one value")
+            params.append(normalized_unit_types)
+            conditions.append(f"ru.unit_type = ANY(${len(params)}::text[])")
+        elif unit_type is not None:
+            params.append(unit_type)
+            conditions.append(f"ru.unit_type = ${len(params)}")
+        else:
+            raise ValueError("unit_type or allowed_unit_types must be provided")
+
+        params.append(user_id)
+        user_id_param = len(params)
+        conditions.append(
+            "EXISTS ("
+            "SELECT 1 FROM video_access AS va "
+            "WHERE va.video_id = ru.video_id "
+            f"AND (va.owner_id IS NULL OR va.owner_id = ${user_id_param})"
+            ")"
+        )
 
         if filters is not None and filters.speaker is not None:
             params.append(filters.speaker)
