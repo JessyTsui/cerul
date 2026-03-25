@@ -94,7 +94,6 @@ class SearchResult(StrictModel):
     speaker: str | None = None
     timestamp_start: float | None = Field(default=None, ge=0.0)
     timestamp_end: float | None = Field(default=None, ge=0.0)
-    unit_type: Literal["summary", "speech", "visual"]
 
     @model_validator(mode="after")
     def validate_timestamps(self) -> "SearchResult":
