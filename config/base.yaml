@@ -12,7 +12,8 @@ search:
 
 knowledge:
   scene_threshold: 0.35
-  rerank_top_n: 20
+  rerank_top_n: 30
+  rerank_model: jina-reranker-v3
   rerank_prompt_template: default
   download:
     max_height: 480

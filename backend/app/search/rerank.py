@@ -13,7 +13,8 @@ from app.config import get_settings
 logger = logging.getLogger(__name__)
 
 DEFAULT_OPENAI_BASE_URL = "https://api.openai.com/v1"
-DEFAULT_RERANK_MODEL = "gpt-4o-mini"
+DEFAULT_RERANK_MODEL = "jina-reranker-v3"
+DEFAULT_JINA_BASE_URL = "https://api.jina.ai/v1"
 DEFAULT_TIMEOUT_SECONDS = 15.0
 
 
@@ -113,6 +114,106 @@ class OpenAICompatibleRerankerBackend:
             raise ValueError("Reranker response did not include a score field.")
 
         return _clamp_llm_score(float(parsed_content["score"]))
+
+
+class JinaRerankerBackend:
+    """Batch reranker using the Jina Reranker API.
+
+    Single API call for all candidates — fast, cheap, multilingual.
+    """
+
+    def __init__(
+        self,
+        *,
+        api_key: str | None = None,
+        base_url: str = DEFAULT_JINA_BASE_URL,
+        model_name: str = DEFAULT_RERANK_MODEL,
+        timeout_seconds: float = DEFAULT_TIMEOUT_SECONDS,
+    ) -> None:
+        self.api_key = (
+            api_key
+            or os.getenv("JINA_API_KEY", "").strip()
+        )
+        self.base_url = base_url.rstrip("/")
+        self.model_name = model_name
+        self.timeout_seconds = timeout_seconds
+
+    async def score_batch(
+        self,
+        query: str,
+        candidates: Sequence[Mapping[str, Any]],
+    ) -> list[float]:
+        if not self.api_key:
+            raise RuntimeError("JINA_API_KEY is not set.")
+
+        documents = [
+            _build_jina_document(candidate)
+            for candidate in candidates
+        ]
+
+        payload = {
+            "model": self.model_name,
+            "query": query,
+            "documents": documents,
+            "top_n": len(documents),
+            "truncation": True,
+            "return_documents": False,
+        }
+
+        async with httpx.AsyncClient(timeout=self.timeout_seconds) as client:
+            response = await client.post(
+                f"{self.base_url}/rerank",
+                headers={
+                    "Authorization": f"Bearer {self.api_key}",
+                    "Content-Type": "application/json",
+                },
+                json=payload,
+            )
+
+        response.raise_for_status()
+        response_payload = response.json()
+        results = response_payload.get("results", [])
+
+        # Map scores back to original candidate order.
+        # Jina scores can be negative; clamp to [0, 1].
+        scores = [0.0] * len(candidates)
+        for result in results:
+            idx = result.get("index", 0)
+            if 0 <= idx < len(scores):
+                raw_score = float(result.get("relevance_score", 0.0))
+                scores[idx] = max(0.0, min(raw_score, 1.0))
+
+        return scores
+
+
+def _build_jina_document(candidate: Mapping[str, Any]) -> str:
+    """Build a text representation of a candidate for Jina reranking."""
+    parts = []
+    title = _coerce_text(candidate.get("title"))
+    if title:
+        parts.append(title)
+    segment_title = _coerce_text(candidate.get("segment_title"))
+    if segment_title and segment_title != title:
+        parts.append(segment_title)
+    transcript = _truncate_text(
+        _coerce_text(
+            candidate.get("transcript_text") or candidate.get("description")
+        ),
+        limit=1500,
+    )
+    if transcript:
+        parts.append(transcript)
+    visual = _truncate_text(
+        _coerce_text(
+            candidate.get("visual_text_content")
+            or candidate.get("visual_description")
+            or candidate.get("visual_summary")
+        ),
+        limit=500,
+    )
+    if visual:
+        parts.append(visual)
+    return "\n".join(parts) if parts else "N/A"
 
 
 class LLMReranker:
@@ -234,8 +335,10 @@ def build_rerank_prompt(
 
 def _build_default_backend(
     settings: Any,
-) -> RerankerBackend:
+) -> RerankerBackend | BatchRerankerBackend:
     model = getattr(settings.knowledge, "rerank_model", DEFAULT_RERANK_MODEL)
+    if "jina" in model.lower():
+        return JinaRerankerBackend(model_name=model)
     return OpenAICompatibleRerankerBackend(model_name=model)
 
 

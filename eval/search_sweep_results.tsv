@@ -1,0 +1,31 @@
+experiment	config	ndcg5	mrr	hit3
+cand_mult=4	mode=embedding | cand=4x	0.7669	0.8370	0.9121
+cand_mult=6	mode=embedding | cand=6x	0.7702	0.8370	0.9121
+cand_mult=8	mode=embedding | cand=8x	0.7713	0.8370	0.9121
+cand_mult=10	mode=embedding | cand=10x	0.7713	0.8370	0.9121
+cand_mult=12	mode=embedding | cand=12x	0.7713	0.8370	0.9121
+cand_mult=16	mode=embedding | cand=16x	0.7713	0.8370	0.9121
+cand_mult=20	mode=embedding | cand=20x	0.7713	0.8370	0.9121
+rerank_n=5	mode=rerank | cand=8x | rerank_n=5	0.7627	0.8361	0.8901
+rerank_n=10	mode=rerank | cand=8x | rerank_n=10	0.7553	0.8273	0.8901
+rerank_n=15	mode=rerank | cand=8x | rerank_n=15	0.7902	0.8575	0.9121
+rerank_n=20	mode=rerank | cand=8x | rerank_n=20	0.7936	0.8533	0.9011
+rerank_n=25	mode=rerank | cand=8x | rerank_n=25	0.7937	0.8566	0.9121
+rerank_n=30	mode=rerank | cand=8x | rerank_n=30	0.8000	0.8599	0.9121
+rerank_n=40	mode=rerank | cand=8x | rerank_n=40	0.7866	0.8553	0.9121
+mmr=1.0	mode=rerank | cand=8x | rerank_n=30	0.7901	0.8516	0.9121
+mmr=0.95	mode=rerank | cand=8x | rerank_n=30 | mmr=0.95	0.7761	0.8355	0.8791
+mmr=0.9	mode=rerank | cand=8x | rerank_n=30 | mmr=0.9	0.7721	0.8300	0.8791
+mmr=0.85	mode=rerank | cand=8x | rerank_n=30 | mmr=0.85	0.7756	0.8300	0.8791
+mmr=0.8	mode=rerank | cand=8x | rerank_n=30 | mmr=0.8	0.7673	0.8245	0.8791
+mmr=0.75	mode=rerank | cand=8x | rerank_n=30 | mmr=0.75	0.7772	0.8333	0.8901
+mmr=0.7	mode=rerank | cand=8x | rerank_n=30 | mmr=0.7	0.7839	0.8443	0.9011
+mmr=0.6	mode=rerank | cand=8x | rerank_n=30 | mmr=0.6	0.7879	0.8443	0.9011
+mmr=0.5	mode=rerank | cand=8x | rerank_n=30 | mmr=0.5	0.7699	0.8223	0.8791
+cap=0	mode=rerank | cand=8x | rerank_n=30	0.7817	0.8397	0.8901
+cap=1	mode=rerank | cand=8x | rerank_n=30 | cap=1	0.7870	0.8502	0.8901
+cap=2	mode=rerank | cand=8x | rerank_n=30 | cap=2	0.7905	0.8493	0.9121
+cap=3	mode=rerank | cand=8x | rerank_n=30 | cap=3	0.7813	0.8397	0.8901
+cap=4	mode=rerank | cand=8x | rerank_n=30 | cap=4	0.7912	0.8544	0.9121
+final_embedding	mode=embedding | cand=8x	0.7713	0.8370	0.9121
+final_rerank	mode=rerank | cand=8x | rerank_n=30	0.7868	0.8423	0.9011

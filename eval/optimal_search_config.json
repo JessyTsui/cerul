@@ -1,0 +1,16 @@
+{
+  "candidate_mult": 8,
+  "rerank_top_n": 30,
+  "mmr_lambda": 1.0,
+  "cap_per_video": 0,
+  "embedding_metrics": {
+    "ndcg5": 0.7712630406691469,
+    "mrr": 0.836996336996337,
+    "hit3": 0.9120879120879121
+  },
+  "rerank_metrics": {
+    "ndcg5": 0.7867716568302648,
+    "mrr": 0.8423076923076924,
+    "hit3": 0.9010989010989011
+  }
+}
