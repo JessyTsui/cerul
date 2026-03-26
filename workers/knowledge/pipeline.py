@@ -27,6 +27,7 @@ from .runtime import (
 )
 from .steps import (
     AnalyzeKnowledgeFramesStep,
+    DenseVisualEmbedStep,
     DownloadKnowledgeVideoStep,
     EmbedKnowledgeSegmentsStep,
     FetchKnowledgeCaptionsStep,
@@ -48,6 +49,7 @@ DEFAULT_KNOWLEDGE_STEP_TIMEOUTS: dict[str, float] = {
     "AnalyzeKnowledgeFramesStep": 600.0,
     "SegmentKnowledgeTranscriptStep": 90.0,
     "EmbedKnowledgeSegmentsStep": 300.0,
+    "DenseVisualEmbedStep": 600.0,
     "StoreKnowledgeSegmentsStep": 120.0,
 }
 
@@ -60,6 +62,7 @@ DEFAULT_KNOWLEDGE_TIMEOUT_GUIDANCE: dict[str, str] = {
     "AnalyzeKnowledgeFramesStep": "Frame analysis timed out; this usually means a vision-model request hung. Check Gemini reachability, proxy behavior, or lower frame volume.",
     "SegmentKnowledgeTranscriptStep": "Transcript segmentation timed out; inspect transcript payload size and segmentation heuristics.",
     "EmbedKnowledgeSegmentsStep": "Segment embedding timed out; inspect Gemini embedding latency and outbound connectivity.",
+    "DenseVisualEmbedStep": "Dense visual embedding timed out; inspect ffmpeg frame extraction and multimodal embedding latency.",
     "StoreKnowledgeSegmentsStep": "Database persistence timed out; inspect Postgres health and lock contention.",
 }
 
@@ -100,6 +103,9 @@ class KnowledgeIndexingPipeline:
                 AnalyzeKnowledgeFramesStep(frame_analyzer=self._frame_analyzer),
                 SegmentKnowledgeTranscriptStep(),
                 EmbedKnowledgeSegmentsStep(
+                    embedding_backend=self._embedding_backend,
+                ),
+                DenseVisualEmbedStep(
                     embedding_backend=self._embedding_backend,
                 ),
                 StoreKnowledgeSegmentsStep(repository=self._repository),

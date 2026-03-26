@@ -49,6 +49,9 @@ DEFAULT_KEYFRAME_CAPTURE_CONCURRENCY = 6
 DEFAULT_KEYFRAME_CAPTURE_TIMEOUT_SECONDS = 30.0
 logger = logging.getLogger(__name__)
 
+DENSE_VISUAL_UNIT_INDEX_OFFSET = 1000
+DENSE_VISUAL_UNIT_INDEX_STRIDE = 100
+
 DEFAULT_UNIFIED_TIMEOUT_GUIDANCE: dict[str, str] = {
     "FetchUnifiedMetadataStep": "Metadata fetch timed out; inspect the upstream source and proxy path.",
     "DownloadKnowledgeVideoStep": "Video download timed out; inspect source reachability, cookies, and proxy settings.",
@@ -163,6 +166,9 @@ class UnifiedIndexingPipeline:
         stored_segments = [
             dict(segment) for segment in context.data.get("stored_segments", [])
         ]
+        dense_visual_units = [
+            dict(unit) for unit in context.data.get("dense_visual_units", [])
+        ]
         if not stored_video or not stored_segments:
             raise RuntimeError("Unified indexing requires stored knowledge video and segments.")
         self._validate_max_duration(stored_video.get("duration_seconds"))
@@ -180,6 +186,7 @@ class UnifiedIndexingPipeline:
             operation=lambda: self._build_units_from_knowledge_segments(
                 stored_video=stored_video,
                 stored_segments=stored_segments,
+                dense_visual_units=dense_visual_units,
                 video_path=context.data.get("video_path"),
             ),
         )
@@ -652,9 +659,13 @@ class UnifiedIndexingPipeline:
         *,
         stored_video: Mapping[str, Any],
         stored_segments: Sequence[Mapping[str, Any]],
+        dense_visual_units: Sequence[Mapping[str, Any]] | None = None,
         video_path: str | Path | None = None,
     ) -> list[dict[str, Any]]:
         units: list[dict[str, Any]] = []
+        segments_by_index = {
+            int(segment["segment_index"]): segment for segment in stored_segments
+        }
         uploaded_urls = await self._ensure_segment_keyframes(
             video=stored_video,
             segments=stored_segments,
@@ -803,6 +814,55 @@ class UnifiedIndexingPipeline:
                     }
                 )
                 visual_unit_index += 1
+
+        for dense_visual_unit in dense_visual_units or []:
+            segment_index = int(dense_visual_unit.get("segment_index") or 0)
+            frame_index = int(dense_visual_unit.get("frame_index") or 0)
+            embedding = dense_visual_unit.get("embedding")
+            if embedding is None:
+                continue
+            segment = dict(segments_by_index.get(segment_index) or {})
+            content_text = str(dense_visual_unit.get("content_text") or "").strip()
+            if not content_text:
+                content_text = "\n".join(
+                    part
+                    for part in [
+                        str(stored_video.get("title") or "").strip(),
+                        str(segment.get("transcript_text") or "").strip()[:200],
+                    ]
+                    if part
+                )
+            metadata = dict(dense_visual_unit.get("metadata") or {})
+            metadata.update(
+                {
+                    "dense_visual": True,
+                    "segment_title": segment.get("title"),
+                    "frame_index": frame_index,
+                    "frame_timestamp_seconds": dense_visual_unit.get("timestamp_seconds"),
+                }
+            )
+            units.append(
+                {
+                    "unit_type": "visual",
+                    "unit_index": (
+                        DENSE_VISUAL_UNIT_INDEX_OFFSET
+                        + (segment_index * DENSE_VISUAL_UNIT_INDEX_STRIDE)
+                        + frame_index
+                    ),
+                    "timestamp_start": dense_visual_unit.get("timestamp_start")
+                    or segment.get("timestamp_start"),
+                    "timestamp_end": dense_visual_unit.get("timestamp_end")
+                    or segment.get("timestamp_end"),
+                    "content_text": content_text,
+                    "transcript": None,
+                    "visual_desc": None,
+                    "visual_type": "frame_embed",
+                    "keyframe_url": uploaded_urls.get(segment_index)
+                    or stored_video.get("thumbnail_url"),
+                    "metadata": metadata,
+                    "embedding": list(embedding),
+                }
+            )
         return units
 
     async def _build_units_from_visual_scene(

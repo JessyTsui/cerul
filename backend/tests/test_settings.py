@@ -24,6 +24,7 @@ BASE_YAML = """
       clip_score_threshold: null
     knowledge:
       scene_threshold: 0.35
+      dense_visual_frames_per_segment: 3
       rerank_top_n: 20
       rerank_prompt_template: default
 """
@@ -48,6 +49,7 @@ def test_load_settings_with_env_overrides(tmp_path: Path) -> None:
     assert settings.public.demo_mode is True
     assert settings.search.mmr_lambda == 0.75
     assert settings.knowledge.download.max_height == 480
+    assert settings.knowledge.dense_visual_frames_per_segment == 3
     assert settings.knowledge.transcription.model == "whisper-1"
 
 
@@ -61,6 +63,7 @@ def test_load_settings_applies_environment_variable_overrides(tmp_path: Path) ->
             "API_BASE_URL": "http://localhost:8000",
             "WEB_BASE_URL": "http://localhost:3000",
             "CERUL__KNOWLEDGE__RERANK_TOP_N": "42",
+            "CERUL__KNOWLEDGE__DENSE_VISUAL_FRAMES_PER_SEGMENT": "5",
             "CERUL__KNOWLEDGE__DOWNLOAD__MAX_HEIGHT": "360",
             "CERUL__KNOWLEDGE__TRANSCRIPTION__MODEL": "custom-whisper",
             "ASR_BASE_URL": "https://transcribe.example.com/v1",
@@ -74,6 +77,7 @@ def test_load_settings_applies_environment_variable_overrides(tmp_path: Path) ->
 
     assert settings.search.mmr_lambda == 0.55
     assert settings.knowledge.rerank_top_n == 42
+    assert settings.knowledge.dense_visual_frames_per_segment == 5
     assert settings.knowledge.rerank_model == "gpt-4o-mini"
     assert settings.knowledge.download.max_height == 360
     assert settings.knowledge.transcription.model == "custom-whisper"

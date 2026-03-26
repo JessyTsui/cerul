@@ -25,6 +25,7 @@ from workers.knowledge.runtime import (
 )
 from workers.knowledge.steps import (
     AnalyzeKnowledgeFramesStep,
+    DenseVisualEmbedStep,
     DetectKnowledgeScenesStep,
     DownloadKnowledgeVideoStep,
     EmbedKnowledgeSegmentsStep,
@@ -35,6 +36,7 @@ from workers.knowledge.steps import (
     StoreKnowledgeSegmentsStep,
     TranscribeKnowledgeVideoStep,
 )
+from workers.knowledge.steps.dense_visual_embed import compute_dense_visual_timestamps
 from workers.knowledge.steps.embed import compute_embedding_frame_timestamps
 
 
@@ -1140,6 +1142,7 @@ def test_analyze_knowledge_frames_step_batches_annotations_across_scenes(
         frame_analyzer=HeuristicFrameAnalyzer(
             annotation_backend=ConcurrentRecordingFrameAnnotator(delay_seconds=0.03),
             annotation_concurrency=2,
+            max_annotated_frames_per_video=20,
         )
     )
     analyzer = step._frame_analyzer
@@ -1329,7 +1332,10 @@ def test_heuristic_frame_analyzer_annotates_short_visual_scenes_even_without_tex
     frame_one.write_bytes(b"frame-one")
     frame_two.write_bytes(b"frame-two")
     annotator = RecordingFrameAnnotator()
-    analyzer = HeuristicFrameAnalyzer(annotation_backend=annotator)
+    analyzer = HeuristicFrameAnalyzer(
+        annotation_backend=annotator,
+        max_annotated_frames_per_video=20,
+    )
 
     with (
         patch.object(
@@ -1640,6 +1646,106 @@ def test_embed_knowledge_segments_step_runs_embeddings_concurrently() -> None:
 
     assert len(context.data["segment_embeddings"]) == 6
     assert backend.peak > 1
+
+
+def test_compute_dense_visual_timestamps_spreads_frames_evenly() -> None:
+    assert compute_dense_visual_timestamps(10.0, 20.0, count=1) == [15.0]
+    assert compute_dense_visual_timestamps(10.0, 20.0, count=3) == [12.5, 15.0, 17.5]
+    assert compute_dense_visual_timestamps(20.0, 20.0, count=3) == [20.0]
+
+
+def test_dense_visual_embed_step_builds_multimodal_units(
+    tmp_path: Path,
+) -> None:
+    backend = FakeMultimodalEmbeddingBackend()
+    video_path = tmp_path / "demo.mp4"
+    video_path.write_bytes(b"video")
+    extracted_frames: list[Path] = []
+
+    async def fake_extract(
+        video_path: str | Path,
+        timestamp_seconds: float,
+        output_path: Path,
+        *,
+        scale: str = "640:360",
+    ) -> Path:
+        del scale
+        assert Path(video_path).name == "demo.mp4"
+        assert any(abs(timestamp_seconds - expected) < 0.01 for expected in (13.333, 16.667))
+        output_path.write_bytes(b"frame")
+        extracted_frames.append(output_path)
+        return output_path
+
+    step = DenseVisualEmbedStep(
+        embedding_backend=backend,
+        frames_per_segment=2,
+    )
+    context = PipelineContext(
+        data={
+            "video_path": str(video_path),
+            "video_metadata": {"title": "Dense Visual Demo"},
+            "segments": [
+                {
+                    "segment_index": 0,
+                    "title": "Agents",
+                    "transcript_text": "agents coordinate retrieval with tool calls",
+                    "timestamp_start": 10.0,
+                    "timestamp_end": 20.0,
+                    "metadata": {},
+                }
+            ],
+        }
+    )
+
+    with patch(
+        "workers.knowledge.steps.dense_visual_embed.extract_dense_visual_frame",
+        AsyncMock(side_effect=fake_extract),
+    ):
+        asyncio.run(step.run(context))
+
+    dense_visual_units = context.data["dense_visual_units"]
+    assert len(dense_visual_units) == 2
+    assert context.data["dense_visual_unit_count"] == 2
+    assert context.data["segments"][0]["metadata"]["dense_visual_frame_count"] == 2
+    assert [unit["frame_index"] for unit in dense_visual_units] == [0, 1]
+    assert all(unit["metadata"]["dense_visual"] is True for unit in dense_visual_units)
+    assert all(Path(unit["frame_path"]).exists() for unit in dense_visual_units)
+    assert backend.multimodal_calls == [
+        ("Dense Visual Demo\nagents coordinate retrieval with tool calls", [str(path)])
+        for path in extracted_frames
+    ]
+
+
+def test_dense_visual_embed_step_skips_when_backend_has_no_multimodal_support(
+    tmp_path: Path,
+) -> None:
+    video_path = tmp_path / "demo.mp4"
+    video_path.write_bytes(b"video")
+    step = DenseVisualEmbedStep(
+        embedding_backend=FakeEmbeddingBackend(),
+        frames_per_segment=2,
+    )
+    context = PipelineContext(
+        data={
+            "video_path": str(video_path),
+            "video_metadata": {"title": "Dense Visual Demo"},
+            "segments": [
+                {
+                    "segment_index": 0,
+                    "title": "Agents",
+                    "transcript_text": "agents coordinate retrieval with tool calls",
+                    "timestamp_start": 10.0,
+                    "timestamp_end": 20.0,
+                    "metadata": {},
+                }
+            ],
+        }
+    )
+
+    asyncio.run(step.run(context))
+
+    assert context.data["dense_visual_units"] == []
+    assert context.data["dense_visual_unit_count"] == 0
 
 
 def test_store_knowledge_segments_step_persists_video_and_segments() -> None:

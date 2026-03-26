@@ -12,6 +12,7 @@ search:
 
 knowledge:
   scene_threshold: 0.35
+  dense_visual_frames_per_segment: 3
   rerank_top_n: 30
   rerank_model: jina-reranker-v3
   rerank_prompt_template: default

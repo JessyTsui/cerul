@@ -56,7 +56,7 @@ class IndexingConfig:
 
     # Frame annotation budget.
     max_annotated_frames_per_scene: int = 1
-    max_annotated_frames_per_video: int = 20
+    max_annotated_frames_per_video: int = 0
 
     # Short video annotation bias (seconds).
     short_video_annotate_bias_seconds: float = 180.0
@@ -82,7 +82,7 @@ class IndexingConfig:
             parts.append(f"info={self.max_informative_frames}")
         if self.max_annotated_frames_per_scene != 1:
             parts.append(f"ann/sc={self.max_annotated_frames_per_scene}")
-        if self.max_annotated_frames_per_video != 20:
+        if self.max_annotated_frames_per_video != 0:
             parts.append(f"ann/vid={self.max_annotated_frames_per_video}")
         if self.skin_ratio_threshold != 0.45:
             parts.append(f"skin={self.skin_ratio_threshold}")

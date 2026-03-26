@@ -124,6 +124,7 @@ class KnowledgeSettings(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     scene_threshold: float = Field(ge=0.0, le=1.0)
+    dense_visual_frames_per_segment: int = Field(default=3, ge=0, le=16)
     rerank_top_n: int = Field(gt=0)
     rerank_prompt_template: str
     rerank_model: str = "gpt-4o-mini"

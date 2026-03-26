@@ -391,6 +391,17 @@ def test_youtube_client_requires_api_key() -> None:
             asyncio.run(client.get_video_metadata("abc123"))
 
 
+def test_youtube_client_prefers_youtube_api_proxy_over_ytdlp_proxy(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("YOUTUBE_API_PROXY", "http://youtube-proxy.example:10001")
+    monkeypatch.setenv("YTDLP_PROXY", "http://ytdlp-proxy.example:10002")
+
+    client = YouTubeClient(api_key="test-key")
+
+    assert client._proxy == "http://youtube-proxy.example:10001"
+
+
 def test_youtube_client_real_api_returns_known_video_metadata() -> None:
     api_key = os.getenv("YOUTUBE_API_KEY", "").strip()
     if not api_key:

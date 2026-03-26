@@ -198,6 +198,18 @@ def test_unified_pipeline_transforms_knowledge_segments_into_retrieval_units() -
                     "embedding": [0.11, 0.22, 0.33],
                 }
             ],
+            "dense_visual_units": [
+                {
+                    "segment_index": 0,
+                    "frame_index": 0,
+                    "timestamp_seconds": 24.0,
+                    "timestamp_start": 12.0,
+                    "timestamp_end": 48.0,
+                    "content_text": "AGI Timeline\nAGI is coming sooner than most people expect.",
+                    "embedding": [0.7, 0.8, 0.9],
+                    "metadata": {"dense_visual": True},
+                }
+            ],
         },
         completed_steps=["StoreKnowledgeSegmentsStep"],
     )
@@ -208,7 +220,7 @@ def test_unified_pipeline_transforms_knowledge_segments_into_retrieval_units() -
     with patch(
         "workers.unified.pipeline.KnowledgeIndexingPipeline",
         return_value=mocked_pipeline,
-    ):
+    ) as mocked_pipeline_cls:
         context = run_async(
             pipeline.run(
                 url="https://www.youtube.com/watch?v=abc123xyz00",
@@ -225,23 +237,31 @@ def test_unified_pipeline_transforms_knowledge_segments_into_retrieval_units() -
     stored_units = repository.units_by_video_id[stored_video["id"]]
 
     kwargs = mocked_pipeline.run.await_args.kwargs
+    constructor_kwargs = mocked_pipeline_cls.call_args.kwargs
     assert kwargs["video_id"] == "abc123xyz00"
     assert kwargs["job_id"] == "job-123"
     assert kwargs["conf"]["scene_threshold"] == 0.2
     assert "step_timeouts" in kwargs["conf"]
     assert "step_timeout_guidance" in kwargs["conf"]
+    assert constructor_kwargs["frame_analyzer"] is pipeline._frame_analyzer
+    assert constructor_kwargs["scene_detector"] is pipeline._scene_detector
     assert stored_video["id"] == "video-123"
     assert repository.access_by_video_id["video-123"] == {"user-123"}
-    assert [unit["unit_type"] for unit in stored_units] == ["summary", "speech", "visual"]
+    assert [unit["unit_type"] for unit in stored_units] == [
+        "summary",
+        "speech",
+        "visual",
+        "visual",
+    ]
     assert stored_units[0]["content_text"] == (
         "LLM summary about agent workflows, slide evidence, and the main claim."
     )
     assert stored_units[0]["metadata"]["summary_source"] == "gemini_flash"
     assert stored_units[0]["keyframe_url"] == "https://img.youtube.com/vi/abc123xyz00/hqdefault.jpg"
-    assert context.data["indexed_unit_count"] == 3
+    assert context.data["indexed_unit_count"] == 4
     assert context.data["job_artifacts"] == {
         "video_id": "video-123",
-        "units_created": 3,
+        "units_created": 4,
         "source": "youtube",
     }
     assert stored_units[1]["embedding"] == [0.11, 0.22, 0.33]
@@ -249,8 +269,12 @@ def test_unified_pipeline_transforms_knowledge_segments_into_retrieval_units() -
     assert stored_units[2]["embedding"] == [0.11, 0.22, 0.33]
     assert stored_units[2]["metadata"]["embedding_source"] == "segment"
     assert stored_units[2]["keyframe_url"] == "https://img.youtube.com/vi/abc123xyz00/hqdefault.jpg"
+    assert stored_units[3]["unit_index"] == 1000
+    assert stored_units[3]["visual_type"] == "frame_embed"
+    assert stored_units[3]["metadata"]["dense_visual"] is True
+    assert stored_units[3]["keyframe_url"] == "https://img.youtube.com/vi/abc123xyz00/hqdefault.jpg"
     assert not any(call[0] == "multimodal" for call in embedding_backend.calls)
-    assert repository.completed_jobs["job-123"]["units_created"] == 3
+    assert repository.completed_jobs["job-123"]["units_created"] == 4
     assert summary_generator.calls[0]["title"] == "AGI Timeline"
 
 
