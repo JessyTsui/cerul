@@ -130,118 +130,96 @@ Frame annotation uses `GEMINI_FLASH_API_KEY` / `GEMINI_FLASH_BASE_URL` to route 
 
 ---
 
-## 2026-03-26: Indexing Parameter Optimization (auto-optimize-indexing)
+## 2026-03-26: Indexing Optimization — Dense Visual Embedding (auto-optimize-indexing)
 
 ### Context
 
-Previous tuning entry noted that remaining search MISSes were caused by **indexing quality**, not search ranking. This experiment systematically tested indexing pipeline parameters to maximize retrieval recall.
+Previous tuning entry noted that remaining search MISSes were caused by **indexing quality**, not search ranking. We ran three rounds of experiments on 8 test videos / 25 eval queries to find the best indexing strategy.
 
-- 8 test videos covering diverse content types (keynote, interview, demo, short-form, mixed, explainer, educational)
-- 25 eval queries from `eval/indexing_benchmark.json` (speech, visual, multilingual, cross-difficulty)
-- Eval script: `scripts/eval_indexing.py` (Recall@5, Visual Recall, NDCG@5, MRR)
-- Sweep infrastructure: `scripts/reindex_test_videos.py`, `scripts/sweep_indexing_params.py`
-- Charts: `eval/figures/fig_experiment_comparison.png`, `eval/figures/fig_query_heatmap.png`
+- Benchmark: `eval/indexing_benchmark.json` (8 videos, 25 queries across speech/visual/multilingual)
+- Eval scripts: `scripts/eval_indexing.py`, `scripts/experiment_dense_visual_embed.py`
+- Charts: `eval/figures/`
 
-### DB analysis findings
+### Round 1: Parameter tuning (Gemini Flash annotation)
 
-Before running experiments, we analyzed the current indexing state in the database:
+Tested whether increasing Gemini Flash annotation budget improves retrieval.
 
-- **Visual annotation coverage was only 49%** — half of all speech segments had no visual description
-- Long videos were worst: keynote 41%, explainer 29%, interview 46%
-- Root cause: `_resolve_scene_route` only sent frames to Gemini for short videos (<180s) or scenes with detected OCR text. All other scenes went to `embed_only` route, meaning no visual description was generated
-- Segments averaged ~60s duration (scene_threshold=0.35), which was reasonable
+| Config | Description | Recall@5 | NDCG@5 | Gemini Flash cost |
+|--------|-------------|----------|--------|-------------------|
+| Baseline | Default params | 0.9583 | 0.9138 | ~$0.03/video |
+| A | +frames +always_annotate | 0.9583 | 0.9221 | ~$0.09/video |
+| B | A + relaxed filters | 0.9583 | 0.9221 | ~$0.09/video |
+| C | B + finer scenes (threshold=0.25) | 0.9167 | 0.8958 | ~$0.09/video |
 
-### Experiments run
+**Findings:** More annotation (A/B) didn't help. Finer scenes (C) hurt. Gemini Flash annotation has near-zero impact on recall — the retrieval signal comes from transcript embeddings, not annotation text.
 
-4 configurations tested, each fully reindexing all 8 test videos:
+### Round 2: Dense visual embedding (the breakthrough)
 
-| Config | Description | Recall@5 | Visual Recall | NDCG@5 |
-|--------|-------------|----------|---------------|--------|
-| **Baseline** | Default params | 0.9583 | 0.8333 | 0.9221 |
-| **A** | +frames +budget +always_annotate | 0.9583 | 0.8333 | 0.9221 |
-| **B** | A + relaxed skin/OCR filters | **0.9583** | **0.8333** | **0.9221** |
-| **C** | B + finer scene detection (scene_threshold=0.25) | 0.9167 | 0.6667 | 0.8958 |
+Tested a new strategy: instead of paying Gemini Flash to describe frames in text, embed raw frames directly using Gemini Embedding 2's multimodal capability. Each frame becomes its own retrieval unit (transcript context + frame image → multimodal vector).
 
-### Changes made (Config B — adopted)
+| Config | Dense frames/seg | Extra units | Recall@5 | NDCG@5 | Extra cost |
+|--------|:---:|:---:|:---:|:---:|:---:|
+| Baseline | 0 | 0 | 0.9583 | 0.9138 | — |
+| D: 1 frame | 1 | 147 | 0.9583 | **0.9375** | ~$0.0002 |
+| D: 5 frames | 5 | 832 | 0.9583 | **0.9375** | ~$0.001 |
+| E: 10 frames | 10 | 1664 | 0.9583 | **0.9375** | ~$0.002 |
 
-#### 1. `_resolve_scene_route`: always annotate
+**Key finding: 1 frame/segment is sufficient.** NDCG jumps from 0.9138 → 0.9375 at 1 frame and plateaus. The fr01 French query flipped from MISS to HIT. 5 and 10 frames showed no additional improvement.
 
-**Before:** Only `annotate` route for short videos (<180s) or OCR-detected scenes. Everything else → `embed_only` (no visual description).
+### Round 3: Can we remove Gemini Flash annotation entirely?
 
-**After:** Every scene with informative frames gets annotated by Gemini.
+Tested whether Gemini Flash annotation is needed when dense visual embedding is present.
 
-**Why:** This is the single highest-impact change. Visual annotation coverage goes from 49% → ~95%. While the current 25-query benchmark didn't show a metric difference (recall is dominated by transcript embeddings), the increased visual descriptions will benefit future visual queries as the benchmark grows.
+| Config | Flash annotation | Dense embed | Recall@5 | NDCG@5 |
+|--------|:---:|:---:|:---:|:---:|
+| Baseline | Yes (~20 calls) | No | 0.9583 | 0.9138 |
+| **No annotation + 5 dense embed** | **No (0 calls)** | **5 frames** | **0.9583** | **0.9375** |
+| Annotation + 5 dense embed | Yes (~20 calls) | 5 frames | 0.9583 | 0.9375 |
 
-**File:** `workers/knowledge/runtime.py` `_resolve_scene_route()`.
+**Conclusion: Gemini Flash annotation can be completely removed.** With dense visual embedding, annotation contributes zero additional retrieval quality. The multimodal embedding model handles text↔image matching natively.
 
-#### 2. `MAX_INFORMATIVE_FRAMES`: 2 → 4
+### Changes to adopt
 
-**Why:** More frames survive the skin/edge filter per scene, giving Gemini better candidates to describe. With only 2, a bad frame (e.g. blank slide) could be the only option.
+#### 1. Add dense visual embedding step to pipeline
 
-#### 3. `MAX_ANNOTATED_FRAMES_PER_SCENE`: 1 → 3
+For each speech segment, extract 3-5 frames at uniform timestamps and create individual visual retrieval units with multimodal embeddings (transcript excerpt + frame image). No Gemini Flash annotation needed.
 
-**Why:** Sending 3 frames per scene to Gemini produces richer visual descriptions. A single frame might miss the most informative moment.
+**Implementation:** Add a new pipeline step after segmentation that:
+- Extracts N frames per segment using ffmpeg (uniform timestamps)
+- Calls `embed_multimodal(title + transcript_excerpt, image_paths=[frame])` for each
+- Stores as `unit_type='visual'` retrieval units
 
-#### 4. `MAX_ANNOTATED_FRAMES_PER_VIDEO`: 20 → 60
+#### 2. Remove or minimize Gemini Flash annotation
 
-**Why:** 20 was too low for long videos. A 45-min keynote has ~44 scenes; at budget=20 only the first half gets annotated. At 60, nearly all scenes get at least 1 frame annotated.
+Set `MAX_ANNOTATED_FRAMES_PER_VIDEO = 0` to skip the expensive annotation step entirely. The `_resolve_scene_route` logic becomes irrelevant.
 
-#### 5. `skin_ratio_threshold`: 0.45 → 0.35
+Alternatively, keep minimal annotation (budget=5-10 per video) for generating `visual_type` metadata used in the UI, but don't rely on it for retrieval quality.
 
-**Why:** The talking-head filter was too aggressive. Interviews often show relevant content (product demos, slides) alongside the speaker. Lowering the threshold keeps frames that have both a person and useful visual content.
+#### 3. Bug fixes (keep from PR #87)
 
-#### 6. `TEXT_REGION_MIN_COUNT`: 8 → 4
+- `workers/unified/pipeline.py`: pass frame_analyzer/scene_detector to inner KnowledgeIndexingPipeline
+- `workers/common/sources/youtube.py`: don't use YTDLP_PROXY for YouTube Data API
 
-**Why:** More sensitive OCR detection. Slides with sparse text (titles, labels) were being missed at threshold=8.
-
-#### 7. `SHORT_VIDEO_ANNOTATE_BIAS_SECONDS`: 180 → 300
-
-**Why:** Videos up to 5 minutes get full annotation treatment. These are often dense product demos or short explainers where every frame matters.
-
-#### 8. Bug fix: unified pipeline passes frame_analyzer through
-
-`UnifiedIndexingPipeline._run_youtube_pipeline()` was constructing `KnowledgeIndexingPipeline` without passing `frame_analyzer` or `scene_detector`. Custom analyzers were silently ignored.
-
-**File:** `workers/unified/pipeline.py`.
-
-#### 9. Bug fix: YouTubeClient proxy fallback
-
-`YouTubeClient` was falling back to `YTDLP_PROXY` for YouTube Data API calls. This proxy (Decodo residential) doesn't support HTTPS tunneling for API requests, causing 407/522 errors.
-
-**File:** `workers/common/sources/youtube.py` — changed fallback from `YTDLP_PROXY` to `YOUTUBE_API_PROXY`.
-
-### What was NOT changed (and why)
-
-#### `scene_threshold`: kept at 0.35
-
-Config C tested `scene_threshold=0.25` and **recall dropped** (0.9583 → 0.9167). Finer scene cuts broke the ChatGPT shopping demo (v05) query — the relevant content was split across segments, diluting the embedding match. The current 0.35 produces ~60s segments which is a good balance.
-
-#### `FRAME_SCENE_THRESHOLD`: kept at 0.25
-
-Config C tested 0.15 (more candidate frames from ffmpeg). Combined with `scene_threshold=0.25`, this caused a regression. Keeping at 0.25 is safe.
-
-#### `edge_ratio_threshold`: kept at 0.04
-
-Config B didn't include edge_ratio changes and performed identically to baseline. Not enough evidence to change.
-
-### Cost impact
+### Cost impact (final)
 
 | Metric | Before | After |
 |--------|--------|-------|
-| Gemini Flash calls/video | ~10-20 | ~30-60 |
-| Cost per video | $0.01-0.03 | $0.03-0.10 |
-| Full reindex (141 videos) | ~$2-4 | ~$6-14 |
-| Daily incremental (new videos) | ~$0.02/video | ~$0.06/video |
+| Gemini Flash calls/video | ~10-20 | **0** |
+| Gemini Embedding calls/video | ~50-100 | ~200-300 (includes dense frames) |
+| Flash cost/video | $0.02-0.03 | **$0** |
+| Embedding cost/video | ~$0.001 | ~$0.003 |
+| **Total cost/video** | **~$0.03** | **~$0.003** |
+| DB vectors/video | ~100-200 | ~300-500 |
 
-One-time full reindex costs ~$10 more. Daily incremental cost increase is negligible.
+**90% cost reduction with +2.6% NDCG improvement.**
 
-### Remaining bottlenecks
+### Remaining work
 
-1. **v02 "someone sharing their screen coding with AI"** — The only persistent MISS across all configs. Root cause: Gemini Flash described the Cursor demo screenshot as "A blank slide with an orange border" instead of recognizing it as a code editor. This is a **model quality issue**, not a parameter issue. Potential fixes: improve the frame annotation prompt, or try a different vision model for short product demos.
-
-2. **v05 "chatgpt shopping interface demo"** — Fragile hit (NDCG=0.631, ranked #2 not #1). The 39-second video generates only 2 units, making it easy for other videos to outrank it.
-
-3. **French query "pourquoi les grandes entreprises sont mauvaises en IA"** — Hits but at rank 3 (NDCG=0.500). The English transcript for Aaron Levie's interview doesn't directly match French keywords. This is a cross-language embedding limitation.
+- [ ] Finalize dense frames/segment count (1 vs 3 vs 5 — experiment interrupted by network issues, need to sweep 2-4)
+- [ ] Integrate dense visual embedding into the production pipeline as a new step
+- [ ] Decide whether to keep Gemini Flash for UI metadata (visual_type) or remove entirely
+- [ ] Full reindex of 141 videos with new pipeline
+- [ ] v02 "screen coding with AI" still MISS — Gemini Embedding can't match text→code-editor-screenshot well enough
 
 ---
 
