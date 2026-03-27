@@ -1,0 +1,37 @@
+name = "cerul-api"
+main = "src/index.ts"
+compatibility_date = "2026-03-27"
+compatibility_flags = ["nodejs_compat"]
+workers_dev = true
+
+[vars]
+CERUL_ENV = "development"
+API_BASE_URL = "http://localhost:8787"
+WEB_BASE_URL = "http://localhost:3000"
+DEMO_MODE = "true"
+EMBEDDING_BACKEND = "gemini"
+EMBEDDING_MODEL = "gemini-embedding-2-preview"
+EMBEDDING_DIMENSION = "3072"
+EMBEDDING_NORMALIZE = "true"
+RERANK_MODEL = "jina-reranker-v3"
+R2_BUCKET_NAME = "cerul-cdn"
+R2_PUBLIC_URL = ""
+
+# Secrets should be set with `wrangler secret put`.
+# DATABASE_URL
+# BETTER_AUTH_SECRET
+# ADMIN_CONSOLE_EMAILS
+# OPENAI_API_KEY
+# GEMINI_API_KEY
+# JINA_API_KEY
+# STRIPE_SECRET_KEY
+# STRIPE_WEBHOOK_SECRET
+# STRIPE_PRO_PRICE_ID
+# YOUTUBE_API_KEY
+# PEXELS_API_KEY
+# PIXABAY_API_KEY
+
+[[r2_buckets]]
+binding = "QUERY_IMAGES_BUCKET"
+bucket_name = "cerul-cdn"
+preview_bucket_name = "cerul-cdn"

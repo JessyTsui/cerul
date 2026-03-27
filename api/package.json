@@ -1,0 +1,24 @@
+{
+  "name": "cerul-api-workers",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=20.9.0"
+  },
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "check": "tsc --project tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@neondatabase/serverless": "^1.0.1",
+    "hono": "^4.10.5",
+    "stripe": "^18.3.0"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20260320.0",
+    "typescript": "^5.9.3",
+    "wrangler": "^4.12.0"
+  }
+}
