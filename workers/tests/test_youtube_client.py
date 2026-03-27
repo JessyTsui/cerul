@@ -1,10 +1,13 @@
 import asyncio
 import os
+from pathlib import Path
 from unittest.mock import patch
 
 import pytest
 
+import workers.common.sources.youtube as youtube_module
 from workers.common.sources import YouTubeClient
+from workers.common.sources.youtube import resolve_ytdlp_cookies_file
 
 
 class FakeResponse:
@@ -400,6 +403,18 @@ def test_youtube_client_prefers_youtube_api_proxy_over_ytdlp_proxy(
     client = YouTubeClient(api_key="test-key")
 
     assert client._proxy == "http://youtube-proxy.example:10001"
+
+
+def test_resolve_ytdlp_cookies_file_uses_default_container_path(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    cookies_path = tmp_path / "cookies.txt"
+    cookies_path.write_text("# Netscape HTTP Cookie File\n", encoding="utf-8")
+    monkeypatch.delenv("YTDLP_COOKIES_FILE", raising=False)
+    monkeypatch.setattr(youtube_module, "DEFAULT_YTDLP_COOKIES_FILE", cookies_path)
+
+    assert resolve_ytdlp_cookies_file() == str(cookies_path)
 
 
 def test_youtube_client_real_api_returns_known_video_metadata() -> None:

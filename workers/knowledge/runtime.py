@@ -22,6 +22,7 @@ from urllib.parse import urlparse
 import httpx
 
 from backend.app.config import get_settings
+from workers.common.sources.youtube import resolve_ytdlp_cookies_file
 
 DEFAULT_OPENAI_BASE_URL = "https://api.openai.com/v1"
 DEFAULT_TRANSCRIPTION_MODEL = "whisper-1"
@@ -532,10 +533,12 @@ class YtDlpCaptionProvider:
         *,
         command: str | None = None,
         proxy_url: str | None = None,
+        cookies_file: str | None = None,
         logger: logging.Logger | None = None,
     ) -> None:
         self._command = (command or os.getenv("YTDLP_BIN") or "yt-dlp").strip() or "yt-dlp"
         self._proxy_url = _resolve_ytdlp_proxy(proxy_url)
+        self._cookies_file = resolve_ytdlp_cookies_file(cookies_file)
         self._logger = logger or logging.getLogger(__name__)
 
     async def resolve_transcript_segments(
@@ -571,8 +574,13 @@ class YtDlpCaptionProvider:
             str(output_template),
             source,
         ]
+        network_args: list[str] = []
         if self._proxy_url is not None:
-            command[1:1] = ["--proxy", self._proxy_url]
+            network_args.extend(["--proxy", self._proxy_url])
+        if self._cookies_file is not None:
+            network_args.extend(["--cookies", self._cookies_file])
+        if network_args:
+            command[1:1] = network_args
 
         try:
             completed = await self._run_command(command)
@@ -666,6 +674,7 @@ class YtDlpVideoDownloader:
         *,
         command: str | None = None,
         proxy_url: str | None = None,
+        cookies_file: str | None = None,
         max_height: int | None = None,
         fallback_downloader: KnowledgeVideoDownloader | None = None,
         logger: logging.Logger | None = None,
@@ -673,6 +682,7 @@ class YtDlpVideoDownloader:
         download_settings = get_settings().knowledge.download
         self._command = (command or os.getenv("YTDLP_BIN") or "yt-dlp").strip() or "yt-dlp"
         self._proxy_url = _resolve_ytdlp_proxy(proxy_url)
+        self._cookies_file = resolve_ytdlp_cookies_file(cookies_file)
         resolved_max_height = max_height if max_height is not None else download_settings.max_height
         self._max_height = max(int(resolved_max_height), 1)
         self._fallback_downloader = fallback_downloader or HttpVideoDownloader()
@@ -714,8 +724,13 @@ class YtDlpVideoDownloader:
             str(output_template),
             source,
         ]
+        network_args: list[str] = []
         if self._proxy_url is not None:
-            command[1:1] = ["--proxy", self._proxy_url]
+            network_args.extend(["--proxy", self._proxy_url])
+        if self._cookies_file is not None:
+            network_args.extend(["--cookies", self._cookies_file])
+        if network_args:
+            command[1:1] = network_args
 
         try:
             completed = await self._run_command(command)

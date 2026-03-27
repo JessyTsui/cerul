@@ -2,6 +2,7 @@ import os
 import re
 import xml.etree.ElementTree as ET
 from collections.abc import Sequence
+from pathlib import Path
 from typing import Any
 
 import httpx
@@ -15,6 +16,29 @@ _DURATION_RE = re.compile(
     r"(?:(?P<seconds>\d+)S)?"
     r")?$"
 )
+DEFAULT_YTDLP_COOKIES_FILE = Path("/app/cookies.txt")
+
+
+def resolve_ytdlp_cookies_file(
+    cookies_file: str | os.PathLike[str] | None = None,
+) -> str | None:
+    for candidate in (
+        cookies_file,
+        os.getenv("YTDLP_COOKIES_FILE"),
+        DEFAULT_YTDLP_COOKIES_FILE,
+    ):
+        if candidate is None:
+            continue
+
+        candidate_value = str(candidate).strip()
+        if not candidate_value:
+            continue
+
+        resolved_path = Path(candidate_value).expanduser()
+        if resolved_path.is_file():
+            return str(resolved_path)
+
+    return None
 
 
 class YouTubeClient:
