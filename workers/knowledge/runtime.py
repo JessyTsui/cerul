@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import hashlib
+import random
 import inspect
 import json
 import logging
@@ -527,6 +528,25 @@ class OpenAICompatibleTranscriber:
         return "verbose_json"
 
 
+def _ytdlp_sleep_range() -> tuple[float, float]:
+    """Return (min, max) seconds to sleep before each yt-dlp call."""
+    raw = os.getenv("YTDLP_SLEEP_RANGE", "1,3").strip()
+    parts = raw.split(",", 1)
+    try:
+        lo = float(parts[0])
+        hi = float(parts[1]) if len(parts) > 1 else lo * 2
+    except (ValueError, IndexError):
+        lo, hi = 1.0, 3.0
+    return (min(lo, hi), max(lo, hi))
+
+
+async def _ytdlp_random_delay(logger: logging.Logger) -> None:
+    lo, hi = _ytdlp_sleep_range()
+    delay = random.uniform(lo, hi)
+    logger.debug("yt-dlp rate-limit delay: %.1fs", delay)
+    await asyncio.sleep(delay)
+
+
 class YtDlpCaptionProvider:
     def __init__(
         self,
@@ -611,6 +631,7 @@ class YtDlpCaptionProvider:
         )
 
     async def _run_command(self, command: Sequence[str]) -> subprocess.CompletedProcess[str]:
+        await _ytdlp_random_delay(self._logger)
         return await asyncio.to_thread(
             subprocess.run,
             list(command),
@@ -764,6 +785,7 @@ class YtDlpVideoDownloader:
         )
 
     async def _run_command(self, command: Sequence[str]) -> subprocess.CompletedProcess[str]:
+        await _ytdlp_random_delay(self._logger)
         return await asyncio.to_thread(
             subprocess.run,
             list(command),
