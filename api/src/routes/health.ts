@@ -7,6 +7,7 @@ export function createHealthRouter(): any {
     c.json({
       status: "ok",
       service: "cerul-api",
+      version: "0.0.1",
       timestamp: new Date().toISOString()
     })
   );
