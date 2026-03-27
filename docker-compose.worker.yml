@@ -1,10 +1,12 @@
 services:
   worker:
-    build:
-      context: .
-      dockerfile: Dockerfile
-      args:
-        YTDLP_VERSION: ${YTDLP_VERSION:-2025.06.09}
+    image: ghcr.io/jessytsui/cerul/worker:${WORKER_VERSION:-latest}
+    # Build locally instead of pulling a published image:
+    # build:
+    #   context: .
+    #   dockerfile: Dockerfile
+    #   args:
+    #     YTDLP_VERSION: ${YTDLP_VERSION:-2025.06.09}
     env_file:
       - .env
     environment:

@@ -59,6 +59,21 @@ jobs:
       - run: pnpm --dir frontend install --frozen-lockfile
       - run: pnpm --dir frontend test
 
+  api-typecheck:
+    name: API Type Check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: api/package-lock.json
+      - run: npm ci
+        working-directory: api
+      - run: npx tsc --noEmit
+        working-directory: api
+
   backend-test:
     name: Backend Test
     runs-on: ubuntu-latest
@@ -116,3 +131,17 @@ jobs:
             workers/requirements-test.txt
       - run: pip install -r workers/requirements-test.txt
       - run: python -m pytest workers/tests -v
+
+  docker-build-test:
+    name: Docker Build Test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: false
+          tags: cerul-worker:test
+          cache-from: type=gha
+          cache-to: type=gha,mode=max

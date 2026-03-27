@@ -3,19 +3,22 @@ main = "src/index.ts"
 compatibility_date = "2026-03-27"
 compatibility_flags = ["nodejs_compat"]
 workers_dev = true
+routes = [
+  { pattern = "api.cerul.ai", custom_domain = true }
+]
 
 [vars]
-CERUL_ENV = "development"
-API_BASE_URL = "http://localhost:8787"
-WEB_BASE_URL = "http://localhost:3000"
-DEMO_MODE = "true"
+CERUL_ENV = "production"
+API_BASE_URL = "https://api.cerul.ai"
+WEB_BASE_URL = "https://cerul.ai"
+DEMO_MODE = "false"
 EMBEDDING_BACKEND = "gemini"
 EMBEDDING_MODEL = "gemini-embedding-2-preview"
 EMBEDDING_DIMENSION = "3072"
 EMBEDDING_NORMALIZE = "true"
 RERANK_MODEL = "jina-reranker-v3"
 R2_BUCKET_NAME = "cerul-cdn"
-R2_PUBLIC_URL = ""
+R2_PUBLIC_URL = "https://cdn.cerul.ai"
 
 # Secrets should be set with `wrangler secret put`.
 # DATABASE_URL
@@ -32,6 +35,30 @@ R2_PUBLIC_URL = ""
 # PIXABAY_API_KEY
 
 [[r2_buckets]]
+binding = "QUERY_IMAGES_BUCKET"
+bucket_name = "cerul-cdn"
+preview_bucket_name = "cerul-cdn"
+
+[env.staging]
+name = "cerul-api-staging"
+routes = [
+  { pattern = "staging-api.cerul.ai", custom_domain = true }
+]
+
+[env.staging.vars]
+CERUL_ENV = "staging"
+API_BASE_URL = "https://staging-api.cerul.ai"
+WEB_BASE_URL = "https://cerul.ai"
+DEMO_MODE = "false"
+EMBEDDING_BACKEND = "gemini"
+EMBEDDING_MODEL = "gemini-embedding-2-preview"
+EMBEDDING_DIMENSION = "3072"
+EMBEDDING_NORMALIZE = "true"
+RERANK_MODEL = "jina-reranker-v3"
+R2_BUCKET_NAME = "cerul-cdn"
+R2_PUBLIC_URL = "https://cdn.cerul.ai"
+
+[[env.staging.r2_buckets]]
 binding = "QUERY_IMAGES_BUCKET"
 bucket_name = "cerul-cdn"
 preview_bucket_name = "cerul-cdn"

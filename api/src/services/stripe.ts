@@ -29,7 +29,7 @@ function requireSetting(name: string, value: string | null): string {
 
 function stripeClient(config: AppConfig): any {
   return new Stripe(requireSetting("STRIPE_SECRET_KEY", config.stripe.secretKey), {
-    apiVersion: "2025-02-24.acacia"
+    apiVersion: "2025-08-27.basil"
   });
 }
 

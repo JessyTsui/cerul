@@ -27,3 +27,6 @@ eval/.video_cache/
 eval/*_log.txt
 eval/*_details.json
 eval/*_results.tsv
+
+# CF Workers local secrets
+api/.dev.vars

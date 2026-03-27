@@ -17,8 +17,8 @@
     "stripe": "^18.3.0"
   },
   "devDependencies": {
-    "@cloudflare/workers-types": "^4.20260320.0",
-    "typescript": "^5.9.3",
+    "@cloudflare/workers-types": "^4.20260317.0",
+    "typescript": "^5.8.0",
     "wrangler": "^4.12.0"
   }
 }
