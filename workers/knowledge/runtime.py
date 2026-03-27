@@ -582,7 +582,7 @@ class YtDlpCaptionProvider:
         output_template = output_dir / f"{source_video_id}.%(ext)s"
         command = [
             self._command,
-            "--extractor-args", "youtube:player_client=android",
+            *(["--extractor-args", "youtube:player_client=android"] if self._cookies_file is None else []),
             "--skip-download",
             "--write-subs",
             "--write-auto-subs",
@@ -738,7 +738,7 @@ class YtDlpVideoDownloader:
         command = [
             self._command,
             "--no-playlist",
-            "--extractor-args", "youtube:player_client=android",
+            *(["--extractor-args", "youtube:player_client=android"] if self._cookies_file is None else []),
             "--format",
             format_selector,
             "--output",
