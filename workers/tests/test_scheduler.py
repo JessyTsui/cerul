@@ -456,7 +456,7 @@ def test_apply_llm_relevance_filter_keeps_selected_videos() -> None:
     result = asyncio.run(scheduler._apply_llm_relevance_filter(source, videos))
 
     assert [video["source_video_id"] for video in result] == ["b", "c"]
-    assert gemini_client.models.calls[0]["model"] == "gemini-2.5-flash-preview-05-20"
+    assert gemini_client.models.calls[0]["model"] == "gemini-3.1-flash-lite-preview"
     assert gemini_client.models.calls[0]["config"] == {"temperature": 0}
     assert "Videos about AI agents and developer tooling" in str(
         gemini_client.models.calls[0]["contents"]
