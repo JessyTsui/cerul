@@ -691,6 +691,81 @@ def test_ytdlp_video_downloader_reads_proxy_from_env(
     assert captured["command"][1:3] == ["--proxy", "http://proxy.example:10001"]
 
 
+def test_ytdlp_caption_provider_reads_cookies_file_from_env(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    cookies_path = tmp_path / "cookies.txt"
+    cookies_path.write_text("# Netscape HTTP Cookie File\n", encoding="utf-8")
+    monkeypatch.setenv("YTDLP_COOKIES_FILE", str(cookies_path))
+    provider = YtDlpCaptionProvider(command="yt-dlp-test")
+    captured: dict[str, list[str]] = {}
+
+    async def fake_run_command(command: list[str]) -> subprocess.CompletedProcess[str]:
+        captured["command"] = command
+        (tmp_path / "openai-devday.en.vtt").write_text(
+            "WEBVTT\n\n00:00:00.000 --> 00:00:02.000\nhello team\n",
+            encoding="utf-8",
+        )
+        return subprocess.CompletedProcess(command, 0, "", "")
+
+    provider._run_command = fake_run_command  # type: ignore[method-assign]
+
+    segments = asyncio.run(
+        provider.resolve_transcript_segments(
+            {
+                "source_video_id": "openai-devday",
+                "source_url": "https://www.youtube.com/watch?v=openai-devday",
+                "duration_seconds": 2,
+            },
+            tmp_path,
+        )
+    )
+
+    assert segments is not None
+    cookies_index = captured["command"].index("--cookies")
+    assert captured["command"][cookies_index + 1] == str(cookies_path)
+
+
+def test_ytdlp_video_downloader_reads_cookies_file_from_env(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    cookies_path = tmp_path / "cookies.txt"
+    cookies_path.write_text("# Netscape HTTP Cookie File\n", encoding="utf-8")
+    monkeypatch.setenv("YTDLP_COOKIES_FILE", str(cookies_path))
+    downloader = YtDlpVideoDownloader(command="yt-dlp-test")
+    captured: dict[str, list[str]] = {}
+
+    async def fake_run_command(command: list[str]) -> object:
+        captured["command"] = command
+        (tmp_path / "youtube_openai-devday.mp4").write_bytes(b"video")
+
+        class CompletedProcess:
+            returncode = 0
+            stdout = ""
+            stderr = ""
+
+        return CompletedProcess()
+
+    downloader._run_command = fake_run_command  # type: ignore[method-assign]
+
+    downloaded_path = asyncio.run(
+        downloader.download_video(
+            {
+                "source": "youtube",
+                "source_video_id": "openai-devday",
+                "source_url": "https://www.youtube.com/watch?v=openai-devday",
+            },
+            tmp_path,
+        )
+    )
+
+    assert Path(str(downloaded_path)).exists()
+    cookies_index = captured["command"].index("--cookies")
+    assert captured["command"][cookies_index + 1] == str(cookies_path)
+
+
 def test_ytdlp_video_downloader_applies_configured_height_ceiling(
     tmp_path: Path,
 ) -> None:
@@ -729,6 +804,49 @@ def test_ytdlp_video_downloader_applies_configured_height_ceiling(
         "/best[height<=360]"
         "/best"
     )
+
+
+def test_ytdlp_video_downloader_applies_proxy_before_cookies(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    cookies_path = tmp_path / "cookies.txt"
+    cookies_path.write_text("# Netscape HTTP Cookie File\n", encoding="utf-8")
+    monkeypatch.setenv("YTDLP_PROXY", "http://proxy.example:10001")
+    monkeypatch.setenv("YTDLP_COOKIES_FILE", str(cookies_path))
+    downloader = YtDlpVideoDownloader(command="yt-dlp-test")
+    captured: dict[str, list[str]] = {}
+
+    async def fake_run_command(command: list[str]) -> object:
+        captured["command"] = command
+        (tmp_path / "youtube_openai-devday.mp4").write_bytes(b"video")
+
+        class CompletedProcess:
+            returncode = 0
+            stdout = ""
+            stderr = ""
+
+        return CompletedProcess()
+
+    downloader._run_command = fake_run_command  # type: ignore[method-assign]
+
+    asyncio.run(
+        downloader.download_video(
+            {
+                "source": "youtube",
+                "source_video_id": "openai-devday",
+                "source_url": "https://www.youtube.com/watch?v=openai-devday",
+            },
+            tmp_path,
+        )
+    )
+
+    assert captured["command"][1:5] == [
+        "--proxy",
+        "http://proxy.example:10001",
+        "--cookies",
+        str(cookies_path),
+    ]
 
 
 def test_transcribe_knowledge_video_step_normalizes_segments() -> None:
