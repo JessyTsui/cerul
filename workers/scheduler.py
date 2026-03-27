@@ -27,7 +27,7 @@ from workers.common.storage import R2FrameUploader
 
 logger = logging.getLogger(__name__)
 
-DEFAULT_GEMINI_FLASH_MODEL = "gemini-2.5-flash-preview-05-20"
+DEFAULT_GEMINI_FLASH_MODEL = "gemini-3.1-flash-lite-preview"
 YOUTUBE_SEARCH_RELEVANCE_PROMPT_TEMPLATE = """You are filtering YouTube search results for a video index.
 
 Target topic:
