@@ -705,8 +705,9 @@ export class UnifiedIndexService {
         }
         return;
       }
-      if (hostname.includes(":")) {
-        if (isPrivateIpv6(hostname)) {
+      if (hostname.startsWith("[") || hostname.includes(":")) {
+        const bare = hostname.replace(/^\[|\]$/g, "");
+        if (isPrivateIpv6(bare)) {
           apiError(422, "Direct video URLs must resolve to public internet addresses.");
         }
         return;
