@@ -1,6 +1,6 @@
 services:
   worker:
-    image: ghcr.io/jessytsui/cerul/worker:v0.0.1
+    image: ghcr.io/jessytsui/cerul/worker:${WORKER_VERSION:-latest}
     # Build locally instead of pulling a published image:
     # build:
     #   context: .
