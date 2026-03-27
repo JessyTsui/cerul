@@ -15,6 +15,9 @@ RUN curl -fL "https://github.com/yt-dlp/yt-dlp/releases/download/${YTDLP_VERSION
     -o /usr/local/bin/yt-dlp \
     && chmod +x /usr/local/bin/yt-dlp
 
+# Deno runtime required by yt-dlp 2026+ for YouTube signature extraction
+RUN curl -fsSL https://deno.land/install.sh | DENO_INSTALL=/usr/local sh
+
 WORKDIR /app
 
 COPY backend/requirements.txt backend/requirements.txt
