@@ -65,7 +65,7 @@ export type AdminSummary = {
   };
   requestSeries: AdminSummaryPoint[];
   contentSeries: AdminSummaryPoint[];
-  ingestionSeries: AdminSummaryPoint[];
+  workersSeries: AdminSummaryPoint[];
   notices: AdminNotice[];
 };
 
@@ -185,6 +185,10 @@ export type AdminFailedJob = {
   track: string;
   jobType: string;
   sourceId: string | null;
+  sourceName: string | null;
+  sourceSlug: string | null;
+  videoId: string | null;
+  videoUrl: string | null;
   errorMessage: string | null;
   attempts: number;
   maxAttempts: number;
@@ -197,7 +201,7 @@ export type AdminFailedStep = {
   lastFailedAt: string | null;
 };
 
-export type AdminIngestionSummary = {
+export type AdminWorkersSummary = {
   generatedAt: string;
   window: AdminWindow;
   metrics: {
@@ -251,6 +255,28 @@ export type AdminMetricTargetInput = {
   comparisonMode: AdminTargetComparisonMode;
   targetValue: number;
   note: string | null;
+};
+
+export type WorkerNodeStatus = "online" | "stale" | "offline";
+
+export type AdminWorkerNode = {
+  workerId: string;
+  hostname: string;
+  pid: number | null;
+  slots: number;
+  status: WorkerNodeStatus;
+  startedAt: string;
+  lastHeartbeat: string;
+  activeJobs: number;
+  completed24h: number;
+  failed24h: number;
+  avgDurationMs24h: number | null;
+  metadata: Record<string, unknown>;
+};
+
+export type AdminWorkerNodesResponse = {
+  generatedAt: string;
+  nodes: AdminWorkerNode[];
 };
 
 export type AdminWorkerStep = {
@@ -387,6 +413,8 @@ export type AdminSourceAnalytics = {
   jobsCreated: number;
   jobsCompleted: number;
   jobsFailed: number;
+  running: number;
+  backlog: number;
   prevJobsCreated: number;
   prevJobsCompleted: number;
   prevJobsFailed: number;
@@ -612,6 +640,9 @@ function buildRangeQuery(range: AdminRange): string {
 export function normalizeAdminSummary(payload: unknown): AdminSummary {
   const raw = ensureObject(payload, "Invalid admin summary response.");
   const metrics = ensureObject(raw.metrics, "Admin summary is missing metrics.");
+  const workerSeriesPayload = Array.isArray(raw.workers_series)
+    ? raw.workers_series
+    : raw.ingestion_series;
 
   return {
     generatedAt: typeof raw.generated_at === "string" ? raw.generated_at : "",
@@ -630,7 +661,7 @@ export function normalizeAdminSummary(payload: unknown): AdminSummary {
     },
     requestSeries: normalizeSummaryPoints(raw.request_series),
     contentSeries: normalizeSummaryPoints(raw.content_series),
-    ingestionSeries: normalizeSummaryPoints(raw.ingestion_series),
+    workersSeries: normalizeSummaryPoints(workerSeriesPayload),
     notices: Array.isArray(raw.notices) ? raw.notices.map((item) => normalizeNotice(item)) : [],
   };
 }
@@ -762,10 +793,10 @@ export function normalizeAdminContentSummary(payload: unknown): AdminContentSumm
   };
 }
 
-export function normalizeAdminIngestionSummary(payload: unknown): AdminIngestionSummary {
-  const raw = ensureObject(payload, "Invalid admin ingestion response.");
-  const metrics = ensureObject(raw.metrics, "Admin ingestion summary is missing metrics.");
-  const statusCounts = ensureObject(raw.status_counts, "Admin ingestion status counts are missing.");
+export function normalizeAdminWorkersSummary(payload: unknown): AdminWorkersSummary {
+  const raw = ensureObject(payload, "Invalid admin workers response.");
+  const metrics = ensureObject(raw.metrics, "Admin workers summary is missing metrics.");
+  const statusCounts = ensureObject(raw.status_counts, "Admin workers status counts are missing.");
 
   return {
     generatedAt: typeof raw.generated_at === "string" ? raw.generated_at : "",
@@ -817,6 +848,14 @@ export function normalizeAdminIngestionSummary(payload: unknown): AdminIngestion
             jobType: typeof value.job_type === "string" ? value.job_type : "",
             sourceId:
               typeof value.source_id === "string" ? value.source_id : null,
+            sourceName:
+              typeof value.source_name === "string" ? value.source_name : null,
+            sourceSlug:
+              typeof value.source_slug === "string" ? value.source_slug : null,
+            videoId:
+              typeof value.video_id === "string" ? value.video_id : null,
+            videoUrl:
+              typeof value.video_url === "string" ? value.video_url : null,
             errorMessage:
               typeof value.error_message === "string" ? value.error_message : null,
             attempts: isFiniteNumber(value.attempts) ? value.attempts : 0,
@@ -835,6 +874,40 @@ export function normalizeAdminIngestionSummary(payload: unknown): AdminIngestion
               : 0,
             lastFailedAt:
               typeof value.last_failed_at === "string" ? value.last_failed_at : null,
+          };
+        })
+      : [],
+  };
+}
+
+export function normalizeAdminWorkerNodesResponse(payload: unknown): AdminWorkerNodesResponse {
+  const raw = ensureObject(payload, "Invalid admin worker nodes response.");
+
+  return {
+    generatedAt: typeof raw.generated_at === "string" ? raw.generated_at : "",
+    nodes: Array.isArray(raw.nodes)
+      ? raw.nodes.map((item) => {
+          const node = ensureObject(item, "Invalid worker node payload.");
+          const status =
+            node.status === "online" || node.status === "stale" || node.status === "offline"
+              ? node.status
+              : "offline";
+
+          return {
+            workerId: typeof node.worker_id === "string" ? node.worker_id : "",
+            hostname: typeof node.hostname === "string" ? node.hostname : "",
+            pid: isFiniteNumber(node.pid) ? node.pid : null,
+            slots: isFiniteNumber(node.slots) ? node.slots : 1,
+            status,
+            startedAt: typeof node.started_at === "string" ? node.started_at : "",
+            lastHeartbeat: typeof node.last_heartbeat === "string" ? node.last_heartbeat : "",
+            activeJobs: isFiniteNumber(node.active_jobs) ? node.active_jobs : 0,
+            completed24h: isFiniteNumber(node.completed_24h) ? node.completed_24h : 0,
+            failed24h: isFiniteNumber(node.failed_24h) ? node.failed_24h : 0,
+            avgDurationMs24h: isFiniteNumber(node.avg_duration_ms_24h)
+              ? node.avg_duration_ms_24h
+              : null,
+            metadata: isPlainObject(node.metadata) ? node.metadata : {},
           };
         })
       : [],
@@ -1117,7 +1190,7 @@ export const admin = {
     return normalizeAdminContentSummary(payload);
   },
 
-  async getIngestion(range: AdminRange): Promise<AdminIngestionSummary> {
+  async getWorkers(range: AdminRange): Promise<AdminWorkersSummary> {
     const payload = await fetchWithAuth<unknown>(
       `/admin/ingestion/summary${buildRangeQuery(range)}`,
       {
@@ -1126,7 +1199,7 @@ export const admin = {
       },
     );
 
-    return normalizeAdminIngestionSummary(payload);
+    return normalizeAdminWorkersSummary(payload);
   },
 
   async getTargets(range: AdminRange): Promise<AdminTargetsResponse> {
@@ -1184,6 +1257,15 @@ export const admin = {
     });
 
     return normalizeAdminWorkerLive(payload);
+  },
+
+  async getWorkerNodes(): Promise<AdminWorkerNodesResponse> {
+    const payload = await fetchWithAuth<unknown>("/admin/workers", {
+      method: "GET",
+      cache: "no-store",
+    });
+
+    return normalizeAdminWorkerNodesResponse(payload);
   },
 
   async retryJob(jobId: string): Promise<{ ok: boolean; jobId: string }> {
@@ -1369,6 +1451,8 @@ export const admin = {
             jobsCreated: isFiniteNumber(v.jobs_created) ? v.jobs_created : 0,
             jobsCompleted: isFiniteNumber(v.jobs_completed) ? v.jobs_completed : 0,
             jobsFailed: isFiniteNumber(v.jobs_failed) ? v.jobs_failed : 0,
+            running: isFiniteNumber(v.running) ? v.running : 0,
+            backlog: isFiniteNumber(v.backlog) ? v.backlog : 0,
             prevJobsCreated: isFiniteNumber(v.prev_jobs_created) ? v.prev_jobs_created : 0,
             prevJobsCompleted: isFiniteNumber(v.prev_jobs_completed) ? v.prev_jobs_completed : 0,
             prevJobsFailed: isFiniteNumber(v.prev_jobs_failed) ? v.prev_jobs_failed : 0,

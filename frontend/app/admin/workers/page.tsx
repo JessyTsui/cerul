@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { redirect } from "next/navigation";
+import { AdminWorkersScreen } from "@/components/admin/workers-screen";
 
 export const metadata: Metadata = {
   title: "Admin Workers",
@@ -9,6 +9,6 @@ export const metadata: Metadata = {
   },
 };
 
-export default function AdminIngestionRedirectPage() {
-  redirect("/admin/workers");
+export default function AdminWorkersPage() {
+  return <AdminWorkersScreen />;
 }

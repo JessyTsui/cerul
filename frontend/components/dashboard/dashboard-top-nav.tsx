@@ -27,10 +27,6 @@ export function DashboardTopNav({ currentPath }: DashboardTopNavProps) {
         </div>
 
         <div className="ml-auto flex flex-wrap items-center justify-end gap-2">
-          <span className="inline-flex items-center gap-2 rounded-full border border-[rgba(31,141,74,0.16)] bg-white/78 px-4 py-2 text-sm font-medium text-[var(--foreground)]">
-            <span className="h-2.5 w-2.5 rounded-full bg-[var(--success)]" />
-            Operational
-          </span>
           <Link
             href={"/search" as Route}
             className="inline-flex h-10 items-center rounded-full border border-[var(--border)] bg-white/70 px-4 text-sm font-medium text-[var(--foreground-secondary)] transition hover:border-[var(--border-strong)] hover:bg-white hover:text-[var(--foreground)]"

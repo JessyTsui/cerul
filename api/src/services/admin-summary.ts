@@ -829,7 +829,7 @@ export async function fetchAdminSummary(db: DatabaseClient, rangeKey: string): P
   if (Number((metrics.failed_jobs as any).current) > 0) {
     notices.push({
       tone: "error",
-      title: "Recent ingestion failures detected",
+      title: "Recent worker failures detected",
       description: `${Math.trunc(Number((metrics.failed_jobs as any).current))} job(s) failed in the selected window.`
     });
   }
@@ -854,6 +854,7 @@ export async function fetchAdminSummary(db: DatabaseClient, rangeKey: string): P
     request_series: series,
     content_series: series,
     ingestion_series: series,
+    workers_series: series,
     notices
   };
 }
@@ -1339,7 +1340,7 @@ export async function fetchContentSummary(db: DatabaseClient, rangeKey: string):
   };
 }
 
-export async function fetchIngestionSummary(db: DatabaseClient, rangeKey: string): Promise<Record<string, unknown>> {
+export async function fetchWorkersSummary(db: DatabaseClient, rangeKey: string): Promise<Record<string, unknown>> {
   const window = resolveTimeWindow(rangeKey);
   const targets = await fetchTargetMap(db, window.range_key);
   const metrics = (
@@ -1429,20 +1430,26 @@ export async function fetchIngestionSummary(db: DatabaseClient, rangeKey: string
   const failedJobRows = await db.fetch(
     `
       SELECT
-          id::text AS job_id,
-          track,
-          job_type,
-          source_id::text AS source_id,
-          error_message,
-          attempts,
-          max_attempts,
-          updated_at
-      FROM processing_jobs
-      WHERE status = 'failed'
-        AND ${notCancelledJobCondition()}
-        AND updated_at >= $1
-        AND updated_at < $2
-      ORDER BY updated_at DESC
+          pj.id::text AS job_id,
+          pj.track,
+          pj.job_type,
+          pj.source_id::text AS source_id,
+          cs.display_name AS source_name,
+          cs.slug AS source_slug,
+          COALESCE(pj.input_payload->>'video_id', pj.input_payload->>'source_video_id') AS video_id,
+          pj.input_payload->>'url' AS video_url,
+          pj.error_message,
+          pj.attempts,
+          pj.max_attempts,
+          pj.updated_at
+      FROM processing_jobs AS pj
+      LEFT JOIN content_sources AS cs
+        ON cs.id = pj.source_id
+      WHERE pj.status = 'failed'
+        AND ${notCancelledJobCondition("pj")}
+        AND pj.updated_at >= $1
+        AND pj.updated_at < $2
+      ORDER BY pj.updated_at DESC
       LIMIT 10
     `,
     window.current_start,
@@ -1540,6 +1547,10 @@ export async function fetchIngestionSummary(db: DatabaseClient, rangeKey: string
       track: String(row.track),
       job_type: String(row.job_type),
       source_id: row.source_id == null ? null : String(row.source_id),
+      source_name: row.source_name == null ? null : String(row.source_name),
+      source_slug: row.source_slug == null ? null : String(row.source_slug),
+      video_id: row.video_id == null ? null : String(row.video_id),
+      video_url: row.video_url == null ? null : String(row.video_url),
       error_message: row.error_message == null ? null : String(row.error_message),
       attempts: asInt(row.attempts),
       max_attempts: asInt(row.max_attempts),

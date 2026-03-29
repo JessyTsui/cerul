@@ -913,6 +913,91 @@ export async function fetchWorkerLive(
   };
 }
 
+export async function fetchWorkerNodes(
+  db: DatabaseClient,
+): Promise<Record<string, unknown>> {
+  const rows = await db.fetch(
+    `
+      SELECT
+          wh.worker_id,
+          wh.hostname,
+          wh.pid,
+          wh.slots,
+          wh.started_at,
+          wh.last_heartbeat,
+          wh.metadata,
+          CASE
+              WHEN wh.last_heartbeat >= NOW() - INTERVAL '60 seconds' THEN 'online'
+              WHEN wh.last_heartbeat >= NOW() - INTERVAL '5 minutes' THEN 'stale'
+              ELSE 'offline'
+          END AS status,
+          COUNT(pj.id) FILTER (WHERE pj.status = 'running') AS active_jobs,
+          COUNT(pj.id) FILTER (
+              WHERE pj.status = 'completed'
+                AND pj.completed_at >= NOW() - INTERVAL '24 hours'
+          ) AS completed_24h,
+          COUNT(pj.id) FILTER (
+              WHERE pj.status = 'failed'
+                AND ${notCancelledJobCondition("pj")}
+                AND pj.updated_at >= NOW() - INTERVAL '24 hours'
+          ) AS failed_24h,
+          AVG(EXTRACT(EPOCH FROM (pj.completed_at - COALESCE(pj.started_at, pj.created_at))) * 1000)
+              FILTER (
+                  WHERE pj.status = 'completed'
+                    AND pj.completed_at >= NOW() - INTERVAL '24 hours'
+                    AND pj.completed_at IS NOT NULL
+                    AND COALESCE(pj.started_at, pj.created_at) IS NOT NULL
+              ) AS avg_duration_ms_24h
+      FROM worker_heartbeats AS wh
+      LEFT JOIN processing_jobs AS pj
+          ON (
+              pj.locked_by = wh.worker_id
+              OR pj.locked_by LIKE wh.worker_id || '-slot-%'
+          )
+         AND (
+             pj.status = 'running'
+             OR pj.updated_at >= NOW() - INTERVAL '24 hours'
+         )
+      WHERE wh.last_heartbeat >= NOW() - INTERVAL '24 hours'
+      GROUP BY
+          wh.worker_id,
+          wh.hostname,
+          wh.pid,
+          wh.slots,
+          wh.started_at,
+          wh.last_heartbeat,
+          wh.metadata
+      ORDER BY wh.last_heartbeat DESC, wh.worker_id ASC
+    `
+  );
+
+  return {
+    generated_at: utcNow(),
+    nodes: rows.map((row) => {
+      const metadata = coerceJsonValue(row.metadata);
+
+      return {
+        worker_id: String(row.worker_id),
+        hostname: String(row.hostname),
+        pid: row.pid == null ? null : asInt(row.pid),
+        slots: Math.max(asInt(row.slots), 1),
+        status: String(row.status),
+        started_at: row.started_at == null ? null : String(row.started_at),
+        last_heartbeat: row.last_heartbeat == null ? null : String(row.last_heartbeat),
+        active_jobs: asInt(row.active_jobs),
+        completed_24h: asInt(row.completed_24h),
+        failed_24h: asInt(row.failed_24h),
+        avg_duration_ms_24h:
+          row.avg_duration_ms_24h == null ? null : Number(row.avg_duration_ms_24h),
+        metadata:
+          metadata && typeof metadata === "object" && !Array.isArray(metadata)
+            ? (metadata as Record<string, unknown>)
+            : {}
+      };
+    })
+  };
+}
+
 function resolveSourceAnalyticsWindow(rangeKey: string): {
   range_key: string;
   current_start: Date;
@@ -959,6 +1044,14 @@ export async function fetchSourcesAnalytics(db: DatabaseClient, rangeKey = "7d")
                 AND pj.updated_at >= $1 AND pj.updated_at < $2
           ) AS jobs_failed,
           COUNT(pj.id) FILTER (
+              WHERE pj.status = 'running'
+                AND ${notCancelledJobCondition("pj")}
+          ) AS running,
+          COUNT(pj.id) FILTER (
+              WHERE pj.status IN ('pending', 'retrying')
+                AND ${notCancelledJobCondition("pj")}
+          ) AS backlog,
+          COUNT(pj.id) FILTER (
               WHERE pj.created_at >= $3 AND pj.created_at < $4
           ) AS prev_jobs_created,
           COUNT(pj.id) FILTER (
@@ -972,7 +1065,6 @@ export async function fetchSourcesAnalytics(db: DatabaseClient, rangeKey = "7d")
           ) AS prev_jobs_failed
       FROM content_sources AS cs
       LEFT JOIN processing_jobs AS pj ON pj.source_id = cs.id
-      WHERE cs.is_active = TRUE
       GROUP BY cs.id, cs.slug, cs.display_name
       ORDER BY cs.display_name
     `,
@@ -993,6 +1085,8 @@ export async function fetchSourcesAnalytics(db: DatabaseClient, rangeKey = "7d")
       jobs_created: asInt(row.jobs_created),
       jobs_completed: asInt(row.jobs_completed),
       jobs_failed: asInt(row.jobs_failed),
+      running: asInt(row.running),
+      backlog: asInt(row.backlog),
       prev_jobs_created: asInt(row.prev_jobs_created),
       prev_jobs_completed: asInt(row.prev_jobs_completed),
       prev_jobs_failed: asInt(row.prev_jobs_failed)

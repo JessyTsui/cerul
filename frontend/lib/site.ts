@@ -235,8 +235,9 @@ export const dashboardRoutes = [
 export const adminRoutes = [
   { label: "Overview", href: "/admin", meta: "A1" },
   { label: "Requests", href: "/admin/requests", meta: "A2" },
-  { label: "Ingestion", href: "/admin/ingestion", meta: "A3" },
+  { label: "Workers", href: "/admin/workers", meta: "A3" },
   { label: "Sources", href: "/admin/sources", meta: "A4" },
+  { label: "Content", href: "/admin/content", meta: "A5" },
 ] as const;
 
 export function isPrimaryRoute(path: string): boolean {

@@ -60,10 +60,15 @@ function IconFilm({ className }: { className?: string }) {
   );
 }
 
-function IconDatabase({ className }: { className?: string }) {
+function IconServer({ className }: { className?: string }) {
   return (
     <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-      <path d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4m0 5c0 2.21-3.582 4-8 4s-8-1.79-8-4" strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} />
+      <path
+        d="M4 6.5A1.5 1.5 0 015.5 5h13A1.5 1.5 0 0120 6.5v3A1.5 1.5 0 0118.5 11h-13A1.5 1.5 0 014 9.5v-3zm0 8A1.5 1.5 0 015.5 13h13a1.5 1.5 0 011.5 1.5v3a1.5 1.5 0 01-1.5 1.5h-13A1.5 1.5 0 014 17.5v-3zM8 8h.01M8 16h.01M12 8h6M12 16h6"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth={2}
+      />
     </svg>
   );
 }
@@ -91,7 +96,7 @@ const ROUTE_ICONS: Record<string, React.FC<{ className?: string }>> = {
   Requests: IconArrowPath,
   Users: IconUsers,
   Content: IconFilm,
-  Ingestion: IconDatabase,
+  Workers: IconServer,
   Sources: IconArchive,
   Targets: IconCog,
 };
@@ -118,21 +123,13 @@ export function AdminSidebar({ currentPath }: AdminSidebarProps) {
         <div className="surface-elevated flex h-full flex-col overflow-hidden rounded-[34px] px-4 py-5">
           <BrandMark />
 
-          <div className="mt-7 rounded-[22px] border border-[var(--border-brand)] bg-[var(--brand-subtle)] px-4 py-4">
-            <p className="text-xs font-medium uppercase tracking-[0.18em] text-[var(--brand-bright)]">
-              Control Room
-            </p>
-            <p className="mt-3 text-sm leading-6 text-[var(--foreground-secondary)]">
-              Internal visibility for demand, ingestion, sources, and operator actions.
-            </p>
-            <Link
-              href={"/dashboard" as Route}
-              className="mt-4 flex items-center justify-between rounded-full bg-white/78 px-3 py-2.5 text-sm font-medium text-[var(--foreground)] transition hover:bg-white"
-            >
-              <span>Back to dashboard</span>
-              <IconHome className="h-4 w-4" />
-            </Link>
-          </div>
+          <Link
+            href={"/dashboard" as Route}
+            className="mt-7 flex items-center justify-between rounded-[18px] border border-[var(--border)] bg-white/56 px-4 py-3 text-sm text-[var(--foreground-secondary)] transition hover:border-[var(--border-strong)] hover:bg-white/78 hover:text-[var(--foreground)]"
+          >
+            <span>Back to dashboard</span>
+            <IconHome className="h-4 w-4" />
+          </Link>
 
           <div className="mt-7">
             <p className="px-3 text-xs font-medium uppercase tracking-[0.18em] text-[var(--foreground-tertiary)]">
@@ -164,9 +161,6 @@ export function AdminSidebar({ currentPath }: AdminSidebarProps) {
                     </span>
                     <div className="min-w-0 flex-1">
                       <p className="text-sm font-medium">{item.label}</p>
-                      <p className="text-xs text-[var(--foreground-tertiary)]">
-                        Page {item.meta}
-                      </p>
                     </div>
                   </Link>
                 );

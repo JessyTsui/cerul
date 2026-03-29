@@ -7,6 +7,7 @@ import { AdminLayout } from "./admin-layout";
 import { AdminMetricCard } from "./admin-metric-card";
 import { AdminRangePicker } from "./admin-range-picker";
 import { AdminTrendChart } from "./admin-trend-chart";
+import { VideoLibraryPanel } from "./video-library-panel";
 import { DashboardNotice, DashboardSkeleton, DashboardState } from "@/components/dashboard/dashboard-state";
 import { useAdminResource } from "./use-admin-resource";
 
@@ -22,7 +23,7 @@ export function AdminContentScreen() {
     <AdminLayout
       currentPath="/admin/content"
       title="Content"
-      description="Indexed supply, growth, and source freshness."
+      description="Browse and manage indexed videos while tracking catalog growth and source freshness."
       actions={
         <AdminRangePicker value={range} onChange={setRange} />
       }
@@ -102,35 +103,41 @@ export function AdminContentScreen() {
               <p className="mt-1 text-xs leading-6 text-[var(--foreground-tertiary)]">
                 Sources that look quiet or under-synced relative to the rest of the catalog.
               </p>
-              <table className="admin-table mt-4">
-                <thead>
-                  <tr>
-                    <th>Source</th>
-                    <th>Track</th>
-                    <th>Jobs</th>
-                    <th>Last job</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {data.staleSources.map((source) => (
-                    <tr key={source.sourceId}>
-                      <td className="admin-table-primary">
-                        {source.displayName}
-                        {source.isStale ? (
-                          <span className="ml-1.5 rounded-full border border-[rgba(212,156,105,0.22)] bg-[rgba(212,156,105,0.12)] px-1.5 py-0.5 text-[10px] text-[var(--accent-bright)]">
-                            stale
-                          </span>
-                        ) : null}
-                      </td>
-                      <td>{source.track}</td>
-                      <td>{source.jobsInRange}</td>
-                      <td>{formatAdminDateTime(source.lastJobAt)}</td>
+              {data.staleSources.length === 0 ? (
+                <p className="mt-4 text-sm text-[var(--foreground-tertiary)]">All sources are up to date.</p>
+              ) : (
+                <table className="admin-table mt-4">
+                  <thead>
+                    <tr>
+                      <th>Source</th>
+                      <th>Track</th>
+                      <th>Jobs</th>
+                      <th>Last job</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody>
+                    {data.staleSources.map((source) => (
+                      <tr key={source.sourceId}>
+                        <td className="admin-table-primary">
+                          {source.displayName}
+                          {source.isStale ? (
+                            <span className="ml-1.5 rounded-full border border-[rgba(191,91,70,0.22)] bg-[rgba(191,91,70,0.12)] px-1.5 py-0.5 text-[10px] font-medium text-[var(--error)]">
+                              stale
+                            </span>
+                          ) : null}
+                        </td>
+                        <td>{source.track}</td>
+                        <td>{source.jobsInRange}</td>
+                        <td>{formatAdminDateTime(source.lastJobAt)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
             </article>
           </div>
+
+          <VideoLibraryPanel />
         </>
       ) : (
         <DashboardState

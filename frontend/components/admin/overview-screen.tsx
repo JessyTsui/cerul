@@ -70,7 +70,7 @@ export function AdminOverviewScreen() {
                 </h2>
                 <p className="mt-3 text-sm leading-7 text-[var(--foreground-secondary)]">
                   This view pulls the high-signal indicators forward so you can spot
-                  growth, degraded search quality, and ingestion issues without
+                  growth, degraded search quality, and worker issues without
                   bouncing between tabs.
                 </p>
               </div>
@@ -80,7 +80,7 @@ export function AdminOverviewScreen() {
                     { label: "Users", href: "/admin/users" as Route },
                     { label: "Requests", href: "/admin/requests" as Route },
                     { label: "Content", href: "/admin/content" as Route },
-                    { label: "Ingestion", href: "/admin/ingestion" as Route },
+                    { label: "Workers", href: "/admin/workers" as Route },
                   ] as const
                 ).map((item) => (
                   <Link
@@ -117,8 +117,8 @@ export function AdminOverviewScreen() {
           </div>
 
           <AdminTrendChart
-            title="Ingestion failures"
-            data={toAdminChartData(data.ingestionSeries, "jobsFailed")}
+            title="Worker failures"
+            data={toAdminChartData(data.workersSeries, "jobsFailed")}
             metricLabel="Failed jobs"
           />
         </>

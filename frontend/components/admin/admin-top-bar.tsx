@@ -7,11 +7,13 @@ import { UserAvatarMenu } from "./user-avatar-menu";
 
 type AdminTopBarProps = {
   currentPath: string;
+  title?: string;
 };
 
-export function AdminTopBar({ currentPath }: AdminTopBarProps) {
+export function AdminTopBar({ currentPath, title }: AdminTopBarProps) {
   const activeRoute =
     adminRoutes.find((item) => isAdminRouteActive(currentPath, item.href))?.label ??
+    title ??
     "Overview";
 
   return (
@@ -44,11 +46,6 @@ export function AdminTopBar({ currentPath }: AdminTopBarProps) {
               Search admin pages
             </span>
           </div>
-
-          <span className="hidden items-center gap-2 rounded-full border border-[rgba(31,141,74,0.18)] bg-white/78 px-4 py-2 text-sm font-medium text-[var(--foreground)] md:inline-flex">
-            <span className="h-2.5 w-2.5 rounded-full bg-[var(--success)]" />
-            Live telemetry
-          </span>
 
           <Link
             href={"/dashboard" as Route}

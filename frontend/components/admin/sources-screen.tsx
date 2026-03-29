@@ -80,6 +80,47 @@ function formatDuration(seconds: number | null): string {
   return `${m}:${String(s).padStart(2, "0")}`;
 }
 
+function getSourceProgress(analytics: AdminSourceAnalytics | null): {
+  total: number;
+  completion: number | null;
+} {
+  if (!analytics) {
+    return { total: 0, completion: null };
+  }
+
+  const total =
+    analytics.jobsCompleted + analytics.jobsFailed + analytics.running + analytics.backlog;
+  return {
+    total,
+    completion: total === 0 ? null : Math.round((analytics.jobsCompleted / total) * 100),
+  };
+}
+
+function SourceProgressBar({ analytics }: { analytics: AdminSourceAnalytics | null }) {
+  const progress = getSourceProgress(analytics);
+
+  if (!analytics || progress.total === 0 || progress.completion == null) {
+    return (
+      <div className="mt-2 flex items-center gap-2 text-[10px] text-[var(--foreground-tertiary)]">
+        <div className="h-1.5 flex-1 rounded-full bg-[rgba(36,29,21,0.08)]" />
+        <span>No jobs yet</span>
+      </div>
+    );
+  }
+
+  return (
+    <div className="mt-2 flex items-center gap-2">
+      <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-[rgba(36,29,21,0.08)]">
+        <div
+          className="h-full rounded-full bg-[linear-gradient(90deg,var(--foreground),var(--brand-bright),var(--accent-bright))]"
+          style={{ width: `${progress.completion}%` }}
+        />
+      </div>
+      <span className="text-[10px] text-[var(--foreground-secondary)]">{progress.completion}%</span>
+    </div>
+  );
+}
+
 function DeltaBadge({ current, previous }: { current: number; previous: number }) {
   const delta = current - previous;
   if (delta === 0 && current === 0) return null;
@@ -992,6 +1033,41 @@ export function AdminSourcesScreen() {
                           {source.slug}
                           {description ? ` · ${description.slice(0, 60)}` : ""}
                         </p>
+                        <div className="mt-2">
+                          <div className="flex flex-wrap items-center gap-3 text-[10px] text-[var(--foreground-tertiary)]">
+                            <span>
+                              <span className="font-semibold text-[var(--foreground)]">
+                                {analytics?.jobsCompleted ?? 0}
+                              </span>{" "}
+                              done
+                            </span>
+                            <span>
+                              <span className="font-semibold text-[var(--brand-bright)]">
+                                {analytics?.running ?? 0}
+                              </span>{" "}
+                              running
+                            </span>
+                            <span>
+                              <span className="font-semibold text-[var(--accent-bright)]">
+                                {analytics?.backlog ?? 0}
+                              </span>{" "}
+                              queued
+                            </span>
+                            <span>
+                              <span
+                                className={`font-semibold ${
+                                  (analytics?.jobsFailed ?? 0) > 0
+                                    ? "text-[var(--error)]"
+                                    : "text-[var(--foreground)]"
+                                }`}
+                              >
+                                {analytics?.jobsFailed ?? 0}
+                              </span>{" "}
+                              failed
+                            </span>
+                          </div>
+                          <SourceProgressBar analytics={analytics} />
+                        </div>
                       </div>
 
                       {/* Stats columns — fixed widths for alignment */}
@@ -1016,6 +1092,24 @@ export function AdminSourcesScreen() {
                             <DeltaBadge current={analytics.jobsCompleted} previous={analytics.prevJobsCompleted} />
                           ) : null}
                           <span className="ml-1 font-normal text-[var(--foreground-tertiary)]">idx</span>
+                        </span>
+                        <span className="w-[92px] text-right font-semibold text-[var(--brand-bright)]">
+                          {analytics ? analytics.running : 0}
+                          <span className="ml-1 font-normal text-[var(--foreground-tertiary)]">run</span>
+                        </span>
+                        <span className="w-[92px] text-right font-semibold text-[var(--accent-bright)]">
+                          {analytics ? analytics.backlog : 0}
+                          <span className="ml-1 font-normal text-[var(--foreground-tertiary)]">queued</span>
+                        </span>
+                        <span
+                          className={`w-[88px] text-right font-semibold ${
+                            (analytics?.jobsFailed ?? 0) > 0
+                              ? "text-[var(--error)]"
+                              : "text-[var(--foreground)]"
+                          }`}
+                        >
+                          {analytics ? analytics.jobsFailed : 0}
+                          <span className="ml-1 font-normal text-[var(--foreground-tertiary)]">fail</span>
                         </span>
                       </div>
 
@@ -1161,6 +1255,14 @@ export function AdminSourcesScreen() {
                                     <span className="ml-1 text-[var(--foreground-tertiary)]">completed</span>
                                   </div>
                                   <div>
+                                    <span className="font-semibold text-[var(--brand-bright)]">{analytics.running}</span>
+                                    <span className="ml-1 text-[var(--foreground-tertiary)]">running</span>
+                                  </div>
+                                  <div>
+                                    <span className="font-semibold text-[var(--accent-bright)]">{analytics.backlog}</span>
+                                    <span className="ml-1 text-[var(--foreground-tertiary)]">queued</span>
+                                  </div>
+                                  <div>
                                     <span className={`font-semibold ${analytics.jobsFailed > 0 ? "text-[var(--error)]" : "text-[var(--foreground)]"}`}>
                                       {analytics.jobsFailed}
                                     </span>
@@ -1168,6 +1270,7 @@ export function AdminSourcesScreen() {
                                     <span className="ml-1 text-[var(--foreground-tertiary)]">failed</span>
                                   </div>
                                 </div>
+                                <SourceProgressBar analytics={analytics} />
                               </div>
                             ) : null}
 

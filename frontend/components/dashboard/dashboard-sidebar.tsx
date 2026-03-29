@@ -124,7 +124,6 @@ export function DashboardSidebar({ currentPath }: DashboardSidebarProps) {
                     </span>
                     <div className="min-w-0 flex-1">
                       <p className="text-sm font-medium">{item.label}</p>
-                      <p className="text-xs text-[var(--foreground-tertiary)]">Page {item.meta}</p>
                     </div>
                   </Link>
                 );
@@ -163,24 +162,6 @@ export function DashboardSidebar({ currentPath }: DashboardSidebarProps) {
             </div>
           </div>
 
-          <Link
-            href={ACCOUNT_SETTINGS_ROUTE as Route}
-            className="mt-auto rounded-[24px] border border-[var(--border)] bg-white/72 px-4 py-4 transition hover:bg-white"
-          >
-            <div className="flex items-center gap-3">
-              <span className="inline-flex h-11 w-11 items-center justify-center rounded-full bg-[var(--background-sunken)] text-sm font-semibold text-[var(--foreground-secondary)]">
-                {initials || "U"}
-              </span>
-              <div className="min-w-0">
-                <p className="truncate text-sm font-medium text-[var(--foreground)]">
-                  {viewer.displayName ?? "Cerul workspace"}
-                </p>
-                <p className="truncate text-xs text-[var(--foreground-tertiary)]">
-                  {viewer.email ?? "Signed in"}
-                </p>
-              </div>
-            </div>
-          </Link>
         </div>
       </div>
     </aside>

@@ -12,6 +12,7 @@ import {
   fetchSourcesAnalytics,
   fetchSourcesRecentVideos,
   fetchWorkerLive,
+  fetchWorkerNodes,
   getVideoJobStatus,
   killJob,
   retryJob,
@@ -24,7 +25,7 @@ import {
   deleteTarget,
   fetchAdminSummary,
   fetchContentSummary,
-  fetchIngestionSummary,
+  fetchWorkersSummary,
   fetchRequestsSummary,
   fetchTargetsSummary,
   fetchUsersSummary,
@@ -121,9 +122,15 @@ export function createAdminRouter(): any {
     return c.json(await fetchContentSummary(db, parseAdminRange(c.req.query("range"))));
   });
 
+  router.get("/workers/summary", async (c: any) => {
+    const db = c.get("db") as DatabaseClient;
+    return c.json(await fetchWorkersSummary(db, parseAdminRange(c.req.query("range"))));
+  });
+
+  // Backward compat — remove after next API deploy
   router.get("/ingestion/summary", async (c: any) => {
     const db = c.get("db") as DatabaseClient;
-    return c.json(await fetchIngestionSummary(db, parseAdminRange(c.req.query("range"))));
+    return c.json(await fetchWorkersSummary(db, parseAdminRange(c.req.query("range"))));
   });
 
   router.get("/targets", async (c: any) => {
@@ -268,6 +275,11 @@ export function createAdminRouter(): any {
     const failedLimit = parseBoundedInteger(c.req.query("failed_limit"), "failed_limit", 10, 1, 100);
     const failedOffset = parseBoundedInteger(c.req.query("failed_offset"), "failed_offset", 0, 0);
     return c.json(await fetchWorkerLive(db, failedLimit, failedOffset));
+  });
+
+  router.get("/workers", async (c: any) => {
+    const db = c.get("db") as DatabaseClient;
+    return c.json(await fetchWorkerNodes(db));
   });
 
   router.get("/videos", async (c: any) => {

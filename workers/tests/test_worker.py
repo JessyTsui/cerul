@@ -4,7 +4,13 @@ from datetime import datetime, timedelta, timezone
 from unittest.mock import AsyncMock, Mock, patch
 
 from workers.common.pipeline import PipelineContext
-from workers.worker import JobWorker, build_worker_ids
+from workers.worker import (
+    JobWorker,
+    build_worker_ids,
+    mark_worker_stopped,
+    register_worker,
+    update_worker_heartbeat,
+)
 
 
 def run_async(coro):
@@ -287,6 +293,52 @@ def test_compute_retry_delay_uses_exponential_backoff_with_cap() -> None:
     assert worker.compute_retry_delay(2) == 60
     assert worker.compute_retry_delay(3) == 120
     assert worker.compute_retry_delay(20) == 3600
+
+
+def test_register_worker_writes_worker_heartbeat_row() -> None:
+    conn = RecordingConnection()
+    pool = RecordingPool(conn)
+
+    run_async(
+        register_worker(
+            pool,
+            worker_id="worker-a",
+            hostname="host-a",
+            pid=1234,
+            slots=6,
+            metadata={"python_version": "3.12.0"},
+        )
+    )
+
+    assert "INSERT INTO worker_heartbeats" in conn.execute_calls[0][0]
+    assert conn.execute_calls[0][1] == (
+        "worker-a",
+        "host-a",
+        1234,
+        6,
+        '{"python_version": "3.12.0"}',
+    )
+
+
+def test_update_worker_heartbeat_touches_last_seen() -> None:
+    conn = RecordingConnection()
+    pool = RecordingPool(conn)
+
+    run_async(update_worker_heartbeat(pool, "worker-a"))
+
+    assert "UPDATE worker_heartbeats" in conn.execute_calls[0][0]
+    assert conn.execute_calls[0][1] == ("worker-a",)
+
+
+def test_mark_worker_stopped_marks_worker_offline() -> None:
+    conn = RecordingConnection()
+    pool = RecordingPool(conn)
+
+    run_async(mark_worker_stopped(pool, "worker-a"))
+
+    assert "UPDATE worker_heartbeats" in conn.execute_calls[0][0]
+    assert "INTERVAL '5 minutes 1 second'" in conn.execute_calls[0][0]
+    assert conn.execute_calls[0][1] == ("worker-a",)
 
 
 def test_record_live_step_event_ignores_deleted_job() -> None:

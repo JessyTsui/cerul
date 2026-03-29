@@ -5,6 +5,7 @@ import asyncio
 import json
 import logging
 import os
+import platform
 import signal
 import socket
 from collections.abc import Mapping
@@ -21,6 +22,7 @@ from workers.unified import UnifiedIndexingPipeline
 LOGGER = logging.getLogger(__name__)
 MAX_STEP_LOG_ENTRIES = 25
 DEFAULT_WORKER_CONCURRENCY = 6
+WORKER_HEARTBEAT_INTERVAL_SECONDS = 30
 
 
 CLAIM_JOB_SQL = """
@@ -53,7 +55,6 @@ SET
     error_message = NULL,
     completed_at = NOW(),
     next_retry_at = NULL,
-    locked_by = NULL,
     locked_at = NULL,
     updated_at = NOW()
 WHERE id = $1::uuid
@@ -67,7 +68,6 @@ SET
     error_message = $2,
     completed_at = NULL,
     next_retry_at = NOW() + ($3 * INTERVAL '1 second'),
-    locked_by = NULL,
     locked_at = NULL,
     updated_at = NOW()
 WHERE id = $1::uuid
@@ -81,7 +81,6 @@ SET
     error_message = $2,
     completed_at = NULL,
     next_retry_at = NULL,
-    locked_by = NULL,
     locked_at = NULL,
     updated_at = NOW()
 WHERE id = $1::uuid
@@ -158,6 +157,92 @@ WHERE id = $1::uuid
   AND COALESCE((input_payload->>'cancelled_by_user')::boolean, FALSE) = FALSE
 LIMIT 1
 """
+
+REGISTER_WORKER_HEARTBEAT_SQL = """
+INSERT INTO worker_heartbeats (
+    worker_id,
+    hostname,
+    pid,
+    slots,
+    started_at,
+    last_heartbeat,
+    metadata
+)
+VALUES ($1, $2, $3, $4, NOW(), NOW(), $5::jsonb)
+ON CONFLICT (worker_id) DO UPDATE
+SET
+    hostname = EXCLUDED.hostname,
+    pid = EXCLUDED.pid,
+    slots = EXCLUDED.slots,
+    started_at = NOW(),
+    last_heartbeat = NOW(),
+    metadata = EXCLUDED.metadata
+"""
+
+UPDATE_WORKER_HEARTBEAT_SQL = """
+UPDATE worker_heartbeats
+SET last_heartbeat = NOW()
+WHERE worker_id = $1
+"""
+
+MARK_WORKER_STOPPED_SQL = """
+UPDATE worker_heartbeats
+SET last_heartbeat = NOW() - INTERVAL '5 minutes 1 second'
+WHERE worker_id = $1
+"""
+
+
+async def register_worker(
+    pool: asyncpg.Pool,
+    worker_id: str,
+    hostname: str,
+    pid: int,
+    slots: int,
+    metadata: Mapping[str, Any] | None = None,
+) -> None:
+    payload = json.dumps(dict(metadata or {}), default=str)
+    async with pool.acquire() as conn:
+        await conn.execute(
+            REGISTER_WORKER_HEARTBEAT_SQL,
+            worker_id,
+            hostname,
+            pid,
+            max(int(slots), 1),
+            payload,
+        )
+
+
+async def update_worker_heartbeat(pool: asyncpg.Pool, worker_id: str) -> None:
+    async with pool.acquire() as conn:
+        await conn.execute(UPDATE_WORKER_HEARTBEAT_SQL, worker_id)
+
+
+async def mark_worker_stopped(pool: asyncpg.Pool, worker_id: str) -> None:
+    async with pool.acquire() as conn:
+        await conn.execute(MARK_WORKER_STOPPED_SQL, worker_id)
+
+
+async def heartbeat_loop(
+    pool: asyncpg.Pool,
+    worker_id: str,
+    shutdown_event: asyncio.Event,
+    interval: float = WORKER_HEARTBEAT_INTERVAL_SECONDS,
+) -> None:
+    while not shutdown_event.is_set():
+        try:
+            await asyncio.wait_for(shutdown_event.wait(), timeout=interval)
+            break
+        except asyncio.TimeoutError:
+            pass
+
+        try:
+            await update_worker_heartbeat(pool, worker_id)
+        except Exception:
+            LOGGER.warning(
+                "Failed to update heartbeat for worker %s.",
+                worker_id,
+                exc_info=True,
+            )
 
 
 class JobWorker:
@@ -1001,24 +1086,63 @@ async def main() -> None:
     )
 
     shutdown_event = asyncio.Event()
+    heartbeat_pool = await asyncpg.create_pool(
+        args.db_url,
+        min_size=1,
+        max_size=2,
+    )
     worker_ids = build_worker_ids(args.worker_id, args.concurrency)
+    heartbeat_metadata = {
+        "python_version": platform.python_version(),
+        "platform": platform.platform(),
+        "concurrency": len(worker_ids),
+    }
     LOGGER.info(
         "Starting %d worker slot(s): %s",
         len(worker_ids),
         ", ".join(worker_ids),
     )
-    await asyncio.gather(
-        *[
-            JobWorker(
-                worker_id=worker_id,
-                db_url=args.db_url,
-                poll_interval=args.poll_interval,
-                shutdown_event=shutdown_event,
-                manage_signals=index == 0,
-            ).run_loop()
-            for index, worker_id in enumerate(worker_ids)
-        ]
+    await register_worker(
+        heartbeat_pool,
+        worker_id=args.worker_id,
+        hostname=socket.gethostname(),
+        pid=os.getpid(),
+        slots=len(worker_ids),
+        metadata=heartbeat_metadata,
     )
+    heartbeat_task = asyncio.create_task(
+        heartbeat_loop(
+            heartbeat_pool,
+            worker_id=args.worker_id,
+            shutdown_event=shutdown_event,
+        )
+    )
+
+    try:
+        await asyncio.gather(
+            *[
+                JobWorker(
+                    worker_id=worker_id,
+                    db_url=args.db_url,
+                    poll_interval=args.poll_interval,
+                    shutdown_event=shutdown_event,
+                    manage_signals=index == 0,
+                ).run_loop()
+                for index, worker_id in enumerate(worker_ids)
+            ]
+        )
+    finally:
+        shutdown_event.set()
+        heartbeat_task.cancel()
+        try:
+            await heartbeat_task
+        except asyncio.CancelledError:
+            pass
+
+        try:
+            await mark_worker_stopped(heartbeat_pool, args.worker_id)
+        finally:
+            await heartbeat_pool.close()
 
 
 if __name__ == "__main__":

@@ -23,7 +23,7 @@ export function AdminLayout({
     <div className="soft-theme flex min-h-screen">
       <AdminSidebar currentPath={currentPath} />
       <div className="flex min-w-0 flex-1 flex-col">
-        <AdminTopBar currentPath={currentPath} />
+        <AdminTopBar currentPath={currentPath} title={title} />
         <main className="flex-1 overflow-y-auto px-5 py-5 sm:px-6 lg:px-8">
           <div className="mx-auto max-w-[1240px]">
             <div className="mb-6 flex flex-col gap-4 border-b border-[var(--border)] pb-6 lg:flex-row lg:items-end lg:justify-between">
