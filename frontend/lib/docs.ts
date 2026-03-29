@@ -595,7 +595,7 @@ export const docsUtilityLinks = [
   },
   {
     title: "Support",
-    href: "mailto:team@cerul.ai",
+    href: "mailto:support@cerul.ai",
     description: "Reach the team when a public route is unclear.",
   },
 ] as const;

@@ -401,7 +401,7 @@ export function UnifiedSearchDemo() {
       </section>
 
       <section className="grid gap-6 xl:grid-cols-[0.9fr_1.1fr]">
-        <article className="surface-elevated rounded-[34px] px-5 py-5 sm:px-6">
+        <article className="surface-elevated rounded-3xl px-6 py-6">
           <div className="flex flex-wrap gap-2">
             {surfaceTabs.map((tab) => (
               <button
@@ -413,9 +413,9 @@ export function UnifiedSearchDemo() {
                     setResponseView(tab.id === "usage" ? "response" : responseView);
                   });
                 }}
-                className={`rounded-full border px-4 py-2 text-sm font-medium transition ${
+                className={`rounded-full border px-4 py-2 text-sm font-medium transition-all duration-200 ${
                   surface === tab.id
-                    ? "border-[var(--border-brand)] bg-[var(--brand-subtle)] text-[var(--foreground)]"
+                    ? "border-[var(--border-brand)] bg-[var(--brand-subtle)] text-[var(--foreground)] shadow-sm"
                     : "border-[var(--border)] bg-white/70 text-[var(--foreground-secondary)] hover:border-[var(--border-strong)] hover:bg-white hover:text-[var(--foreground)]"
                 }`}
               >
@@ -424,7 +424,7 @@ export function UnifiedSearchDemo() {
             ))}
           </div>
 
-          <div className="mt-5">
+          <div className="mt-6">
             <p className="text-base font-semibold text-[var(--foreground)]">
               {surfaceTabs.find((tab) => tab.id === surface)?.label}
             </p>

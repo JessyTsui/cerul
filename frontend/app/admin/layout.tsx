@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import { redirect } from "next/navigation";
+import { AdminAppShell } from "@/components/admin/admin-app-shell";
 import { ConsoleViewerProvider } from "@/components/console/console-viewer-context";
 import { getConsoleViewer } from "@/lib/console-viewer";
 
@@ -22,7 +23,7 @@ export default async function AdminAppLayout({
 
   return (
     <ConsoleViewerProvider viewer={viewer}>
-      {children}
+      <AdminAppShell>{children}</AdminAppShell>
     </ConsoleViewerProvider>
   );
 }

@@ -7,6 +7,7 @@ import { DocsHeader } from "@/components/docs-header";
 import { DocsSidebar } from "@/components/docs-sidebar";
 import { DocsToc, type TocItem } from "@/components/docs-toc";
 import { SiteFooter } from "@/components/site-footer";
+import { FadeIn, BlurFade } from "@/components/animations";
 import { docsFeatureCards, docsPopularTopics, getDocsIndexCards } from "@/lib/docs";
 
 export const revalidate = 3600;
@@ -44,57 +45,70 @@ export default function DocsPage() {
 
           <main data-ai-copy-root="true" className="min-w-0">
             <article className="rounded-[28px] border border-[var(--border)] bg-[rgba(255,252,247,0.78)] px-6 py-8 shadow-[0_18px_48px_rgba(36,29,21,0.08)] backdrop-blur-xl sm:px-8">
-              <section id="overview" className="max-w-4xl border-b border-[var(--border)] pb-10">
-                <p className="font-mono text-[11px] uppercase tracking-[0.18em] text-[var(--brand-bright)]">
-                  Documentation
-                </p>
-                <h1 className="mt-4 text-4xl font-semibold tracking-[-0.05em] text-[var(--foreground)] sm:text-5xl">
-                  Cerul API docs
-                </h1>
-                <p className="mt-4 max-w-3xl text-[15px] leading-8 text-[var(--foreground-secondary)]">
-                  Public guides and endpoint references for building against Cerul&apos;s
-                  video-search platform. Start with one authenticated request, understand the
-                  response envelope, and only move deeper when your integration needs it.
-                </p>
+              {/* Hero Section */}
+              <section id="overview" className="max-w-4xl border-b border-[var(--border)] pb-12">
+                <BlurFade>
+                  <span className="eyebrow inline-flex items-center gap-2">
+                    <span className="inline-block h-px w-4 bg-[var(--brand)]" />
+                    Documentation
+                  </span>
+                </BlurFade>
+                <BlurFade delay={100}>
+                  <h1 className="mt-5 text-4xl font-bold tracking-tight text-[var(--foreground)] sm:text-5xl">
+                    Cerul API docs
+                  </h1>
+                </BlurFade>
+                <BlurFade delay={200}>
+                  <p className="mt-4 max-w-3xl text-[16px] leading-8 text-[var(--foreground-secondary)]">
+                    Public guides and endpoint references for building against Cerul&apos;s
+                    video-search platform. Start with one authenticated request, understand the
+                    response envelope, and only move deeper when your integration needs it.
+                  </p>
+                </BlurFade>
 
-                <div className="mt-5 flex flex-wrap items-center gap-2 text-sm text-[var(--foreground-secondary)]">
-                  {[
-                    "Base URL: https://api.cerul.ai",
-                    "Bearer authentication",
-                    "JSON request + response",
-                  ].map((item) => (
-                    <span
-                      key={item}
-                      className="rounded-full border border-[var(--border)] bg-white/70 px-3 py-1"
-                    >
-                      {item}
-                    </span>
-                  ))}
-                </div>
-
-                <div className="mt-8 grid gap-6 xl:grid-cols-[minmax(0,1fr)_440px]">
-                  <div>
-                    <p className="text-sm leading-7 text-[var(--foreground-secondary)]">
-                      The fastest path is still simple: create one key, test search once, then wire
-                      usage checks before you scale traffic.
-                    </p>
-                    <div className="mt-5 grid gap-3">
-                      {fastStartSteps.map((step, index) => (
-                        <div
-                          key={step}
-                          className="rounded-[18px] border border-[var(--border)] bg-[var(--background-elevated)] px-4 py-4"
-                        >
-                          <p className="font-mono text-[11px] uppercase tracking-[0.16em] text-[var(--brand-bright)]">
-                            Step {index + 1}
-                          </p>
-                          <p className="mt-2 text-sm leading-7 text-[var(--foreground)]">{step}</p>
-                        </div>
-                      ))}
-                    </div>
+                <FadeIn delay={300}>
+                  <div className="mt-6 flex flex-wrap items-center gap-2 text-sm text-[var(--foreground-secondary)]">
+                    {[
+                      "Base URL: https://api.cerul.ai",
+                      "Bearer authentication",
+                      "JSON request + response",
+                    ].map((item) => (
+                      <span
+                        key={item}
+                        className="rounded-full border border-[var(--border)] bg-white/70 px-3 py-1.5 font-mono text-xs"
+                      >
+                        {item}
+                      </span>
+                    ))}
                   </div>
+                </FadeIn>
 
-                  <CodeBlock
-                    code={`curl "https://api.cerul.ai/v1/search" \\
+                <div className="mt-10 grid gap-6 xl:grid-cols-[minmax(0,1fr)_440px]">
+                  <FadeIn delay={400}>
+                    <div>
+                      <p className="text-[15px] leading-7 text-[var(--foreground-secondary)]">
+                        The fastest path is still simple: create one key, test search once, then wire
+                        usage checks before you scale traffic.
+                      </p>
+                      <div className="mt-6 grid gap-3">
+                        {fastStartSteps.map((step, index) => (
+                          <div
+                            key={step}
+                            className="group rounded-[18px] border border-[var(--border)] bg-[var(--background-elevated)] px-5 py-4 transition-all hover:border-[var(--border-brand)] hover:shadow-sm"
+                          >
+                            <p className="font-mono text-[11px] uppercase tracking-[0.16em] text-[var(--brand-bright)]">
+                              Step {index + 1}
+                            </p>
+                            <p className="mt-2 text-[15px] leading-7 text-[var(--foreground)]">{step}</p>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </FadeIn>
+
+                  <FadeIn delay={500}>
+                    <CodeBlock
+                      code={`curl "https://api.cerul.ai/v1/search" \\
   -H "Authorization: Bearer YOUR_CERUL_API_KEY" \\
   -H "Content-Type: application/json" \\
   -d '{
@@ -106,12 +120,13 @@ export default function DocsPage() {
       "source": "youtube"
     }
   }'`}
-                    filename="quickstart.sh"
-                    language="bash"
-                  />
+                      filename="quickstart.sh"
+                      language="bash"
+                    />
+                  </FadeIn>
                 </div>
 
-                <div className="mt-7" data-docs-ai-anchor="true">
+                <div className="mt-8" data-docs-ai-anchor="true">
                   <AIToolbar
                     copyRootSelector="[data-ai-copy-root='true']"
                     pageUrl="/docs"
@@ -120,124 +135,132 @@ export default function DocsPage() {
                 </div>
               </section>
 
-              <section id="getting-started" className="border-b border-[var(--border)] py-10">
-                <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
-                  <div>
-                    <p className="font-mono text-[11px] uppercase tracking-[0.18em] text-[var(--foreground-tertiary)]">
-                      Getting started
-                    </p>
-                    <h2 className="mt-2 text-2xl font-semibold text-[var(--foreground)]">
-                      Read in the order most integrations happen
-                    </h2>
+              {/* Getting Started */}
+              <section id="getting-started" className="border-b border-[var(--border)] py-12">
+                <FadeIn>
+                  <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+                    <div>
+                      <span className="eyebrow">Getting started</span>
+                      <h2 className="mt-3 text-2xl font-bold text-[var(--foreground)]">
+                        Read in the order most integrations happen
+                      </h2>
+                    </div>
+                    <Link
+                      href="/docs/api-reference"
+                      className="text-sm font-medium text-[var(--brand-bright)] transition hover:text-[var(--foreground)]"
+                    >
+                      Full endpoint index →
+                    </Link>
                   </div>
-                  <Link
-                    href="/docs/api-reference"
-                    className="text-sm font-medium text-[var(--brand-bright)] transition hover:text-[var(--foreground)]"
-                  >
-                    Full endpoint index →
-                  </Link>
-                </div>
+                </FadeIn>
 
-                <div className="mt-5 overflow-hidden rounded-[20px] border border-[var(--border)] bg-[var(--background-elevated)]">
-                  {docsIndexCards.map((card, index) => (
-                    <Link
-                      key={card.slug}
-                      href={card.href as Route}
-                      className="group block border-b border-[var(--border)] px-5 py-5 transition hover:bg-white/80 last:border-b-0"
-                    >
-                      <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
-                        <div className="min-w-0">
-                          <div className="flex flex-wrap items-center gap-2">
-                            <span className="font-mono text-[11px] uppercase tracking-[0.18em] text-[var(--brand-bright)]">
-                              {String(index + 1).padStart(2, "0")}
-                            </span>
-                            <span className="rounded-full border border-[var(--border)] px-2.5 py-1 text-[11px] text-[var(--foreground-secondary)]">
-                              {card.kicker}
-                            </span>
-                            <span className="rounded-full border border-[var(--border)] px-2.5 py-1 text-[11px] text-[var(--foreground-secondary)]">
-                              {card.readingTime}
-                            </span>
+                <FadeIn delay={100}>
+                  <div className="mt-6 overflow-hidden rounded-[24px] border border-[var(--border)] bg-[var(--background-elevated)]">
+                    {docsIndexCards.map((card, index) => (
+                      <Link
+                        key={card.slug}
+                        href={card.href as Route}
+                        className="group block border-b border-[var(--border)] px-6 py-5 transition-all hover:bg-white/80 last:border-b-0"
+                      >
+                        <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                          <div className="min-w-0">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <span className="font-mono text-[11px] uppercase tracking-[0.18em] text-[var(--brand-bright)]">
+                                {String(index + 1).padStart(2, "0")}
+                              </span>
+                              <span className="rounded-full border border-[var(--border)] px-2.5 py-1 text-[11px] text-[var(--foreground-secondary)]">
+                                {card.kicker}
+                              </span>
+                              <span className="rounded-full border border-[var(--border)] px-2.5 py-1 text-[11px] text-[var(--foreground-secondary)]">
+                                {card.readingTime}
+                              </span>
+                            </div>
+                            <h3 className="mt-3 text-xl font-semibold text-[var(--foreground)]">
+                              {card.title}
+                            </h3>
+                            <p className="mt-2 max-w-3xl text-[15px] leading-7 text-[var(--foreground-secondary)]">
+                              {card.summary}
+                            </p>
                           </div>
-                          <h3 className="mt-3 text-xl font-semibold text-[var(--foreground)]">
-                            {card.title}
-                          </h3>
-                          <p className="mt-2 max-w-3xl text-sm leading-7 text-[var(--foreground-secondary)]">
-                            {card.summary}
-                          </p>
+                          <span className="text-sm font-medium text-[var(--brand-bright)] transition group-hover:text-[var(--foreground)]">
+                            Open →
+                          </span>
                         </div>
-                        <span className="text-sm font-medium text-[var(--brand-bright)] transition group-hover:text-[var(--foreground)]">
-                          Open
-                        </span>
-                      </div>
-                    </Link>
-                  ))}
-                </div>
+                      </Link>
+                    ))}
+                  </div>
+                </FadeIn>
               </section>
 
-              <section id="api-surface" className="border-b border-[var(--border)] py-10">
-                <p className="font-mono text-[11px] uppercase tracking-[0.18em] text-[var(--foreground-tertiary)]">
-                  API surface
-                </p>
-                <h2 className="mt-2 text-2xl font-semibold text-[var(--foreground)]">
-                  Stable public routes
-                </h2>
+              {/* API Surface */}
+              <section id="api-surface" className="border-b border-[var(--border)] py-12">
+                <FadeIn>
+                  <span className="eyebrow">API surface</span>
+                  <h2 className="mt-3 text-2xl font-bold text-[var(--foreground)]">
+                    Stable public routes
+                  </h2>
+                </FadeIn>
 
-                <div className="mt-5 overflow-hidden rounded-[20px] border border-[var(--border)]">
-                  <table className="w-full text-left text-sm">
-                    <thead className="bg-[var(--background-elevated)] text-[var(--foreground-secondary)]">
-                      <tr>
-                        <th className="px-4 py-3 font-medium">Surface</th>
-                        <th className="px-4 py-3 font-medium">What it covers</th>
-                        <th className="px-4 py-3 font-medium">Primary route</th>
-                      </tr>
-                    </thead>
-                    <tbody className="bg-white/65">
-                      {docsFeatureCards.map((card) => (
-                        <tr key={card.title} className="border-t border-[var(--border)]">
-                          <td className="px-4 py-4 text-[var(--foreground)]">{card.title}</td>
-                          <td className="px-4 py-4 text-[var(--foreground-secondary)]">
-                            {card.description}
-                          </td>
-                          <td className="px-4 py-4">
-                            <Link
-                              href={card.href as Route}
-                              className="font-mono text-[var(--brand-bright)] transition hover:text-[var(--foreground)]"
-                            >
-                              {card.snippet}
-                            </Link>
-                          </td>
+                <FadeIn delay={100}>
+                  <div className="mt-6 overflow-hidden rounded-[24px] border border-[var(--border)]">
+                    <table className="w-full text-left text-sm">
+                      <thead className="bg-[var(--background-elevated)] text-[var(--foreground-secondary)]">
+                        <tr>
+                          <th className="px-5 py-4 font-medium">Surface</th>
+                          <th className="px-5 py-4 font-medium">What it covers</th>
+                          <th className="px-5 py-4 font-medium">Primary route</th>
                         </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
+                      </thead>
+                      <tbody className="bg-white/65">
+                        {docsFeatureCards.map((card) => (
+                          <tr key={card.title} className="border-t border-[var(--border)] transition hover:bg-white/80">
+                            <td className="px-5 py-4 text-[var(--foreground)]">{card.title}</td>
+                            <td className="px-5 py-4 text-[var(--foreground-secondary)]">
+                              {card.description}
+                            </td>
+                            <td className="px-5 py-4">
+                              <Link
+                                href={card.href as Route}
+                                className="font-mono text-[var(--brand-bright)] transition hover:text-[var(--foreground)]"
+                              >
+                                {card.snippet}
+                              </Link>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </FadeIn>
               </section>
 
-              <section id="resources" className="pt-10">
-                <p className="font-mono text-[11px] uppercase tracking-[0.18em] text-[var(--foreground-tertiary)]">
-                  Common paths
-                </p>
-                <h2 className="mt-2 text-2xl font-semibold text-[var(--foreground)]">
-                  What developers usually need next
-                </h2>
+              {/* Resources */}
+              <section id="resources" className="pt-12">
+                <FadeIn>
+                  <span className="eyebrow">Common paths</span>
+                  <h2 className="mt-3 text-2xl font-bold text-[var(--foreground)]">
+                    What developers usually need next
+                  </h2>
+                </FadeIn>
 
-                <div className="mt-5 grid gap-4 md:grid-cols-2">
-                  {docsPopularTopics.map((item) => (
-                    <Link
-                      key={item.title}
-                      href={item.href as Route}
-                      className="rounded-[18px] border border-[var(--border)] bg-[var(--background-elevated)] px-5 py-5 transition hover:border-[var(--border-brand)] hover:bg-white"
-                    >
-                      <p className="text-base font-semibold text-[var(--foreground)]">
-                        {item.title}
-                      </p>
-                      <p className="mt-2 text-sm leading-7 text-[var(--foreground-secondary)]">
-                        {item.description}
-                      </p>
-                      <p className="mt-3 font-mono text-[11px] uppercase tracking-[0.16em] text-[var(--brand-bright)]">
-                        {item.href}
-                      </p>
-                    </Link>
+                <div className="mt-6 grid gap-4 md:grid-cols-2">
+                  {docsPopularTopics.map((item, index) => (
+                    <FadeIn key={item.title} delay={index * 100}>
+                      <Link
+                        href={item.href as Route}
+                        className="group block rounded-[20px] border border-[var(--border)] bg-[var(--background-elevated)] p-6 transition-all hover:border-[var(--border-brand)] hover:bg-white hover:shadow-sm"
+                      >
+                        <p className="text-base font-semibold text-[var(--foreground)]">
+                          {item.title}
+                        </p>
+                        <p className="mt-2 text-[15px] leading-relaxed text-[var(--foreground-secondary)]">
+                          {item.description}
+                        </p>
+                        <p className="mt-4 font-mono text-[11px] uppercase tracking-[0.16em] text-[var(--brand-bright)]">
+                          {item.href}
+                        </p>
+                      </Link>
+                    </FadeIn>
                   ))}
                 </div>
               </section>

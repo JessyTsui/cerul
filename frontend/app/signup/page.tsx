@@ -36,10 +36,8 @@ export default async function SignupPage({ searchParams }: SignupPageProps) {
 
   return (
     <AuthShell
-      heroEyebrow="Create workspace"
-      heroTitle="One account for the console, separate keys for every app."
-      heroDescription="Create your Cerul workspace, land in the dashboard immediately, and issue API keys per environment instead of routing everything through one long-lived secret."
-      highlights={["Sandbox first", "Separate web auth", "Production-ready keys"]}
+      heroTitle="Give your agent eyes on every video."
+      heroDescription="Cerul indexes video by meaning — so your agent can find the exact scene it needs across thousands of hours."
     >
       <SignupForm nextPath={nextPath} />
     </AuthShell>

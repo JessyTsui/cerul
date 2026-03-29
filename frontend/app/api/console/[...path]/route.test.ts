@@ -21,7 +21,7 @@ vi.mock("@/lib/console-api", () => ({
 }));
 
 import { NextRequest } from "next/server";
-import { PUT } from "./route";
+import { GET, PUT } from "./route";
 
 describe("console proxy route", () => {
   const originalFetch = global.fetch;
@@ -155,5 +155,90 @@ describe("console proxy route", () => {
         )
         .digest("hex"),
     );
+  });
+
+  it("falls back to the legacy ingestion summary path for workers summary", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi
+        .fn()
+        .mockResolvedValueOnce(
+          new Response(JSON.stringify({ detail: "Not Found" }), {
+            status: 404,
+            headers: {
+              "Content-Type": "application/json",
+            },
+          }),
+        )
+        .mockResolvedValueOnce(
+          new Response(JSON.stringify({ ok: true, series: [] }), {
+            status: 200,
+            headers: {
+              "Content-Type": "application/json",
+            },
+          }),
+        ),
+    );
+
+    const request = new NextRequest(
+      "http://127.0.0.1:3000/api/console/admin/workers/summary?range=7d",
+      {
+        method: "GET",
+        headers: {
+          accept: "application/json",
+        },
+      },
+    );
+
+    const response = await GET(request, {
+      params: Promise.resolve({
+        path: ["admin", "workers", "summary"],
+      }),
+    });
+
+    expect(response.status).toBe(200);
+    expect(global.fetch).toHaveBeenCalledTimes(2);
+
+    const [primaryTarget] = vi.mocked(global.fetch).mock.calls[0] ?? [];
+    const [fallbackTarget] = vi.mocked(global.fetch).mock.calls[1] ?? [];
+    expect(String(primaryTarget)).toBe("http://127.0.0.1:8787/admin/workers/summary?range=7d");
+    expect(String(fallbackTarget)).toBe("http://127.0.0.1:8787/admin/ingestion/summary?range=7d");
+  });
+
+  it("returns an empty worker node payload when the upstream workers route is missing", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        new Response(JSON.stringify({ detail: "Not Found" }), {
+          status: 404,
+          headers: {
+            "Content-Type": "application/json",
+          },
+        }),
+      ),
+    );
+
+    const request = new NextRequest(
+      "http://127.0.0.1:3000/api/console/admin/workers",
+      {
+        method: "GET",
+        headers: {
+          accept: "application/json",
+        },
+      },
+    );
+
+    const response = await GET(request, {
+      params: Promise.resolve({
+        path: ["admin", "workers"],
+      }),
+    });
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({
+      generated_at: "",
+      nodes: [],
+    });
+    expect(global.fetch).toHaveBeenCalledTimes(1);
   });
 });

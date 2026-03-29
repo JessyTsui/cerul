@@ -61,6 +61,50 @@ describe("normalizeAdminSummary", () => {
     expect(normalized.requestSeries[0].latencyP95Ms).toBe(620);
     expect(normalized.notices[0].tone).toBe("warning");
   });
+
+  it("falls back to legacy ingestion series payloads", () => {
+    const normalized = normalizeAdminSummary({
+      generated_at: "2026-03-14T10:00:00Z",
+      window: {
+        range_key: "7d",
+        current_start: "2026-03-08T00:00:00Z",
+        current_end: "2026-03-14T10:00:00Z",
+        previous_start: "2026-03-01T14:00:00Z",
+        previous_end: "2026-03-08T00:00:00Z",
+      },
+      metrics: {
+        total_users: { current: 12, previous: 10, delta: 2 },
+        new_users: { current: 4, previous: 3, delta: 1 },
+        active_users: { current: 8, previous: 6, delta: 2 },
+        requests: { current: 320, previous: 280, delta: 40 },
+        credits_used: { current: 810, previous: 700, delta: 110 },
+        zero_result_rate: { current: 0.08, previous: 0.1, delta: -0.02 },
+        indexed_assets: { current: 1200, previous: 1180, delta: 20 },
+        indexed_segments: { current: 4500, previous: 4300, delta: 200 },
+        pending_jobs: { current: 4, previous: 2, delta: 2 },
+        failed_jobs: { current: 1, previous: 0, delta: 1 },
+      },
+      request_series: [],
+      content_series: [],
+      ingestion_series: [
+        {
+          date: "2026-03-14",
+          requests: 32,
+          credits_used: 70,
+          zero_result_queries: 3,
+          broll_assets_added: 4,
+          knowledge_videos_added: 1,
+          knowledge_segments_added: 12,
+          jobs_completed: 5,
+          jobs_failed: 1,
+          latency_p95_ms: 620,
+        },
+      ],
+      notices: [],
+    });
+
+    expect(normalized.workersSeries[0]?.jobsCompleted).toBe(5);
+  });
 });
 
 describe("admin targets client", () => {
@@ -207,6 +251,78 @@ describe("admin targets client", () => {
 
     expect(global.fetch).toHaveBeenCalledWith(
       "/api/console/admin/workers/summary?range=7d",
+      expect.objectContaining({
+        credentials: "include",
+        method: "GET",
+      }),
+    );
+  });
+
+  it("falls back to the legacy ingestion summary endpoint when workers summary is unavailable", async () => {
+    vi.mocked(global.fetch)
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ detail: "Not Found" }), {
+          status: 404,
+          headers: {
+            "Content-Type": "application/json",
+          },
+        }),
+      )
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            generated_at: "2026-03-14T10:00:00Z",
+            window: {
+              range_key: "7d",
+              current_start: "2026-03-08T00:00:00Z",
+              current_end: "2026-03-14T10:00:00Z",
+              previous_start: "2026-03-01T14:00:00Z",
+              previous_end: "2026-03-08T00:00:00Z",
+            },
+            metrics: {
+              jobs_created: { current: 8, previous: 6, delta: 2 },
+              jobs_completed: { current: 5, previous: 4, delta: 1 },
+              jobs_failed: { current: 1, previous: 0, delta: 1 },
+              completion_rate: { current: 0.83, previous: 0.8, delta: 0.03 },
+              failure_rate: { current: 0.17, previous: 0.2, delta: -0.03 },
+              pending_backlog: { current: 3, previous: 2, delta: 1 },
+              average_processing_ms: { current: 4200, previous: 4400, delta: -200 },
+            },
+            status_counts: {
+              pending: 2,
+              running: 1,
+              retrying: 0,
+              completed: 5,
+              failed: 1,
+            },
+            daily_series: [],
+            source_health: [],
+            recent_failed_jobs: [],
+            failed_steps: [],
+          }),
+          {
+            status: 200,
+            headers: {
+              "Content-Type": "application/json",
+            },
+          },
+        ),
+      );
+
+    const response = await admin.getWorkers("7d");
+
+    expect(response.metrics.jobsCompleted.current).toBe(5);
+    expect(global.fetch).toHaveBeenNthCalledWith(
+      1,
+      "/api/console/admin/workers/summary?range=7d",
+      expect.objectContaining({
+        credentials: "include",
+        method: "GET",
+      }),
+    );
+    expect(global.fetch).toHaveBeenNthCalledWith(
+      2,
+      "/api/console/admin/ingestion/summary?range=7d",
       expect.objectContaining({
         credentials: "include",
         method: "GET",
@@ -590,6 +706,24 @@ describe("admin data clients", () => {
         method: "GET",
       }),
     );
+  });
+
+  it("treats missing worker-node telemetry routes as an empty node list", async () => {
+    vi.mocked(global.fetch).mockResolvedValueOnce(
+      new Response(JSON.stringify({ detail: "Not Found" }), {
+        status: 404,
+        headers: {
+          "Content-Type": "application/json",
+        },
+      }),
+    );
+
+    const response = await admin.getWorkerNodes();
+
+    expect(response).toEqual({
+      generatedAt: "",
+      nodes: [],
+    });
   });
 
   it("preserves running and queued counts in sources analytics", async () => {

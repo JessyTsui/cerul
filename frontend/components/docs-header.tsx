@@ -118,7 +118,7 @@ export function DocsHeader({ currentPath }: DocsHeaderProps) {
                 Search
               </button>
               <a
-                href="mailto:team@cerul.ai"
+                href="mailto:support@cerul.ai"
                 className="hidden rounded-full px-3 py-2 text-sm text-[var(--foreground-tertiary)] transition hover:bg-white/40 hover:text-[var(--foreground)] sm:inline-flex"
               >
                 Support

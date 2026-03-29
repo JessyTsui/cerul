@@ -11,12 +11,11 @@ export function AgentDemoConsole() {
               Example request
             </p>
             <h2 className="mt-3 text-3xl font-semibold tracking-[-0.04em] text-[var(--foreground)] sm:text-4xl">
-              One explicit API call, then a grounded video result.
+              One API call. Grounded video results.
             </h2>
             <p className="mt-3 text-sm leading-7 text-[var(--foreground-secondary)]">
-              The goal is not to hide the API. The UI should make the contract feel clearer and
-              more usable, which is exactly why the new playground leans into request-and-response
-              structure instead of abstract demo chrome.
+              Send a natural-language query, get back timestamped video segments with relevance
+              scores and source links — ready for your agent to reason over.
             </p>
           </div>
 

@@ -1,32 +1,35 @@
-function DashboardLoadingCard({
+function DashboardLoadingBlock({
   className = "",
 }: {
   className?: string;
 }) {
   return (
     <div
-      className={`animate-pulse rounded-[24px] border border-[var(--border)] bg-[rgba(255,255,255,0.03)] ${className}`}
+      className={`animate-pulse rounded-[24px] border border-[var(--border)] bg-[rgba(36,29,21,0.08)] ${className}`}
     />
   );
 }
 
 export default function DashboardLoading() {
   return (
-    <div className="min-h-screen px-4 pb-8 pt-4 sm:px-6 lg:px-8">
-      <div className="mx-auto max-w-[1480px] space-y-6">
-        <DashboardLoadingCard className="h-24" />
-        <div className="grid gap-6 lg:grid-cols-[280px_minmax(0,1fr)]">
-          <DashboardLoadingCard className="hidden h-[520px] lg:block" />
-          <div className="space-y-6">
-            <DashboardLoadingCard className="h-48" />
-            <div className="grid gap-6 xl:grid-cols-3">
-              <DashboardLoadingCard className="h-40" />
-              <DashboardLoadingCard className="h-40" />
-              <DashboardLoadingCard className="h-40" />
-            </div>
-            <DashboardLoadingCard className="h-[360px]" />
-          </div>
+    <div className="mx-auto max-w-[1120px]">
+      <div className="mb-6 flex flex-col gap-4 border-b border-[var(--border)] pb-6 sm:flex-row sm:items-end sm:justify-between">
+        <div className="space-y-3">
+          <DashboardLoadingBlock className="h-4 w-28 rounded-full" />
+          <DashboardLoadingBlock className="h-12 w-48 rounded-full" />
+          <DashboardLoadingBlock className="h-4 w-80 max-w-full rounded-full" />
         </div>
+        <DashboardLoadingBlock className="h-10 w-24 rounded-full" />
+      </div>
+
+      <div className="space-y-5">
+        <DashboardLoadingBlock className="h-56 rounded-[32px]" />
+        <div className="grid gap-5 xl:grid-cols-3">
+          <DashboardLoadingBlock className="h-40 rounded-[28px]" />
+          <DashboardLoadingBlock className="h-40 rounded-[28px]" />
+          <DashboardLoadingBlock className="h-40 rounded-[28px]" />
+        </div>
+        <DashboardLoadingBlock className="h-[360px] rounded-[30px]" />
       </div>
     </div>
   );

@@ -89,7 +89,7 @@ export function LoginForm({ nextPath }: LoginFormProps) {
               Password
             </label>
             <a
-              href="mailto:team@cerul.ai?subject=Cerul%20password%20help"
+              href="mailto:support@cerul.ai?subject=Cerul%20password%20help"
               className="text-xs text-[var(--foreground-tertiary)] transition hover:text-[var(--foreground-secondary)]"
             >
               Forgot password?
@@ -146,14 +146,14 @@ export function LoginForm({ nextPath }: LoginFormProps) {
         </label>
 
         {error ? (
-          <div className="rounded-xl border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm text-red-400">
+          <div className="rounded-[18px] border border-[rgba(191,91,70,0.18)] bg-[rgba(191,91,70,0.12)] px-4 py-3 text-sm text-[var(--error)]">
             {error}
           </div>
         ) : null}
 
         <button
           type="submit"
-          className="h-11 w-full rounded-xl bg-white text-sm font-semibold text-[#090c14] transition hover:bg-white/90 disabled:cursor-not-allowed disabled:opacity-70"
+          className="button-primary w-full"
           disabled={isSubmitting}
         >
           {isSubmitting ? "Signing in..." : "Sign in"}
@@ -164,7 +164,7 @@ export function LoginForm({ nextPath }: LoginFormProps) {
         Don&apos;t have an account?{" "}
         <Link
           href={buildAuthPageHref("/signup", nextPath) as Route}
-          className="font-medium text-white transition hover:text-[var(--brand-bright)]"
+          className="font-medium text-[var(--foreground)] transition hover:text-[var(--brand-bright)]"
         >
           Sign up
         </Link>

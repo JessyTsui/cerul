@@ -22,6 +22,11 @@ type RouteContext = {
   }>;
 };
 
+type SessionUser = {
+  id: string;
+  email?: string | null;
+};
+
 function buildForwardPath(pathSegments: string[] | undefined): string {
   return `/${(pathSegments ?? []).join("/")}`.replace(/\/{2,}/g, "/");
 }
@@ -91,6 +96,110 @@ function buildSessionSignature(input: {
     .digest("hex");
 }
 
+function buildProxyHeaders(input: {
+  request: NextRequest;
+  sessionUser: SessionUser;
+  authProxySecret: string;
+  upstreamPathname: string;
+}): Headers {
+  const headers = new Headers();
+
+  for (const headerName of ["accept", "authorization", "content-type"]) {
+    const headerValue = input.request.headers.get(headerName);
+    if (headerValue) {
+      headers.set(headerName, headerValue);
+    }
+  }
+
+  const cookieHeader = input.request.headers.get("cookie");
+  if (cookieHeader) {
+    headers.set("cookie", cookieHeader);
+  }
+
+  const timestamp = String(Math.floor(Date.now() / 1000));
+  headers.set(SESSION_PROXY_USER_ID_HEADER, input.sessionUser.id);
+
+  if (input.sessionUser.email) {
+    headers.set(SESSION_PROXY_EMAIL_HEADER, input.sessionUser.email);
+  }
+
+  headers.set(SESSION_PROXY_TIMESTAMP_HEADER, timestamp);
+  headers.set(
+    SESSION_PROXY_SIGNATURE_HEADER,
+    buildSessionSignature({
+      userId: input.sessionUser.id,
+      email: input.sessionUser.email,
+      timestamp,
+      method: input.request.method,
+      path: input.upstreamPathname,
+      secret: input.authProxySecret,
+    }),
+  );
+
+  return headers;
+}
+
+async function fetchUpstreamResponse(input: {
+  request: NextRequest;
+  upstreamUrl: URL;
+  sessionUser: SessionUser;
+  authProxySecret: string;
+  body: ArrayBuffer | undefined;
+}): Promise<Response> {
+  return fetch(input.upstreamUrl, {
+    method: input.request.method,
+    headers: buildProxyHeaders({
+      request: input.request,
+      sessionUser: input.sessionUser,
+      authProxySecret: input.authProxySecret,
+      upstreamPathname: input.upstreamUrl.pathname,
+    }),
+    body: canIncludeBody(input.request.method) ? input.body : undefined,
+    cache: "no-store",
+    redirect: "manual",
+  });
+}
+
+function buildProxyResponse(response: Response): Response {
+  const responseHeaders = new Headers();
+  const contentType = response.headers.get("content-type");
+
+  if (contentType) {
+    responseHeaders.set("content-type", contentType);
+  }
+
+  responseHeaders.set("cache-control", "no-store");
+
+  return new Response(response.body, {
+    status: response.status,
+    statusText: response.statusText,
+    headers: responseHeaders,
+  });
+}
+
+function resolveConsoleFallbackPath(forwardPath: string): string | null {
+  if (forwardPath === "/admin/workers/summary") {
+    return "/admin/ingestion/summary";
+  }
+
+  return null;
+}
+
+function buildWorkerNodesFallbackResponse(): Response {
+  return NextResponse.json(
+    {
+      generated_at: "",
+      nodes: [],
+    },
+    {
+      status: 200,
+      headers: {
+        "cache-control": "no-store",
+      },
+    },
+  );
+}
+
 async function proxyConsoleRequest(
   request: NextRequest,
   context: RouteContext,
@@ -127,66 +236,40 @@ async function proxyConsoleRequest(
       { status: 503 },
     );
   }
-
-  const headers = new Headers();
-
-  for (const headerName of ["accept", "authorization", "content-type"]) {
-    const headerValue = request.headers.get(headerName);
-    if (headerValue) {
-      headers.set(headerName, headerValue);
-    }
-  }
-
-  const cookieHeader = request.headers.get("cookie");
-  if (cookieHeader) {
-    headers.set("cookie", cookieHeader);
-  }
-
-  const timestamp = String(Math.floor(Date.now() / 1000));
-  headers.set(SESSION_PROXY_USER_ID_HEADER, session.user.id);
-
-  if (session.user.email) {
-    headers.set(SESSION_PROXY_EMAIL_HEADER, session.user.email);
-  }
-
-  headers.set(SESSION_PROXY_TIMESTAMP_HEADER, timestamp);
-  headers.set(
-    SESSION_PROXY_SIGNATURE_HEADER,
-    buildSessionSignature({
-      userId: session.user.id,
-      email: session.user.email,
-      timestamp,
-      method: request.method,
-      path: upstreamUrl.pathname,
-      secret: authProxySecret,
-    }),
-  );
+  const requestBody = canIncludeBody(request.method)
+    ? await readRequestBody(request)
+    : undefined;
 
   try {
-    const response = await fetch(upstreamUrl, {
-      method: request.method,
-      headers,
-      body: canIncludeBody(request.method)
-        ? await readRequestBody(request)
-        : undefined,
-      cache: "no-store",
-      redirect: "manual",
+    let response = await fetchUpstreamResponse({
+      request,
+      upstreamUrl,
+      sessionUser: session.user,
+      authProxySecret,
+      body: requestBody,
     });
 
-    const responseHeaders = new Headers();
-    const contentType = response.headers.get("content-type");
+    if (response.status === 404) {
+      const fallbackForwardPath = resolveConsoleFallbackPath(forwardPath);
 
-    if (contentType) {
-      responseHeaders.set("content-type", contentType);
+      if (fallbackForwardPath) {
+        response = await fetchUpstreamResponse({
+          request,
+          upstreamUrl: buildUpstreamUrl({
+            backendApiBaseUrl: getBackendApiBaseUrl(),
+            forwardPath: fallbackForwardPath,
+            search: request.nextUrl.search,
+          }),
+          sessionUser: session.user,
+          authProxySecret,
+          body: requestBody,
+        });
+      } else if (request.method === "GET" && forwardPath === "/admin/workers") {
+        return buildWorkerNodesFallbackResponse();
+      }
     }
 
-    responseHeaders.set("cache-control", "no-store");
-
-    return new Response(response.body, {
-      status: response.status,
-      statusText: response.statusText,
-      headers: responseHeaders,
-    });
+    return buildProxyResponse(response);
   } catch {
     return NextResponse.json(
       { detail: "Console API proxy could not reach the backend." },
