@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { AdminContentScreen } from "@/components/admin/content-screen";
+import { redirect } from "next/navigation";
 
 export const metadata: Metadata = {
   title: "Admin Content",
@@ -10,5 +10,5 @@ export const metadata: Metadata = {
 };
 
 export default function AdminContentPage() {
-  return <AdminContentScreen />;
+  redirect("/admin/sources");
 }

@@ -273,7 +273,7 @@ function ActiveJobCard({
         onClick={() => setExpanded((value) => !value)}
       >
         <div className="min-w-0 flex-1">
-          <p className="truncate text-sm font-medium text-white">
+          <p className="truncate text-sm font-medium text-[var(--foreground)]">
             {job.title ?? job.videoId ?? job.jobId.slice(0, 8)}
           </p>
           <p className="mt-0.5 text-xs text-[var(--foreground-tertiary)]">
@@ -296,7 +296,7 @@ function ActiveJobCard({
             <SceneRouteSummary artifacts={runningStep.artifacts} status={runningStep.status} />
           ) : null}
           {longRunning ? (
-            <p className="mt-1 text-[11px] text-amber-300">
+            <p className="mt-1 text-[11px] text-[var(--accent-bright)]">
               This step has been running for a while. Download and transcription can take several minutes.
             </p>
           ) : null}
@@ -305,10 +305,10 @@ function ActiveJobCard({
           <span
             className={`rounded-full px-2 py-0.5 text-xs font-medium ${
               job.status === "running"
-                ? "bg-blue-500/20 text-blue-300"
+                ? "border border-[var(--border-brand)] bg-[var(--brand-subtle)] text-[var(--brand-bright)]"
                 : job.status === "retrying"
-                  ? "bg-amber-500/20 text-amber-300"
-                  : "bg-[var(--border)] text-[var(--foreground-secondary)]"
+                  ? "border border-[rgba(212,156,105,0.22)] bg-[rgba(212,156,105,0.12)] text-[var(--accent-bright)]"
+                  : "border border-[var(--border)] bg-white/72 text-[var(--foreground-secondary)]"
             }`}
           >
             {job.status}
@@ -326,13 +326,13 @@ function ActiveJobCard({
             const status = step?.status ?? "pending";
             const color =
               status === "completed"
-                ? "text-emerald-400"
+                ? "text-[var(--success)]"
                 : status === "running"
-                  ? "text-blue-300"
+                  ? "text-[var(--brand-bright)]"
                   : status === "failed"
-                    ? "text-red-400"
+                    ? "text-[var(--error)]"
                     : status === "skipped"
-                      ? "text-amber-300"
+                      ? "text-[var(--accent-bright)]"
                       : "text-[var(--foreground-tertiary)]";
             const details = summarizeArtifacts(step?.artifacts);
             const stepDuration = formatStepDuration(step, referenceNowMs);
@@ -351,14 +351,14 @@ function ActiveJobCard({
                   <p className="mt-1 text-[10px] text-[var(--foreground-secondary)]">{stepHint(name)}</p>
                 ) : null}
                 {step?.guidance ? (
-                  <p className="mt-1 text-[10px] text-amber-200">{step.guidance}</p>
+                  <p className="mt-1 text-[10px] text-[var(--accent-bright)]">{step.guidance}</p>
                 ) : null}
                 {details ? (
                   <p className="mt-1 text-[10px] text-[var(--foreground-tertiary)]">{details}</p>
                 ) : null}
                 <SceneRouteSummary artifacts={step?.artifacts} status={status} />
                 {stepLogs.length ? (
-                  <div className="mt-2 space-y-1 rounded-md bg-black/15 p-2">
+                  <div className="mt-2 space-y-1 rounded-md border border-[var(--border)] bg-white/62 p-2">
                     {stepLogs.slice(-4).map((entry, index) => (
                       <div key={`${entry.at ?? "log"}-${index}`} className="text-[10px] leading-4 text-[var(--foreground-secondary)]">
                         <span className="text-[var(--foreground-tertiary)]">
@@ -377,11 +377,11 @@ function ActiveJobCard({
           })}
 
           {failedStep?.errorMessage ? (
-            <pre className="mt-2 overflow-x-auto rounded-lg bg-red-950/30 p-2 text-[10px] leading-5 text-red-300 whitespace-pre-wrap break-all">
+            <pre className="mt-2 overflow-x-auto rounded-lg border border-[rgba(191,91,70,0.18)] bg-[rgba(191,91,70,0.1)] p-2 text-[10px] leading-5 text-[var(--error)] whitespace-pre-wrap break-all">
               {failedStep.errorMessage}
             </pre>
           ) : job.status === "retrying" && job.errorMessage ? (
-            <pre className="mt-2 overflow-x-auto rounded-lg bg-amber-950/30 p-2 text-[10px] leading-5 text-amber-200 whitespace-pre-wrap break-all">
+            <pre className="mt-2 overflow-x-auto rounded-lg border border-[rgba(212,156,105,0.2)] bg-[rgba(212,156,105,0.12)] p-2 text-[10px] leading-5 text-[var(--accent-bright)] whitespace-pre-wrap break-all">
               {job.errorMessage}
             </pre>
           ) : null}
@@ -421,10 +421,10 @@ function FailedJobCard({
           className="min-w-0 flex-1 text-left"
           onClick={() => setExpanded((value) => !value)}
         >
-          <p className="truncate text-sm font-medium text-white">
+          <p className="truncate text-sm font-medium text-[var(--foreground)]">
             {job.title ?? job.videoId ?? job.jobId.slice(0, 8)}
           </p>
-          <p className="mt-1 text-[11px] text-red-300">{errorPreview}</p>
+          <p className="mt-1 text-[11px] text-[var(--error)]">{errorPreview}</p>
           <p className="mt-1 text-[11px] text-[var(--foreground-secondary)]">
             {lastActivity ? `Failed ${lastActivity}` : "Failed recently."}
             {job.maxAttempts > 0 ? ` • attempt ${Math.max(job.attempts, 1)}/${job.maxAttempts}` : ""}
@@ -438,8 +438,8 @@ function FailedJobCard({
             onClick={() => onRetry(job.jobId)}
             className={`rounded-md px-3 py-1 text-xs font-medium transition ${
               retrying
-                ? "cursor-not-allowed bg-amber-500/15 text-amber-200"
-                : "bg-red-500/15 text-red-200 hover:bg-red-500/25"
+                ? "cursor-not-allowed bg-[rgba(212,156,105,0.1)] text-[var(--accent-bright)]/60"
+                : "bg-[rgba(191,91,70,0.12)] text-[var(--error)] hover:bg-[rgba(191,91,70,0.18)]"
             }`}
           >
             {retrying ? "Retrying..." : "Retry"}
@@ -454,8 +454,8 @@ function FailedJobCard({
             }}
             className={`rounded-md px-3 py-1 text-xs font-medium transition ${
               killing
-                ? "cursor-not-allowed bg-slate-500/15 text-slate-300"
-                : "bg-slate-500/15 text-slate-200 hover:bg-slate-500/25"
+                ? "cursor-not-allowed bg-white/46 text-[var(--foreground-secondary)]/60"
+                : "bg-white/68 text-[var(--foreground-secondary)] hover:bg-white"
             }`}
           >
             {killing ? "Killing..." : "Kill"}
@@ -473,13 +473,13 @@ function FailedJobCard({
             const status = step?.status ?? "pending";
             const color =
               status === "completed"
-                ? "text-emerald-400"
+                ? "text-[var(--success)]"
                 : status === "running"
-                  ? "text-blue-300"
+                  ? "text-[var(--brand-bright)]"
                   : status === "failed"
-                    ? "text-red-400"
+                    ? "text-[var(--error)]"
                     : status === "skipped"
-                      ? "text-amber-300"
+                      ? "text-[var(--accent-bright)]"
                       : "text-[var(--foreground-tertiary)]";
             const details = summarizeArtifacts(step?.artifacts);
             const stepDuration = formatStepDuration(step, referenceNowMs);
@@ -495,14 +495,14 @@ function FailedJobCard({
                   </span>
                 </div>
                 {step?.guidance ? (
-                  <p className="mt-1 text-[10px] text-amber-200">{step.guidance}</p>
+                  <p className="mt-1 text-[10px] text-[var(--accent-bright)]">{step.guidance}</p>
                 ) : null}
                 {details ? (
                   <p className="mt-1 text-[10px] text-[var(--foreground-tertiary)]">{details}</p>
                 ) : null}
                 <SceneRouteSummary artifacts={step?.artifacts} status={status} />
                 {stepLogs.length ? (
-                  <div className="mt-2 space-y-1 rounded-md bg-black/15 p-2">
+                  <div className="mt-2 space-y-1 rounded-md border border-[var(--border)] bg-white/62 p-2">
                     {stepLogs.slice(-4).map((entry, index) => (
                       <div key={`${entry.at ?? "log"}-${index}`} className="text-[10px] leading-4 text-[var(--foreground-secondary)]">
                         <span className="text-[var(--foreground-tertiary)]">
@@ -521,7 +521,7 @@ function FailedJobCard({
           })}
 
           {failedStep?.errorMessage || job.errorMessage ? (
-            <pre className="mt-2 overflow-x-auto rounded-lg bg-red-950/30 p-2 text-[10px] leading-5 text-red-300 whitespace-pre-wrap break-all">
+            <pre className="mt-2 overflow-x-auto rounded-lg border border-[rgba(191,91,70,0.18)] bg-[rgba(191,91,70,0.1)] p-2 text-[10px] leading-5 text-[var(--error)] whitespace-pre-wrap break-all">
               {failedStep?.errorMessage ?? job.errorMessage}
             </pre>
           ) : null}
@@ -632,121 +632,133 @@ export function WorkerLivePanel() {
   const failedRangeEnd = Math.min(data.failedJobsOffset + failedJobs.length, failedJobsTotal);
 
   return (
-    <section className="space-y-3">
+    <section className="space-y-4">
+      {/* Queue status bar */}
       <div className="flex flex-wrap items-center gap-2">
-        <span className="text-xs font-semibold text-white">Worker</span>
         {[
           { label: "pending", value: queue.pending, color: "text-[var(--foreground-secondary)]" },
-          { label: "running", value: queue.running, color: "text-blue-300" },
-          { label: "retrying", value: queue.retrying, color: "text-amber-300" },
-          { label: "completed", value: queue.completed, color: "text-emerald-400" },
-          { label: "failed", value: queue.failed, color: "text-red-400" },
+          { label: "running", value: queue.running, color: "text-[var(--brand-bright)]" },
+          { label: "retrying", value: queue.retrying, color: "text-[var(--accent-bright)]" },
+          { label: "completed", value: queue.completed, color: "text-[var(--success)]" },
+          { label: "failed", value: queue.failed, color: "text-[var(--error)]" },
         ].map(({ label, value, color }) => (
-          <span key={label} className="rounded-full border border-[var(--border)] px-2.5 py-0.5 text-xs">
+          <span key={label} className="rounded-full border border-[var(--border)] bg-white/72 px-2.5 py-1 text-xs">
             <span className={`font-semibold ${color}`}>{value}</span>{" "}
             <span className="text-[var(--foreground-tertiary)]">{label}</span>
           </span>
         ))}
         <span className="ml-auto text-[10px] text-[var(--foreground-tertiary)]">
-          {error ? <span className="text-red-400">{error}</span> : "↻ 4s"}
+          {error ? <span className="text-[var(--error)]">{error}</span> : "Auto-refresh 4s"}
         </span>
       </div>
 
       {activeJobs.length === 0 && recentCompleted.length === 0 && failedJobs.length === 0 ? (
-        <p className="text-xs text-[var(--foreground-tertiary)]">No active or recent jobs.</p>
+        <div className="surface-elevated rounded-[28px] p-6 text-center">
+          <p className="text-sm text-[var(--foreground-tertiary)]">No active or recent jobs.</p>
+        </div>
       ) : (
-        <div className="grid gap-3 xl:grid-cols-3">
-          {activeJobs.length > 0 ? (
-            <div className="space-y-2">
-              <p className="text-xs text-[var(--foreground-tertiary)]">Active</p>
-              {activeJobs.map((job) => (
-                <ActiveJobCard key={job.jobId} job={job} referenceNowMs={referenceNowMs} />
-              ))}
-            </div>
-          ) : null}
-
-          {recentCompleted.length > 0 ? (
-            <div className="space-y-2">
-              <p className="text-xs text-[var(--foreground-tertiary)]">Recently completed</p>
-              <article className="surface divide-y divide-[var(--border)]">
-                {recentCompleted.map((job) => (
-                  <div key={job.jobId} className="flex items-center justify-between gap-3 px-4 py-2.5">
-                    <div className="min-w-0">
-                      <p className="truncate text-xs text-[var(--foreground-secondary)]">
-                        {job.title ?? job.videoId ?? job.jobId.slice(0, 8)}
-                      </p>
-                      {typeof job.totalDurationMs === "number" ? (
-                        <p className="mt-0.5 text-[10px] text-[var(--foreground-tertiary)]">
-                          {formatDuration(job.totalDurationMs)}
-                        </p>
-                      ) : null}
-                    </div>
-                    <div className="shrink-0 text-right">
-                      <span className="text-xs text-emerald-400">{job.segmentCount} seg</span>
-                    </div>
+        <div className="flex gap-4">
+          {/* Main column: Active jobs */}
+          <div className="flex-1 space-y-3">
+            {activeJobs.length > 0 ? (
+              <>
+                {activeJobs.map((job) => (
+                  <div key={job.jobId} className="surface-elevated relative overflow-hidden rounded-[28px] p-5">
+                    {/* Glow background */}
+                    <div className="pointer-events-none absolute right-0 top-0 h-64 w-64 bg-[rgba(136,165,242,0.12)] blur-3xl" />
+                    <ActiveJobCard job={job} referenceNowMs={referenceNowMs} />
                   </div>
                 ))}
-              </article>
-            </div>
-          ) : null}
-
-          {failedJobs.length > 0 ? (
-            <div className="space-y-2">
-              <div className="flex items-center gap-2">
-                <p className="text-xs text-[var(--foreground-tertiary)]">Failed Jobs</p>
-                <span className="rounded-full border border-red-500/30 px-2 py-0.5 text-[10px] text-red-300">
-                  {failedJobsTotal}
-                </span>
-              </div>
-              <div className="space-y-2">
-                {failedJobs.map((job) => (
-                  <FailedJobCard
-                    key={job.jobId}
-                    job={job}
-                    referenceNowMs={referenceNowMs}
-                    retrying={retryingJobIds.has(job.jobId)}
-                    killing={killingJobIds.has(job.jobId)}
-                    onRetry={handleRetry}
-                    onKill={handleKill}
-                  />
-                ))}
-              </div>
-              {failedJobsTotal > FAILED_JOBS_PAGE_SIZE ? (
-                <div className="flex items-center justify-between gap-3 rounded-xl border border-[var(--border)]/70 px-3 py-2 text-[11px] text-[var(--foreground-secondary)]">
-                  <p>
-                    Showing {failedRangeStart}-{failedRangeEnd} of {failedJobsTotal}
-                  </p>
-                  <div className="flex items-center gap-2">
-                    <button
-                      type="button"
-                      onClick={() =>
-                        setFailedOffset((current) =>
-                          Math.max(current - FAILED_JOBS_PAGE_SIZE, 0),
-                        )
-                      }
-                      disabled={data.failedJobsOffset === 0}
-                      className="rounded-md border border-[var(--border)] px-2.5 py-1 disabled:cursor-not-allowed disabled:opacity-40"
-                    >
-                      Prev
-                    </button>
-                    <span className="text-[10px] text-[var(--foreground-tertiary)]">
-                      Page {failedCurrentPage} / {failedTotalPages}
-                    </span>
-                    <button
-                      type="button"
-                      onClick={() =>
-                        setFailedOffset((current) => current + FAILED_JOBS_PAGE_SIZE)
-                      }
-                      disabled={data.failedJobsOffset + FAILED_JOBS_PAGE_SIZE >= failedJobsTotal}
-                      className="rounded-md border border-[var(--border)] px-2.5 py-1 disabled:cursor-not-allowed disabled:opacity-40"
-                    >
-                      Next
-                    </button>
+              </>
+            ) : (
+              <div className="surface-elevated rounded-[28px] p-5">
+                <div className="flex items-center gap-3">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-full border border-[var(--border)] bg-white/72">
+                    <svg className="h-5 w-5 text-[var(--foreground-tertiary)]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M5 12h14M5 12a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v4a2 2 0 01-2 2M5 12a2 2 0 00-2 2v4a2 2 0 002 2h14a2 2 0 002-2v-4a2 2 0 00-2-2m-2-4h.01M17 16h.01" strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} /></svg>
                   </div>
+                  <div>
+                    <h3 className="text-sm font-semibold text-[var(--foreground)]">Worker Idle</h3>
+                    <p className="text-[10px] text-[var(--foreground-tertiary)]">No active jobs in progress</p>
+                  </div>
+                  <span className="ml-auto rounded-full border border-[rgba(31,141,74,0.18)] bg-[rgba(31,141,74,0.12)] px-1.5 py-0.5 text-[10px] font-semibold text-[var(--success)]">IDLE</span>
                 </div>
-              ) : null}
-            </div>
-          ) : null}
+              </div>
+            )}
+          </div>
+
+          {/* Side column: Recent completed + Failed */}
+          <div className="w-72 shrink-0 space-y-3">
+            {recentCompleted.length > 0 ? (
+              <div className="surface-elevated rounded-[28px] p-4">
+                <p className="mb-3 text-[10px] font-semibold uppercase tracking-wider text-[var(--foreground-tertiary)]">Recently Completed</p>
+                <div className="divide-y divide-[var(--border)]">
+                  {recentCompleted.map((job) => (
+                    <div key={job.jobId} className="flex items-center justify-between gap-2 py-2">
+                      <div className="min-w-0">
+                        <p className="truncate text-xs text-[var(--foreground)]">
+                          {job.title ?? job.videoId ?? job.jobId.slice(0, 8)}
+                        </p>
+                        {typeof job.totalDurationMs === "number" ? (
+                          <p className="mt-0.5 text-[10px] text-[var(--foreground-tertiary)]">{formatDuration(job.totalDurationMs)}</p>
+                        ) : null}
+                      </div>
+                      <span className="shrink-0 text-xs text-[var(--success)]">{job.segmentCount} seg</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ) : null}
+
+            {failedJobs.length > 0 ? (
+              <div className="surface-elevated rounded-[28px] p-4">
+                <div className="mb-3 flex items-center justify-between">
+                  <p className="text-[10px] font-semibold uppercase tracking-wider text-[var(--foreground-tertiary)]">Failed</p>
+                  <span className="rounded-full border border-[rgba(191,91,70,0.18)] bg-[rgba(191,91,70,0.12)] px-1.5 py-0.5 text-[10px] font-semibold text-[var(--error)]">
+                    {failedJobsTotal}
+                  </span>
+                </div>
+                <div className="space-y-2">
+                  {failedJobs.map((job) => (
+                    <FailedJobCard
+                      key={job.jobId}
+                      job={job}
+                      referenceNowMs={referenceNowMs}
+                      retrying={retryingJobIds.has(job.jobId)}
+                      killing={killingJobIds.has(job.jobId)}
+                      onRetry={handleRetry}
+                      onKill={handleKill}
+                    />
+                  ))}
+                </div>
+                {failedJobsTotal > FAILED_JOBS_PAGE_SIZE ? (
+                  <div className="mt-3 flex items-center justify-between gap-2 text-[10px] text-[var(--foreground-secondary)]">
+                    <p>{failedRangeStart}-{failedRangeEnd} of {failedJobsTotal}</p>
+                    <div className="flex items-center gap-1">
+                      <button
+                        type="button"
+                        onClick={() => setFailedOffset((current) => Math.max(current - FAILED_JOBS_PAGE_SIZE, 0))}
+                        disabled={data.failedJobsOffset === 0}
+                        className="rounded border border-[var(--border)] px-2 py-0.5 text-[var(--foreground-secondary)] transition-colors hover:bg-white hover:text-[var(--foreground)] disabled:cursor-not-allowed disabled:opacity-40"
+                      >
+                        Prev
+                      </button>
+                      <span className="text-[var(--foreground-tertiary)]">
+                        {failedCurrentPage}/{failedTotalPages}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => setFailedOffset((current) => current + FAILED_JOBS_PAGE_SIZE)}
+                        disabled={data.failedJobsOffset + FAILED_JOBS_PAGE_SIZE >= failedJobsTotal}
+                        className="rounded border border-[var(--border)] px-2 py-0.5 text-[var(--foreground-secondary)] transition-colors hover:bg-white hover:text-[var(--foreground)] disabled:cursor-not-allowed disabled:opacity-40"
+                      >
+                        Next
+                      </button>
+                    </div>
+                  </div>
+                ) : null}
+              </div>
+            ) : null}
+          </div>
         </div>
       )}
     </section>

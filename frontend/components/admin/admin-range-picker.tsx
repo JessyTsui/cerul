@@ -13,7 +13,7 @@ export function AdminRangePicker({
   onChange,
 }: AdminRangePickerProps) {
   return (
-    <div className="inline-flex rounded-full border border-[var(--border)] bg-[var(--surface)] p-1">
+    <div className="inline-flex rounded-full border border-[var(--border)] bg-white/68 p-1 shadow-sm">
       {ADMIN_RANGE_OPTIONS.map((option) => {
         const isActive = option.value === value;
 
@@ -22,8 +22,8 @@ export function AdminRangePicker({
             key={option.value}
             className={`rounded-full px-4 py-2 text-sm transition-colors ${
               isActive
-                ? "bg-[var(--brand-bright)] text-slate-950"
-                : "text-[var(--foreground-secondary)] hover:text-white"
+                ? "bg-[var(--foreground)] text-[#faf6ef]"
+                : "text-[var(--foreground-secondary)] hover:bg-white/80 hover:text-[var(--foreground)]"
             }`}
             onClick={() => onChange(option.value)}
             type="button"

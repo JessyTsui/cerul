@@ -61,12 +61,12 @@ function getRouteBadgeClass(route: SceneRoute, emphasized = false): string {
     : "border px-2 py-1 text-[10px] font-medium";
 
   if (route === "annotate") {
-    return `${base} border-emerald-400/25 bg-emerald-500/10 text-emerald-200`;
+    return `${base} border-[rgba(31,141,74,0.18)] bg-[rgba(31,141,74,0.12)] text-[var(--success)]`;
   }
   if (route === "embed_only") {
-    return `${base} border-sky-400/25 bg-sky-500/10 text-sky-200`;
+    return `${base} border-[var(--border-brand)] bg-[var(--brand-subtle)] text-[var(--brand-bright)]`;
   }
-  return `${base} border-slate-400/20 bg-slate-500/10 text-slate-200`;
+  return `${base} border-[var(--border)] bg-white/72 text-[var(--foreground-secondary)]`;
 }
 
 function getRouteCounts(payload: Record<string, unknown> | null): SceneRouteCounts {
@@ -174,17 +174,17 @@ export function SceneRouteSummary({
               <p className="text-[10px] uppercase tracking-[0.12em] text-[var(--foreground-tertiary)]">
                 {getSceneRouteLabel(route)}
               </p>
-              <p className="mt-1 text-lg font-semibold text-white">
+              <p className="mt-1 text-lg font-semibold text-[var(--foreground)]">
                 {telemetry.routeCounts[route]}
               </p>
             </div>
           ))}
 
-          <div className="rounded-[12px] border border-amber-400/20 bg-amber-500/10 px-3 py-2 text-amber-100">
-            <p className="text-[10px] uppercase tracking-[0.12em] text-amber-200/80">
+          <div className="rounded-[12px] border border-[rgba(212,156,105,0.22)] bg-[rgba(212,156,105,0.12)] px-3 py-2 text-[var(--accent-bright)]">
+            <p className="text-[10px] uppercase tracking-[0.12em] text-[var(--accent-bright)]/80">
               Annotated frames
             </p>
-            <p className="mt-1 text-lg font-semibold text-white">{annotationCount ?? 0}</p>
+            <p className="mt-1 text-lg font-semibold text-[var(--foreground)]">{annotationCount ?? 0}</p>
           </div>
         </div>
 
@@ -209,7 +209,7 @@ export function SceneRouteSummary({
                   <p className="text-[10px] uppercase tracking-[0.12em] text-[var(--foreground-tertiary)]">
                     {label}
                   </p>
-                  <p className="mt-1 text-sm font-semibold text-white">
+                  <p className="mt-1 text-sm font-semibold text-[var(--foreground)]">
                     {formatMetricDuration(value)}
                   </p>
                 </div>
@@ -240,17 +240,17 @@ export function SceneRouteSummary({
         );
       })}
       {annotationCount !== null && annotationCount > 0 ? (
-        <span className="inline-flex items-center rounded-full border border-amber-400/20 bg-amber-500/10 px-2 py-1 text-[10px] font-medium text-amber-100">
+        <span className="inline-flex items-center rounded-full border border-[rgba(212,156,105,0.22)] bg-[rgba(212,156,105,0.12)] px-2 py-1 text-[10px] font-medium text-[var(--accent-bright)]">
           Annotated frames {annotationCount}
         </span>
       ) : null}
       {typeof telemetry.extractionTimeMs === "number" && telemetry.extractionTimeMs > 0 ? (
-        <span className="inline-flex items-center rounded-full border border-slate-400/20 bg-slate-500/10 px-2 py-1 text-[10px] font-medium text-slate-200">
+        <span className="inline-flex items-center rounded-full border border-[var(--border)] bg-white/72 px-2 py-1 text-[10px] font-medium text-[var(--foreground-secondary)]">
           Extract {formatMetricDuration(telemetry.extractionTimeMs)}
         </span>
       ) : null}
       {typeof telemetry.annotationTimeMs === "number" && telemetry.annotationTimeMs > 0 ? (
-        <span className="inline-flex items-center rounded-full border border-slate-400/20 bg-slate-500/10 px-2 py-1 text-[10px] font-medium text-slate-200">
+        <span className="inline-flex items-center rounded-full border border-[var(--border)] bg-white/72 px-2 py-1 text-[10px] font-medium text-[var(--foreground-secondary)]">
           Annotate {formatMetricDuration(telemetry.annotationTimeMs)}
         </span>
       ) : null}

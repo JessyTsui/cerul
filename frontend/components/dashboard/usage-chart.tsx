@@ -52,7 +52,7 @@ export function UsageChart({ title, description, data }: UsageChartProps) {
   if (data.length === 0) {
     return (
       <article className="surface-elevated rounded-[28px] px-6 py-6">
-        <h2 className="text-2xl font-semibold text-white">{title}</h2>
+        <h2 className="text-2xl font-semibold text-[var(--foreground)]">{title}</h2>
         <p className="mt-2 text-sm text-[var(--foreground-secondary)]">{description}</p>
         <div className="mt-6 rounded-[22px] border border-dashed border-[var(--border)] px-5 py-10 text-center text-sm text-[var(--foreground-secondary)]">
           No usage has been recorded for this period yet.
@@ -75,7 +75,7 @@ export function UsageChart({ title, description, data }: UsageChartProps) {
     <article className="surface-elevated rounded-[28px] px-6 py-6">
       <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
         <div>
-          <h2 className="text-2xl font-semibold text-white">{title}</h2>
+          <h2 className="text-2xl font-semibold text-[var(--foreground)]">{title}</h2>
           <p className="mt-2 text-sm leading-7 text-[var(--foreground-secondary)]">
             {description}
           </p>
@@ -83,21 +83,21 @@ export function UsageChart({ title, description, data }: UsageChartProps) {
         <div className="flex gap-4 text-sm">
           <span className="flex items-center gap-2 text-[var(--brand-bright)]">
             <span className="h-2 w-6 rounded-full bg-[var(--brand)]" />
-            knowledge
+            credits
           </span>
           <span className="flex items-center gap-2 text-[var(--foreground-secondary)]">
-            <span className="h-2 w-6 rounded-full bg-white/45" />
-            broll
+            <span className="h-2 w-6 rounded-full bg-[var(--accent)]" />
+            requests
           </span>
         </div>
       </div>
 
-      <div className="mt-6 overflow-hidden rounded-[24px] border border-[var(--border)] bg-[rgba(255,255,255,0.03)] p-4">
+      <div className="mt-6 overflow-hidden rounded-[24px] border border-[var(--border)] bg-[var(--background-elevated)] p-4">
         <svg viewBox={`0 0 ${width} ${height}`} className="w-full">
           <defs>
             <linearGradient id="usage-fill" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor="rgba(34, 211, 238, 0.34)" />
-              <stop offset="100%" stopColor="rgba(34, 211, 238, 0.02)" />
+              <stop offset="0%" stopColor="rgba(136, 165, 242, 0.34)" />
+              <stop offset="100%" stopColor="rgba(136, 165, 242, 0.04)" />
             </linearGradient>
           </defs>
 
@@ -110,7 +110,7 @@ export function UsageChart({ title, description, data }: UsageChartProps) {
                 x2={width - paddingX}
                 y1={y}
                 y2={y}
-                stroke="rgba(255,255,255,0.08)"
+                stroke="rgba(79, 67, 51, 0.1)"
               />
             );
           })}
@@ -120,7 +120,7 @@ export function UsageChart({ title, description, data }: UsageChartProps) {
           <path
             d={brollPath}
             fill="none"
-            stroke="rgba(255,255,255,0.56)"
+            stroke="var(--accent)"
             strokeWidth="3"
             strokeDasharray="10 10"
           />
@@ -142,7 +142,7 @@ export function UsageChart({ title, description, data }: UsageChartProps) {
                 <text
                   x={x}
                   y={height - 4}
-                  fill="rgba(255,255,255,0.58)"
+                  fill="rgba(109,101,88,0.78)"
                   fontSize="12"
                   textAnchor="middle"
                 >
@@ -155,21 +155,23 @@ export function UsageChart({ title, description, data }: UsageChartProps) {
       </div>
 
       <div className="mt-4 grid gap-4 md:grid-cols-3">
-        <div className="rounded-[20px] border border-[var(--border)] bg-[rgba(255,255,255,0.03)] px-4 py-4">
+        <div className="rounded-[20px] border border-[var(--border)] bg-[var(--background-elevated)] px-4 py-4">
           <p className="text-sm text-[var(--foreground-secondary)]">Credits plotted</p>
-          <p className="mt-2 text-2xl font-semibold text-white">
+          <p className="mt-2 text-2xl font-semibold text-[var(--foreground)]">
             {formatNumber(creditValues.reduce((sum, value) => sum + value, 0))}
           </p>
         </div>
-        <div className="rounded-[20px] border border-[var(--border)] bg-[rgba(255,255,255,0.03)] px-4 py-4">
+        <div className="rounded-[20px] border border-[var(--border)] bg-[var(--background-elevated)] px-4 py-4">
           <p className="text-sm text-[var(--foreground-secondary)]">Requests plotted</p>
-          <p className="mt-2 text-2xl font-semibold text-white">
+          <p className="mt-2 text-2xl font-semibold text-[var(--foreground)]">
             {formatNumber(requestValues.reduce((sum, value) => sum + value, 0))}
           </p>
         </div>
-        <div className="rounded-[20px] border border-[var(--border)] bg-[rgba(255,255,255,0.03)] px-4 py-4">
+        <div className="rounded-[20px] border border-[var(--border)] bg-[var(--background-elevated)] px-4 py-4">
           <p className="text-sm text-[var(--foreground-secondary)]">Data points</p>
-          <p className="mt-2 text-2xl font-semibold text-white">{formatNumber(data.length)}</p>
+          <p className="mt-2 text-2xl font-semibold text-[var(--foreground)]">
+            {formatNumber(data.length)}
+          </p>
         </div>
       </div>
     </article>

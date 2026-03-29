@@ -34,10 +34,10 @@ export function DocsCard({
                 {kicker}
               </p>
             ) : null}
-            <h3 className="mt-2 text-2xl font-semibold text-white">{title}</h3>
+            <h3 className="mt-2 text-2xl font-semibold text-[var(--foreground)]">{title}</h3>
           </div>
         </div>
-        <span className="rounded-full border border-[var(--border)] bg-[rgba(255,255,255,0.03)] px-3 py-1 text-xs text-[var(--foreground-secondary)] transition group-hover:border-[var(--border-brand)] group-hover:text-[var(--brand-bright)]">
+        <span className="rounded-full border border-[var(--border)] bg-white/72 px-3 py-1 text-xs text-[var(--foreground-secondary)] transition group-hover:border-[var(--border-brand)] group-hover:text-[var(--brand-bright)]">
           Open
         </span>
       </div>
@@ -49,7 +49,7 @@ export function DocsCard({
   );
 
   const className =
-    "group block rounded-[26px] border border-[var(--border-brand)] bg-[linear-gradient(180deg,rgba(17,24,39,0.66),rgba(10,16,28,0.92))] p-6 shadow-[0_20px_60px_rgba(2,6,18,0.26)] transition hover:-translate-y-1 hover:shadow-[0_28px_80px_rgba(2,6,18,0.36)]";
+    "group block rounded-[26px] border border-[var(--border)] bg-white/78 p-6 shadow-[0_16px_40px_rgba(36,29,21,0.08)] transition hover:-translate-y-1 hover:border-[var(--border-strong)] hover:bg-white";
 
   if (href) {
     return (

@@ -23,28 +23,28 @@ export function AdminMetricCard({
   const toneMeta =
     tone === "good"
       ? {
-          card: "border-emerald-500/24 bg-[linear-gradient(180deg,rgba(16,185,129,0.11),rgba(18,27,44,0.9))]",
-          badge: "border-emerald-400/24 bg-emerald-400/10 text-emerald-200",
-          accent: "from-emerald-300/32 via-emerald-400/12 to-transparent",
+          card: "border-[rgba(31,141,74,0.18)] bg-[linear-gradient(180deg,rgba(214,241,224,0.96),rgba(255,252,247,0.92))]",
+          badge: "border-[rgba(31,141,74,0.16)] bg-[rgba(31,141,74,0.1)] text-[var(--success)]",
+          accent: "from-[rgba(31,141,74,0.22)] via-[rgba(31,141,74,0.04)] to-transparent",
           state: "On target",
         }
       : tone === "warning"
         ? {
-            card: "border-amber-500/26 bg-[linear-gradient(180deg,rgba(245,158,11,0.11),rgba(18,27,44,0.9))]",
-            badge: "border-amber-400/24 bg-amber-400/10 text-amber-100",
-            accent: "from-amber-300/30 via-orange-400/10 to-transparent",
+            card: "border-[rgba(177,132,24,0.18)] bg-[linear-gradient(180deg,rgba(250,239,214,0.98),rgba(255,252,247,0.92))]",
+            badge: "border-[rgba(177,132,24,0.16)] bg-[rgba(177,132,24,0.1)] text-[var(--warning)]",
+            accent: "from-[rgba(212,156,105,0.28)] via-[rgba(212,156,105,0.06)] to-transparent",
             state: "Needs review",
           }
         : {
-            card: "border-[var(--border)] bg-[linear-gradient(180deg,rgba(255,255,255,0.04),rgba(18,27,44,0.92))]",
-            badge: "border-[var(--border)] bg-[rgba(255,255,255,0.04)] text-[var(--foreground-secondary)]",
-            accent: "from-cyan-200/20 via-sky-400/8 to-transparent",
-            state: "No target",
+            card: "border-[var(--border)] bg-[linear-gradient(180deg,rgba(255,255,255,0.96),rgba(252,246,237,0.94))]",
+            badge: "border-[var(--border)] bg-white/74 text-[var(--foreground-secondary)]",
+            accent: "from-[rgba(136,165,242,0.22)] via-[rgba(136,165,242,0.04)] to-transparent",
+            state: "Benchmark",
           };
 
   return (
     <article
-      className={`surface-elevated rounded-[28px] px-5 py-5 ${toneMeta.card}`}
+      className={`surface-elevated rounded-[30px] px-5 py-5 ${toneMeta.card}`}
     >
       <div
         className={`pointer-events-none absolute inset-x-0 top-0 h-20 bg-gradient-to-b ${toneMeta.accent}`}
@@ -60,7 +60,7 @@ export function AdminMetricCard({
             {toneMeta.state}
           </span>
         </div>
-        <p className="mt-5 text-4xl font-semibold tracking-[-0.05em] text-white">
+        <p className="mt-5 text-4xl font-semibold tracking-[-0.05em] text-[var(--foreground)]">
           {formatAdminMetricValue(metric.current, { kind, compact: true })}
         </p>
         {note ? (
@@ -69,11 +69,11 @@ export function AdminMetricCard({
           </p>
         ) : null}
         <div className="mt-5 flex flex-wrap gap-2 text-xs">
-          <span className="rounded-full border border-[var(--border)] bg-[rgba(8,12,20,0.42)] px-3 py-1.5 text-[var(--foreground-secondary)]">
+          <span className="rounded-full border border-[var(--border)] bg-white/68 px-3 py-1.5 text-[var(--foreground-secondary)]">
             Delta {formatAdminDelta(metric, { kind })}
           </span>
           {metric.target !== null ? (
-            <span className="rounded-full border border-[var(--border)] bg-[rgba(8,12,20,0.42)] px-3 py-1.5 text-[var(--foreground-secondary)]">
+            <span className="rounded-full border border-[var(--border)] bg-white/68 px-3 py-1.5 text-[var(--foreground-secondary)]">
               {formatTargetStatus(metric, { kind })}
             </span>
           ) : null}

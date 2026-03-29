@@ -1,9 +1,14 @@
 "use client";
 
-import { createContext, useContext } from "react";
+import { createContext, useContext, useState } from "react";
 import type { ConsoleViewer } from "@/lib/console-viewer";
 
-const ConsoleViewerContext = createContext<ConsoleViewer | null>(null);
+type ConsoleViewerContextValue = {
+  viewer: ConsoleViewer;
+  updateViewer: (updates: Partial<ConsoleViewer>) => void;
+};
+
+const ConsoleViewerContext = createContext<ConsoleViewerContextValue | null>(null);
 
 type ConsoleViewerProviderProps = {
   viewer: ConsoleViewer;
@@ -14,19 +19,43 @@ export function ConsoleViewerProvider({
   viewer,
   children,
 }: ConsoleViewerProviderProps) {
+  const [viewerState, setViewerState] = useState(viewer);
+
   return (
-    <ConsoleViewerContext.Provider value={viewer}>
+    <ConsoleViewerContext.Provider
+      value={{
+        viewer: viewerState,
+        updateViewer(updates) {
+          setViewerState((current) => ({
+            ...current,
+            ...updates,
+          }));
+        },
+      }}
+    >
       {children}
     </ConsoleViewerContext.Provider>
   );
 }
 
 export function useConsoleViewer(): ConsoleViewer {
-  const viewer = useContext(ConsoleViewerContext);
+  const context = useContext(ConsoleViewerContext);
 
-  if (!viewer) {
+  if (!context) {
     throw new Error("useConsoleViewer must be used within ConsoleViewerProvider.");
   }
 
-  return viewer;
+  return context.viewer;
+}
+
+export function useConsoleViewerActions() {
+  const context = useContext(ConsoleViewerContext);
+
+  if (!context) {
+    throw new Error("useConsoleViewerActions must be used within ConsoleViewerProvider.");
+  }
+
+  return {
+    updateViewer: context.updateViewer,
+  };
 }

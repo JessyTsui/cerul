@@ -61,6 +61,40 @@ export function AdminOverviewScreen() {
             />
           ))}
 
+          <section className="surface-elevated rounded-[32px] px-6 py-6">
+            <p className="eyebrow">System Pulse</p>
+            <div className="mt-4 flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
+              <div className="max-w-2xl">
+                <h2 className="text-2xl font-semibold tracking-[-0.04em] text-[var(--foreground)]">
+                  Keep the admin surface focused on demand, failures, and source health.
+                </h2>
+                <p className="mt-3 text-sm leading-7 text-[var(--foreground-secondary)]">
+                  This view pulls the high-signal indicators forward so you can spot
+                  growth, degraded search quality, and ingestion issues without
+                  bouncing between tabs.
+                </p>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {(
+                  [
+                    { label: "Users", href: "/admin/users" as Route },
+                    { label: "Requests", href: "/admin/requests" as Route },
+                    { label: "Content", href: "/admin/content" as Route },
+                    { label: "Ingestion", href: "/admin/ingestion" as Route },
+                  ] as const
+                ).map((item) => (
+                  <Link
+                    key={item.href}
+                    href={item.href}
+                    className="rounded-full border border-[var(--border)] bg-white/72 px-3 py-1.5 text-xs text-[var(--foreground-secondary)] transition hover:border-[var(--border-strong)] hover:bg-white hover:text-[var(--foreground)]"
+                  >
+                    {item.label}
+                  </Link>
+                ))}
+              </div>
+            </div>
+          </section>
+
           <section className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
             <AdminMetricCard label="Active users" metric={data.metrics.activeUsers} />
             <AdminMetricCard label="Requests" metric={data.metrics.requests} />
@@ -87,25 +121,6 @@ export function AdminOverviewScreen() {
             data={toAdminChartData(data.ingestionSeries, "jobsFailed")}
             metricLabel="Failed jobs"
           />
-
-          <div className="flex flex-wrap gap-2">
-            {(
-              [
-                { label: "Users", href: "/admin/users" as Route },
-                { label: "Requests", href: "/admin/requests" as Route },
-                { label: "Content", href: "/admin/content" as Route },
-                { label: "Ingestion", href: "/admin/ingestion" as Route },
-              ] as const
-            ).map((item) => (
-              <Link
-                key={item.href}
-                href={item.href}
-                className="rounded-full border border-[var(--border)] px-3 py-1.5 text-xs text-[var(--foreground-secondary)] transition hover:border-[var(--border-brand)] hover:text-white"
-              >
-                {item.label}
-              </Link>
-            ))}
-          </div>
         </>
       ) : (
         <DashboardState

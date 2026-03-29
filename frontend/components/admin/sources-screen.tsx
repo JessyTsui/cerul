@@ -447,8 +447,7 @@ export function AdminSourcesScreen() {
     return bSubs - aSubs;
   });
 
-  const inputClassName =
-    "h-12 w-full rounded-[14px] border border-[var(--border)] bg-[var(--surface)] px-4 text-white outline-none transition focus:border-[var(--brand)]";
+  const inputClassName = "admin-input";
   const labelClassName =
     "block font-mono text-[11px] uppercase tracking-[0.16em] text-[var(--foreground-tertiary)]";
 
@@ -500,25 +499,25 @@ export function AdminSourcesScreen() {
       }
     >
       {actionError ? (
-        <div className="rounded-[18px] border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-100">
+        <div className="rounded-[18px] border border-[rgba(191,91,70,0.18)] bg-[rgba(191,91,70,0.12)] px-4 py-3 text-sm text-[var(--error)]">
           {actionError}
         </div>
       ) : null}
 
       {/* Delete confirmation modal */}
       {confirmDeleteSource ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
+        <div className="admin-modal-backdrop fixed inset-0 z-50 flex items-center justify-center">
           <div className="surface-elevated mx-4 w-full max-w-md rounded-[24px] px-6 py-6">
-            <p className="text-lg font-semibold text-white">Delete source</p>
+            <p className="text-lg font-semibold text-[var(--foreground)]">Delete source</p>
             <p className="mt-2 text-sm text-[var(--foreground-secondary)]">
               Are you sure you want to delete{" "}
-              <strong className="text-white">{confirmDeleteSource.displayName}</strong>?
+              <strong className="text-[var(--foreground)]">{confirmDeleteSource.displayName}</strong>?
               This will stop all future video discovery from this channel.
               Existing indexed videos will not be removed.
             </p>
             <div className="mt-6 flex gap-3">
               <button
-                className="rounded-[14px] border border-red-500/50 bg-red-500/20 px-4 py-2 text-sm text-red-200 transition hover:bg-red-500/30"
+                className="rounded-[14px] border border-[rgba(191,91,70,0.22)] bg-[rgba(191,91,70,0.12)] px-4 py-2 text-sm text-[var(--error)] transition hover:bg-[rgba(191,91,70,0.18)]"
                 type="button"
                 disabled={deletingId === confirmDeleteSource.id}
                 onClick={() => void handleDelete(confirmDeleteSource)}
@@ -539,9 +538,9 @@ export function AdminSourcesScreen() {
 
       {/* Add source modal */}
       {showAddSourceModal ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
+        <div className="admin-modal-backdrop fixed inset-0 z-50 flex items-center justify-center">
           <div className="surface-elevated mx-4 w-full max-w-lg rounded-[24px] px-6 py-6">
-            <p className="text-lg font-semibold text-white">Add YouTube channel</p>
+            <p className="text-lg font-semibold text-[var(--foreground)]">Add YouTube channel</p>
             <p className="mt-1 text-sm text-[var(--foreground-secondary)]">
               Paste a channel URL or ID. Channel info will be fetched automatically.
             </p>
@@ -561,10 +560,10 @@ export function AdminSourcesScreen() {
               autoFocus
             />
             {addSourceError ? (
-              <p className="mt-2 text-xs text-red-300">{addSourceError}</p>
+              <p className="mt-2 text-xs text-[var(--error)]">{addSourceError}</p>
             ) : null}
             {addSourceResult ? (
-              <p className={`mt-2 text-xs ${addSourceResult.alreadyExists ? "text-amber-300" : "text-emerald-300"}`}>
+              <p className={`mt-2 text-xs ${addSourceResult.alreadyExists ? "text-[var(--accent-bright)]" : "text-[var(--success)]"}`}>
                 {addSourceResult.alreadyExists
                   ? `"${addSourceResult.name}" already exists.`
                   : `"${addSourceResult.name}" added successfully.`}
@@ -593,9 +592,9 @@ export function AdminSourcesScreen() {
 
       {/* Search YouTube modal */}
       {showSearchModal ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
+        <div className="admin-modal-backdrop fixed inset-0 z-50 flex items-center justify-center">
           <div className="surface-elevated mx-4 w-full max-w-lg rounded-[24px] px-6 py-6">
-            <p className="text-lg font-semibold text-white">Search YouTube</p>
+            <p className="text-lg font-semibold text-[var(--foreground)]">Search YouTube</p>
             <p className="mt-1 text-sm text-[var(--foreground-secondary)]">
               Search for videos and queue matching results for indexing.
               Videos under 3 min or 5K views are filtered automatically.
@@ -616,14 +615,14 @@ export function AdminSourcesScreen() {
               autoFocus
             />
             {searchError ? (
-              <p className="mt-2 text-xs text-red-300">{searchError}</p>
+              <p className="mt-2 text-xs text-[var(--error)]">{searchError}</p>
             ) : null}
             {searchResult ? (
-              <div className="mt-3 rounded-[14px] border border-[var(--border)] bg-[rgba(255,255,255,0.02)] p-4 text-sm">
-                <p className="text-white">
+              <div className="mt-3 rounded-[16px] border border-[var(--border)] bg-white/64 p-4 text-sm">
+                <p className="text-[var(--foreground)]">
                   Found <strong>{searchResult.videosFound}</strong> videos,
                   filtered <strong>{searchResult.videosFiltered}</strong>,
-                  created <strong className="text-emerald-300">{searchResult.jobsCreated}</strong> jobs.
+                  created <strong className="text-[var(--success)]">{searchResult.jobsCreated}</strong> jobs.
                 </p>
                 {searchResult.jobsCreated === 0 && searchResult.videosFound > 0 ? (
                   <p className="mt-1 text-xs text-[var(--foreground-tertiary)]">
@@ -655,9 +654,9 @@ export function AdminSourcesScreen() {
 
       {/* Submit video modal */}
       {showSubmitVideoModal ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
+        <div className="admin-modal-backdrop fixed inset-0 z-50 flex items-center justify-center">
           <div className="surface-elevated mx-4 w-full max-w-xl rounded-[24px] px-6 py-6">
-            <p className="text-lg font-semibold text-white">Submit video for indexing</p>
+            <p className="text-lg font-semibold text-[var(--foreground)]">Submit video for indexing</p>
             <p className="mt-1 text-sm text-[var(--foreground-secondary)]">
               Paste a YouTube video URL to manually queue it for processing.
             </p>
@@ -679,11 +678,11 @@ export function AdminSourcesScreen() {
               />
             </div>
             {videoSubmitError ? (
-              <p className="mt-2 text-xs text-red-300">{videoSubmitError}</p>
+              <p className="mt-2 text-xs text-[var(--error)]">{videoSubmitError}</p>
             ) : null}
 
             {videoSubmitResult ? (
-              <div className="mt-4 rounded-[14px] border border-[var(--border)] bg-[rgba(255,255,255,0.02)] p-4">
+              <div className="mt-4 rounded-[16px] border border-[var(--border)] bg-white/64 p-4">
                 <div className="flex gap-3">
                   {videoSubmitResult.thumbnailUrl ? (
                     // eslint-disable-next-line @next/next/no-img-element
@@ -694,14 +693,14 @@ export function AdminSourcesScreen() {
                     />
                   ) : null}
                   <div className="min-w-0 flex-1">
-                    <p className="font-semibold text-white">{videoSubmitResult.title}</p>
+                    <p className="font-semibold text-[var(--foreground)]">{videoSubmitResult.title}</p>
                     <p className="mt-0.5 text-xs text-[var(--foreground-tertiary)]">
                       {videoSubmitResult.channelTitle}
                       {videoSubmitResult.durationSeconds != null
                         ? ` · ${formatDuration(videoSubmitResult.durationSeconds)}`
                         : ""}
                     </p>
-                    <p className={`mt-1 text-xs ${videoSubmitResult.alreadyExists ? "text-amber-300" : "text-emerald-300"}`}>
+                    <p className={`mt-1 text-xs ${videoSubmitResult.alreadyExists ? "text-[var(--accent-bright)]" : "text-[var(--success)]"}`}>
                       {videoSubmitResult.alreadyExists
                         ? "This video already has a processing job."
                         : "Job created successfully."}
@@ -716,7 +715,7 @@ export function AdminSourcesScreen() {
                         Job status
                       </p>
                       <button
-                        className="text-xs text-[var(--foreground-secondary)] transition hover:text-white"
+                        className="text-xs text-[var(--foreground-secondary)] transition hover:text-[var(--foreground)]"
                         type="button"
                         onClick={() => void handleCheckVideoStatus(videoSubmitResult.videoId)}
                       >
@@ -731,12 +730,12 @@ export function AdminSourcesScreen() {
                         <span
                           className={`inline-flex shrink-0 items-center rounded-full px-2 py-0.5 text-[10px] ${
                             job.status === "completed"
-                              ? "border border-emerald-500/30 bg-emerald-500/10 text-emerald-300"
+                              ? "border border-[rgba(31,141,74,0.18)] bg-[rgba(31,141,74,0.12)] text-[var(--success)]"
                               : job.status === "failed"
-                                ? "border border-red-500/30 bg-red-500/10 text-red-300"
+                                ? "border border-[rgba(191,91,70,0.18)] bg-[rgba(191,91,70,0.12)] text-[var(--error)]"
                                 : job.status === "running"
-                                  ? "border border-blue-500/30 bg-blue-500/10 text-blue-300"
-                                  : "border border-[var(--border)] bg-[rgba(255,255,255,0.04)] text-[var(--foreground-tertiary)]"
+                                  ? "border border-[var(--border-brand)] bg-[var(--brand-subtle)] text-[var(--brand-bright)]"
+                                  : "border border-[var(--border)] bg-white/72 text-[var(--foreground-tertiary)]"
                           }`}
                         >
                           {job.status}
@@ -745,7 +744,7 @@ export function AdminSourcesScreen() {
                           {new Date(job.createdAt).toLocaleString()}
                         </span>
                         {job.errorMessage ? (
-                          <span className="truncate text-red-300" title={job.errorMessage}>
+                          <span className="truncate text-[var(--error)]" title={job.errorMessage}>
                             {job.errorMessage}
                           </span>
                         ) : null}
@@ -844,7 +843,7 @@ export function AdminSourcesScreen() {
                   onChange={(e) => updateField("description", e.target.value)}
                   placeholder="Brief description of this channel's focus and content..."
                   rows={3}
-                  className="w-full rounded-[14px] border border-[var(--border)] bg-[var(--surface)] px-4 py-3 text-white outline-none transition focus:border-[var(--brand)]"
+                  className="admin-textarea"
                 />
               </label>
             </div>
@@ -886,14 +885,20 @@ export function AdminSourcesScreen() {
       ) : null}
 
       <section>
-        <article className="surface rounded-[28px] px-6 py-5">
+        <article className="surface-elevated rounded-[30px] px-6 py-5">
           <div className="flex items-center justify-between">
-            <p className="font-mono text-[11px] uppercase tracking-[0.16em] text-[var(--foreground-tertiary)]">
-              Content sources
-            </p>
+            <div>
+              <p className="font-mono text-[11px] uppercase tracking-[0.16em] text-[var(--foreground-tertiary)]">
+                Content sources
+              </p>
+              <p className="mt-2 max-w-2xl text-sm leading-7 text-[var(--foreground-secondary)]">
+                Keep source management lightweight: add channels, review throughput, and
+                expand a row only when you need channel-level detail.
+              </p>
+            </div>
             <div className="flex items-center gap-3">
               {/* Range selector */}
-              <div className="flex rounded-full border border-[var(--border)] bg-[rgba(255,255,255,0.02)]">
+              <div className="flex rounded-full border border-[var(--border)] bg-white/68 p-1">
                 {RANGE_OPTIONS.map((opt) => (
                   <button
                     key={opt.key}
@@ -901,18 +906,18 @@ export function AdminSourcesScreen() {
                     onClick={() => setAnalyticsRange(opt.key)}
                     className={`px-3 py-1 text-xs transition ${
                       analyticsRange === opt.key
-                        ? "bg-[var(--brand)] text-black rounded-full font-medium"
-                        : "text-[var(--foreground-tertiary)] hover:text-white"
+                        ? "rounded-full bg-[var(--foreground)] text-[#faf6ef] font-medium"
+                        : "text-[var(--foreground-tertiary)] hover:text-[var(--foreground)]"
                     }`}
                   >
                     {opt.label}
                   </button>
                 ))}
               </div>
-              <span className="inline-flex items-center rounded-full border border-[var(--border)] bg-[rgba(255,255,255,0.04)] px-3 py-1 text-xs text-[var(--foreground-secondary)]">
+              <span className="inline-flex items-center rounded-full border border-[var(--border)] bg-white/68 px-3 py-1 text-xs text-[var(--foreground-secondary)]">
                 {sources.length} total
               </span>
-              <span className="inline-flex items-center rounded-full border border-emerald-500/30 bg-emerald-500/10 px-3 py-1 text-xs text-emerald-300">
+              <span className="inline-flex items-center rounded-full border border-[rgba(31,141,74,0.18)] bg-[rgba(31,141,74,0.12)] px-3 py-1 text-xs text-[var(--success)]">
                 {activeCount} active
               </span>
             </div>
@@ -923,7 +928,7 @@ export function AdminSourcesScreen() {
               <p className="text-sm text-[var(--foreground-tertiary)]">Loading sources...</p>
             </div>
           ) : error ? (
-            <div className="mt-4 rounded-[18px] border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-100">
+            <div className="mt-4 rounded-[18px] border border-[rgba(191,91,70,0.18)] bg-[rgba(191,91,70,0.12)] px-4 py-3 text-sm text-[var(--error)]">
               {error}
             </div>
           ) : sources.length === 0 ? (
@@ -958,7 +963,7 @@ export function AdminSourcesScreen() {
                 return (
                   <div
                     key={source.id}
-                    className="rounded-[20px] border border-[var(--border)] bg-[rgba(255,255,255,0.02)] transition hover:border-[var(--foreground-tertiary)]"
+                    className="rounded-[22px] border border-[var(--border)] bg-white/64 transition hover:border-[var(--border-strong)] hover:bg-white/78"
                   >
                     {/* Main row — always visible */}
                     <div
@@ -970,14 +975,14 @@ export function AdminSourcesScreen() {
                       {/* Name + description — fixed proportion */}
                       <div className="min-w-0 w-[280px] shrink-0">
                         <div className="flex items-center gap-2">
-                          <p className="truncate font-semibold text-white">
+                          <p className="truncate font-semibold text-[var(--foreground)]">
                             {source.displayName}
                           </p>
                           <span
                             className={`inline-flex shrink-0 items-center rounded-full px-2 py-0.5 text-[10px] ${
                               source.isActive
-                                ? "border border-emerald-500/30 bg-emerald-500/10 text-emerald-300"
-                                : "border border-[var(--border)] bg-[rgba(255,255,255,0.04)] text-[var(--foreground-tertiary)]"
+                                ? "border border-[rgba(31,141,74,0.18)] bg-[rgba(31,141,74,0.12)] text-[var(--success)]"
+                                : "border border-[var(--border)] bg-white/72 text-[var(--foreground-tertiary)]"
                             }`}
                           >
                             {source.isActive ? "Active" : "Paused"}
@@ -991,20 +996,20 @@ export function AdminSourcesScreen() {
 
                       {/* Stats columns — fixed widths for alignment */}
                       <div className="hidden shrink-0 items-center text-xs lg:flex">
-                        <span className="w-[90px] text-right font-semibold text-white">
+                        <span className="w-[90px] text-right font-semibold text-[var(--foreground)]">
                           {formatCount(subscriberCount)}
                           <span className="ml-1 font-normal text-[var(--foreground-tertiary)]">subs</span>
                         </span>
-                        <span className="w-[90px] text-right font-semibold text-white">
+                        <span className="w-[90px] text-right font-semibold text-[var(--foreground)]">
                           {formatCount(videoCount)}
                           <span className="ml-1 font-normal text-[var(--foreground-tertiary)]">vids</span>
                         </span>
-                        <span className="w-[100px] text-right font-semibold text-white">
+                        <span className="w-[100px] text-right font-semibold text-[var(--foreground)]">
                           {formatCount(viewCount)}
                           <span className="ml-1 font-normal text-[var(--foreground-tertiary)]">views</span>
                         </span>
                         <span className="ml-3 w-[100px] border-l border-[var(--border)] pl-3 text-right">
-                          <span className="font-semibold text-white">
+                          <span className="font-semibold text-[var(--foreground)]">
                             {analytics ? analytics.jobsCompleted : 0}
                           </span>
                           {analytics ? (
@@ -1042,13 +1047,13 @@ export function AdminSourcesScreen() {
                             href={getChannelUrl(channelId)}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="inline-flex h-7 items-center rounded-lg border border-[var(--border)] px-2.5 text-xs text-[var(--foreground-secondary)] transition hover:border-[var(--brand)] hover:text-white"
+                            className="inline-flex h-7 items-center rounded-lg border border-[var(--border)] px-2.5 text-xs text-[var(--foreground-secondary)] transition hover:border-[var(--brand)] hover:bg-white hover:text-[var(--foreground)]"
                           >
                             YouTube
                           </a>
                         ) : null}
                         <button
-                          className="inline-flex h-7 items-center rounded-lg border border-[var(--border)] px-2.5 text-xs text-[var(--foreground-secondary)] transition hover:border-emerald-500 hover:text-emerald-300"
+                          className="inline-flex h-7 items-center rounded-lg border border-[var(--border)] px-2.5 text-xs text-[var(--foreground-secondary)] transition hover:border-[rgba(31,141,74,0.18)] hover:bg-[rgba(31,141,74,0.08)] hover:text-[var(--success)]"
                           disabled={syncingId === source.id}
                           onClick={() => void handleSync(source)}
                           type="button"
@@ -1056,14 +1061,14 @@ export function AdminSourcesScreen() {
                           {syncingId === source.id ? "Syncing..." : "Sync"}
                         </button>
                         <button
-                          className="inline-flex h-7 items-center rounded-lg border border-[var(--border)] px-2.5 text-xs text-[var(--foreground-secondary)] transition hover:border-[var(--brand)] hover:text-white"
+                          className="inline-flex h-7 items-center rounded-lg border border-[var(--border)] px-2.5 text-xs text-[var(--foreground-secondary)] transition hover:border-[var(--brand)] hover:bg-white hover:text-[var(--foreground)]"
                           onClick={() => openEditForm(source)}
                           type="button"
                         >
                           Edit
                         </button>
                         <button
-                          className="inline-flex h-7 items-center rounded-lg border border-[var(--border)] px-2.5 text-xs text-[var(--foreground-secondary)] transition hover:border-amber-500 hover:text-amber-300"
+                          className="inline-flex h-7 items-center rounded-lg border border-[var(--border)] px-2.5 text-xs text-[var(--foreground-secondary)] transition hover:border-[rgba(212,156,105,0.22)] hover:bg-[rgba(212,156,105,0.08)] hover:text-[var(--accent-bright)]"
                           disabled={togglingId === source.id}
                           onClick={() => void handleToggleActive(source)}
                           type="button"
@@ -1075,7 +1080,7 @@ export function AdminSourcesScreen() {
                               : "Resume"}
                         </button>
                         <button
-                          className="inline-flex h-7 items-center rounded-lg border border-red-500/40 bg-red-500/10 px-2.5 text-xs text-red-300 transition hover:border-red-500 hover:bg-red-500/20"
+                          className="inline-flex h-7 items-center rounded-lg border border-[rgba(191,91,70,0.22)] bg-[rgba(191,91,70,0.12)] px-2.5 text-xs text-[var(--error)] transition hover:border-[rgba(191,91,70,0.3)] hover:bg-[rgba(191,91,70,0.18)]"
                           onClick={() => setConfirmDeleteSource(source)}
                           type="button"
                         >
@@ -1106,25 +1111,25 @@ export function AdminSourcesScreen() {
                             <div className="flex flex-wrap gap-4 text-xs">
                               {subscriberCount != null ? (
                                 <div>
-                                  <span className="font-semibold text-white">{formatCount(subscriberCount)}</span>
+                                  <span className="font-semibold text-[var(--foreground)]">{formatCount(subscriberCount)}</span>
                                   <span className="ml-1 text-[var(--foreground-tertiary)]">subscribers</span>
                                 </div>
                               ) : null}
                               {videoCount != null ? (
                                 <div>
-                                  <span className="font-semibold text-white">{formatCount(videoCount)}</span>
+                                  <span className="font-semibold text-[var(--foreground)]">{formatCount(videoCount)}</span>
                                   <span className="ml-1 text-[var(--foreground-tertiary)]">videos</span>
                                 </div>
                               ) : null}
                               {viewCount != null ? (
                                 <div>
-                                  <span className="font-semibold text-white">{formatCount(viewCount)}</span>
+                                  <span className="font-semibold text-[var(--foreground)]">{formatCount(viewCount)}</span>
                                   <span className="ml-1 text-[var(--foreground-tertiary)]">total views</span>
                                 </div>
                               ) : null}
                               {maxResults != null ? (
                                 <div>
-                                  <span className="font-semibold text-white">{maxResults}</span>
+                                  <span className="font-semibold text-[var(--foreground)]">{maxResults}</span>
                                   <span className="ml-1 text-[var(--foreground-tertiary)]">max/sync</span>
                                 </div>
                               ) : null}
@@ -1146,17 +1151,17 @@ export function AdminSourcesScreen() {
                                 </p>
                                 <div className="mt-2 flex gap-6 text-xs">
                                   <div>
-                                    <span className="font-semibold text-white">{analytics.jobsCreated}</span>
+                                    <span className="font-semibold text-[var(--foreground)]">{analytics.jobsCreated}</span>
                                     <DeltaBadge current={analytics.jobsCreated} previous={analytics.prevJobsCreated} />
                                     <span className="ml-1 text-[var(--foreground-tertiary)]">discovered</span>
                                   </div>
                                   <div>
-                                    <span className="font-semibold text-white">{analytics.jobsCompleted}</span>
+                                    <span className="font-semibold text-[var(--foreground)]">{analytics.jobsCompleted}</span>
                                     <DeltaBadge current={analytics.jobsCompleted} previous={analytics.prevJobsCompleted} />
                                     <span className="ml-1 text-[var(--foreground-tertiary)]">completed</span>
                                   </div>
                                   <div>
-                                    <span className={`font-semibold ${analytics.jobsFailed > 0 ? "text-red-300" : "text-white"}`}>
+                                    <span className={`font-semibold ${analytics.jobsFailed > 0 ? "text-[var(--error)]" : "text-[var(--foreground)]"}`}>
                                       {analytics.jobsFailed}
                                     </span>
                                     <DeltaBadge current={analytics.jobsFailed} previous={analytics.prevJobsFailed} />
@@ -1204,7 +1209,7 @@ export function AdminSourcesScreen() {
                                     href={`https://www.youtube.com/watch?v=${video.videoId}`}
                                     target="_blank"
                                     rel="noopener noreferrer"
-                                    className="flex gap-3 rounded-[12px] border border-[var(--border)] bg-[rgba(255,255,255,0.02)] p-2 transition hover:border-[var(--foreground-tertiary)]"
+                                    className="flex gap-3 rounded-[14px] border border-[var(--border)] bg-white/56 p-2 transition hover:border-[var(--border-strong)] hover:bg-white/72"
                                   >
                                     {video.thumbnailUrl ? (
                                       // eslint-disable-next-line @next/next/no-img-element
@@ -1214,12 +1219,12 @@ export function AdminSourcesScreen() {
                                         className="h-16 w-28 shrink-0 rounded-[8px] object-cover"
                                       />
                                     ) : (
-                                      <div className="flex h-16 w-28 shrink-0 items-center justify-center rounded-[8px] bg-[rgba(255,255,255,0.06)]">
+                                      <div className="flex h-16 w-28 shrink-0 items-center justify-center rounded-[8px] bg-white/72">
                                         <span className="text-xs text-[var(--foreground-tertiary)]">No thumb</span>
                                       </div>
                                     )}
                                     <div className="min-w-0 flex-1">
-                                      <p className="line-clamp-2 text-sm leading-tight text-white">
+                                      <p className="line-clamp-2 text-sm leading-tight text-[var(--foreground)]">
                                         {video.title}
                                       </p>
                                       <div className="mt-1 flex gap-3 text-[10px] text-[var(--foreground-tertiary)]">
@@ -1258,7 +1263,7 @@ export function AdminSourcesScreen() {
                   </p>
                   <div className="flex gap-2">
                     <button
-                      className="rounded-lg border border-[var(--border)] px-3 py-1 text-xs text-[var(--foreground-secondary)] transition hover:text-white disabled:opacity-30"
+                      className="rounded-lg border border-[var(--border)] px-3 py-1 text-xs text-[var(--foreground-secondary)] transition hover:bg-white hover:text-[var(--foreground)] disabled:opacity-30"
                       type="button"
                       disabled={currentPage === 0}
                       onClick={() => setCurrentPage((p) => p - 1)}
@@ -1266,7 +1271,7 @@ export function AdminSourcesScreen() {
                       Previous
                     </button>
                     <button
-                      className="rounded-lg border border-[var(--border)] px-3 py-1 text-xs text-[var(--foreground-secondary)] transition hover:text-white disabled:opacity-30"
+                      className="rounded-lg border border-[var(--border)] px-3 py-1 text-xs text-[var(--foreground-secondary)] transition hover:bg-white hover:text-[var(--foreground)] disabled:opacity-30"
                       type="button"
                       disabled={(currentPage + 1) * PAGE_SIZE >= sources.length}
                       onClick={() => setCurrentPage((p) => p + 1)}

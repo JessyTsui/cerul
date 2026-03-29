@@ -282,7 +282,7 @@ export function getApiErrorMessage(
   fallback = "Something went wrong while contacting the dashboard API.",
 ): string {
   if (error instanceof TypeError) {
-    return "Could not reach the dashboard API. Verify NEXT_PUBLIC_API_BASE_URL or API_BASE_URL and ensure the backend is reachable from the frontend proxy.";
+    return "Could not reach the dashboard API. Verify NEXT_PUBLIC_API_BASE_URL or API_BASE_URL and ensure the API is reachable from the frontend proxy.";
   }
 
   if (error instanceof ApiClientError) {
@@ -808,12 +808,16 @@ export async function fetchWithAuth<T>(
 ): Promise<T> {
   const headers = new Headers(options.headers);
   let body = options.body;
+  const isFormData = typeof FormData !== "undefined" && body instanceof FormData;
 
   if (isJsonBody(body)) {
     if (!headers.has("Content-Type")) {
       headers.set("Content-Type", "application/json");
     }
     body = JSON.stringify(body);
+  } else if (isFormData) {
+    // Let the browser set Content-Type with the correct multipart boundary.
+    headers.delete("Content-Type");
   }
 
   const response = await fetch(buildUrl(path), {

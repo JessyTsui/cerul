@@ -135,7 +135,7 @@ export function CreateKeyDialog({
             <p className="font-mono text-xs uppercase tracking-[0.16em] text-[var(--foreground-tertiary)]">
               API key
             </p>
-            <h2 className="mt-2 text-2xl font-semibold text-white">
+            <h2 className="mt-2 text-2xl font-semibold text-[var(--foreground)]">
               {createdKey ? "Store this key now" : "Create a new API key"}
             </h2>
           </div>
@@ -156,7 +156,7 @@ export function CreateKeyDialog({
               <p className="font-mono text-xs uppercase tracking-[0.16em] text-[var(--brand-bright)]">
                 Visible once
               </p>
-              <p className="mt-3 font-mono text-sm leading-7 break-all text-white">
+              <p className="mt-3 font-mono text-sm leading-7 break-all text-[var(--foreground)]">
                 {createdKey.rawKey}
               </p>
             </div>
@@ -167,7 +167,7 @@ export function CreateKeyDialog({
             </p>
 
             {error ? (
-              <div className="rounded-[18px] border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-100">
+              <div className="rounded-[18px] border border-[rgba(177,132,24,0.18)] bg-[rgba(177,132,24,0.1)] px-4 py-3 text-sm text-[var(--warning)]">
                 {error}
               </div>
             ) : null}
@@ -189,14 +189,14 @@ export function CreateKeyDialog({
           <form className="mt-6 space-y-5" onSubmit={handleSubmit}>
             <div>
               <label
-                className="mb-2 block text-sm font-medium text-white"
+                className="mb-2 block text-sm font-medium text-[var(--foreground)]"
                 htmlFor="dashboard-key-name"
               >
                 Key name
               </label>
               <input
                 autoFocus
-                className="h-12 w-full rounded-[14px] border border-[var(--border)] bg-[var(--surface)] px-4 text-white outline-none transition focus:border-[var(--brand)]"
+                className="h-12 w-full rounded-[14px] border border-[var(--border)] bg-white/78 px-4 text-[var(--foreground)] outline-none transition placeholder:text-[var(--foreground-tertiary)] focus:border-[var(--border-brand)]"
                 id="dashboard-key-name"
                 maxLength={64}
                 onChange={(event) => setName(event.target.value)}
@@ -209,7 +209,7 @@ export function CreateKeyDialog({
             </div>
 
             {error ? (
-              <div className="rounded-[18px] border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-100">
+              <div className="rounded-[18px] border border-[rgba(191,91,70,0.2)] bg-[rgba(191,91,70,0.08)] px-4 py-3 text-sm text-[var(--error)]">
                 {error}
               </div>
             ) : null}

@@ -1,9 +1,12 @@
 export const primaryNavigation = [
   { label: "Home", href: "/" },
+  { label: "Playground", href: "/search" },
   { label: "Docs", href: "/docs" },
   { label: "Pricing", href: "/pricing" },
   { label: "Dashboard", href: "/dashboard" },
 ] as const;
+
+export const ACCOUNT_SETTINGS_ROUTE = "/dashboard/settings#account" as const;
 
 export const marketingMetrics = [
   {
@@ -225,20 +228,15 @@ export const authValueProps = [
 
 export const dashboardRoutes = [
   { label: "Overview", href: "/dashboard", meta: "01" },
-  { label: "API Keys", href: "/dashboard/keys", meta: "02" },
-  { label: "Usage", href: "/dashboard/usage", meta: "03" },
-  { label: "Settings", href: "/dashboard/settings", meta: "04" },
+  { label: "Usage", href: "/dashboard/usage", meta: "02" },
+  { label: "Settings", href: "/dashboard/settings", meta: "03" },
 ] as const;
 
 export const adminRoutes = [
   { label: "Overview", href: "/admin", meta: "A1" },
-  { label: "Pipelines", href: "/admin/pipelines", meta: "A2" },
-  { label: "Requests", href: "/admin/requests", meta: "A3" },
-  { label: "Users", href: "/admin/users", meta: "A4" },
-  { label: "Content", href: "/admin/content", meta: "A5" },
-  { label: "Ingestion", href: "/admin/ingestion", meta: "A6" },
-  { label: "Sources", href: "/admin/sources", meta: "A7" },
-  { label: "Targets", href: "/admin/settings", meta: "A8" },
+  { label: "Requests", href: "/admin/requests", meta: "A2" },
+  { label: "Ingestion", href: "/admin/ingestion", meta: "A3" },
+  { label: "Sources", href: "/admin/sources", meta: "A4" },
 ] as const;
 
 export function isPrimaryRoute(path: string): boolean {

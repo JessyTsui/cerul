@@ -131,7 +131,7 @@ export function SiteHeaderAuthActions({
       {showAdminLink ? (
         <Link
           href={"/admin" as Route}
-          className="focus-ring rounded-lg px-3 py-2 text-sm text-[var(--foreground-tertiary)] transition hover:text-white"
+          className="focus-ring rounded-full px-3 py-2 text-sm text-[var(--foreground-tertiary)] transition hover:bg-white/40 hover:text-[var(--foreground)]"
         >
           Admin
         </Link>

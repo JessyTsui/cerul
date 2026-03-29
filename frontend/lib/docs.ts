@@ -66,6 +66,13 @@ export type ApiReferenceEndpoint = {
   responseExample: string;
 };
 
+export type DocsSearchEntry = {
+  title: string;
+  description: string;
+  href: string;
+  category: string;
+};
+
 // Base URL for API
 export const API_BASE_URL = "https://api.cerul.ai";
 
@@ -567,6 +574,32 @@ export const docsSidebarGroups: DocsNavGroup[] = [
   },
 ];
 
+export const docsShellTabs = [
+  { label: "Home", href: "/docs" },
+  { label: "Introduction", href: "/docs/quickstart" },
+  { label: "API & SDKs", href: "/docs/api-reference" },
+  { label: "Playground", href: "/search" },
+  { label: "Pricing", href: "/pricing" },
+] as const;
+
+export const docsUtilityLinks = [
+  {
+    title: "API Playground",
+    href: "/search",
+    description: "Test one request in the Cerul playground.",
+  },
+  {
+    title: "GitHub",
+    href: "https://github.com/JessyTsui/cerul",
+    description: "Inspect the public repository and examples.",
+  },
+  {
+    title: "Support",
+    href: "mailto:team@cerul.ai",
+    description: "Reach the team when a public route is unclear.",
+  },
+] as const;
+
 export const docsPopularTopics = [
   {
     title: "Rate limits and quotas",
@@ -616,6 +649,29 @@ export const docsFeatureCards: DocsFeatureCard[] = [
     href: "/docs/usage-api",
   },
 ] as const;
+
+export function getDocsSearchEntries(): DocsSearchEntry[] {
+  return [
+    ...docsPages.map((page) => ({
+      title: page.title,
+      description: page.summary,
+      href: `/docs/${page.slug}`,
+      category: page.kicker,
+    })),
+    {
+      title: "Documentation overview",
+      description: "Landing page and quick navigation for the Cerul public docs.",
+      href: "/docs",
+      category: "Home",
+    },
+    ...apiReferenceEndpoints.map((endpoint) => ({
+      title: `${endpoint.method} ${endpoint.path}`,
+      description: endpoint.title,
+      href: `/docs/api-reference#${endpoint.id}`,
+      category: endpoint.group,
+    })),
+  ];
+}
 
 export const apiReferenceEndpoints: ApiReferenceEndpoint[] = [
   {

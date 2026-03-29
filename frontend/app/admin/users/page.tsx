@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { AdminUsersScreen } from "@/components/admin/users-screen";
+import { redirect } from "next/navigation";
 
 export const metadata: Metadata = {
   title: "Admin Users",
@@ -10,5 +10,5 @@ export const metadata: Metadata = {
 };
 
 export default function AdminUsersPage() {
-  return <AdminUsersScreen />;
+  redirect("/admin");
 }

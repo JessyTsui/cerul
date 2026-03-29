@@ -1,8 +1,11 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { AIToolbar } from "@/components/ai-toolbar";
 import { CodeBlock } from "@/components/code-block";
+import { DocsHeader } from "@/components/docs-header";
 import { DocsTabs } from "@/components/docs-tabs";
-import { SiteHeader } from "@/components/site-header";
+import { DocsToc, type TocItem } from "@/components/docs-toc";
+import { SiteFooter } from "@/components/site-footer";
 import { apiReferenceEndpoints } from "@/lib/docs";
 
 export const metadata: Metadata = {
@@ -24,311 +27,333 @@ const groups = Array.from(
   ),
 );
 
+const tocItems: TocItem[] = [
+  { id: "overview", text: "Introduction", level: 1 },
+  ...apiReferenceEndpoints.map((endpoint) => ({
+    id: endpoint.id,
+    text: `${endpoint.method} ${endpoint.path}`,
+    level: 1 as const,
+  })),
+];
+
 function getMethodClasses(method: "GET" | "POST" | "DELETE") {
   if (method === "GET") {
-    return "bg-emerald-500/14 text-emerald-300 border-emerald-500/30";
+    return "border-[rgba(31,141,74,0.18)] bg-[rgba(31,141,74,0.12)] text-[var(--success)]";
   }
 
   if (method === "DELETE") {
-    return "bg-rose-500/14 text-rose-300 border-rose-500/30";
+    return "border-[rgba(191,91,70,0.18)] bg-[rgba(191,91,70,0.12)] text-[var(--error)]";
   }
 
-  return "bg-sky-500/14 text-sky-300 border-sky-500/30";
+  return "border-[var(--border-brand)] bg-[var(--brand-subtle)] text-[var(--brand-bright)]";
 }
 
 export default function ApiReferencePage() {
   return (
-    <div className="min-h-screen px-4 pb-8 pt-4 sm:px-6 lg:px-8">
-      <div className="mx-auto max-w-[1520px]">
-        <SiteHeader currentPath="/docs/api-reference" />
+    <div className="soft-theme min-h-screen pb-10">
+      <DocsHeader currentPath="/docs/api-reference" />
 
-        <div className="mt-8 grid gap-6 lg:grid-cols-[300px_minmax(0,1fr)_360px]">
-          <aside className="sticky top-24 h-fit rounded-[24px] border border-[var(--border)] bg-[rgba(9,13,21,0.92)] p-4 shadow-[0_22px_60px_rgba(2,6,18,0.16)]">
-            <div className="rounded-[16px] border border-[var(--border-brand)] bg-[rgba(34,211,238,0.08)] px-4 py-4">
-              <p className="font-mono text-[11px] uppercase tracking-[0.16em] text-[var(--brand-bright)]">
-                Public API only
+      <div className="mx-auto max-w-[1520px] px-4 sm:px-6 lg:px-8">
+        <div className="mt-8 grid gap-8 lg:grid-cols-[280px_minmax(0,1fr)_220px]">
+          <aside className="sticky top-20 h-fit max-h-[calc(100vh-5.5rem)] overflow-y-auto rounded-[24px] border border-[var(--border)] bg-[rgba(255,252,247,0.78)] p-4 shadow-[0_18px_40px_rgba(36,29,21,0.06)] backdrop-blur-xl">
+            <div className="border-b border-[var(--border)] pb-4">
+              <Link
+                href="/docs"
+                className="font-mono text-[11px] uppercase tracking-[0.18em] text-[var(--brand-bright)]"
+              >
+                Documentation
+              </Link>
+              <p className="mt-2 text-base font-semibold text-[var(--foreground)]">
+                API Reference
               </p>
-              <p className="mt-2 text-sm leading-6 text-white">
-                This reference only lists the public HTTP routes exposed by Cerul today.
+              <p className="mt-1 text-sm leading-6 text-[var(--foreground-secondary)]">
+                Stable public routes only.
               </p>
             </div>
 
-            <div className="mt-5 space-y-5">
+            <div className="mt-4 space-y-5">
               {groups.map(([groupName, endpoints]) => (
                 <section key={groupName}>
-                  <h2 className="px-3 font-mono text-[11px] uppercase tracking-[0.18em] text-[var(--foreground-tertiary)]">
+                  <h2 className="px-2 font-mono text-[11px] uppercase tracking-[0.18em] text-[var(--foreground-tertiary)]">
                     {groupName}
                   </h2>
-                  <div className="mt-3 space-y-1">
-                    {endpoints.map((endpoint) => {
-                      return (
-                        <a
-                          key={endpoint.id}
-                          href={`#${endpoint.id}`}
-                          className={`rounded-[14px] border-l-2 px-3 py-3 ${
-                            "border-l-transparent bg-transparent transition hover:border-l-[var(--brand)] hover:bg-[rgba(34,211,238,0.08)]"
-                          }`}
-                        >
-                          <div className="flex items-center gap-2">
-                            <span className={`rounded-full border px-2.5 py-1 text-[11px] font-semibold ${getMethodClasses(endpoint.method)}`}>
-                              {endpoint.method}
-                            </span>
-                            <span className="truncate text-sm text-white">{endpoint.path}</span>
-                          </div>
-                          <p className="mt-2 text-xs leading-5 text-[var(--foreground-secondary)]">
-                            {endpoint.title}
-                          </p>
-                        </a>
-                      );
-                    })}
+                  <div className="mt-2 space-y-1">
+                    {endpoints.map((endpoint) => (
+                      <a
+                        key={endpoint.id}
+                        href={`#${endpoint.id}`}
+                        className="block rounded-[14px] border-l-2 border-l-transparent px-3 py-2.5 transition hover:bg-white/70"
+                      >
+                        <div className="flex items-center gap-2">
+                          <span
+                            className={`rounded-full border px-2.5 py-1 text-[11px] font-semibold ${getMethodClasses(endpoint.method)}`}
+                          >
+                            {endpoint.method}
+                          </span>
+                          <span className="truncate text-sm text-[var(--foreground)]">
+                            {endpoint.path}
+                          </span>
+                        </div>
+                        <p className="mt-1 text-xs leading-5 text-[var(--foreground-secondary)]">
+                          {endpoint.title}
+                        </p>
+                      </a>
+                    ))}
                   </div>
                 </section>
               ))}
             </div>
           </aside>
 
-          <main className="min-w-0 space-y-6">
-            <section className="rounded-[24px] border border-[var(--border)] bg-[rgba(9,13,21,0.92)] px-6 py-6 shadow-[0_22px_60px_rgba(2,6,18,0.16)] sm:px-8">
-              <p className="font-mono text-[11px] uppercase tracking-[0.18em] text-[var(--brand-bright)]">
-                API contract
-              </p>
-              <div className="mt-4 flex flex-wrap items-center gap-3 text-sm text-[var(--foreground-secondary)]">
-                <span className="rounded-full border border-[var(--border)] px-3 py-1">
-                  v2.0
-                </span>
-                <span className="rounded-full border border-[var(--border-brand)] bg-[var(--brand-subtle)] px-3 py-1 text-[var(--brand-bright)]">
-                  Base URL: https://api.cerul.ai
-                </span>
-              </div>
-              <h1 className="mt-4 text-4xl font-semibold tracking-[-0.05em] text-white sm:text-5xl">
-                Public endpoints, accurate payloads, no dashboard-only chrome.
-              </h1>
-              <p className="mt-5 max-w-4xl text-base leading-8 text-[var(--foreground-secondary)]">
-                Cerul’s public contract is intentionally narrow. Index, search, and usage are the
-                primary authenticated routes, with tracking redirects returned as public result URLs.
-              </p>
-              <div className="mt-6 grid gap-4 xl:grid-cols-3">
-                {[
-                  {
-                    title: "Base URL",
-                    value: "https://api.cerul.ai",
-                    description: "All public HTTP requests target the same origin.",
-                  },
-                  {
-                    title: "Formats",
-                    value: "JSON request + response",
-                    description: "Primary authenticated routes are JSON-first.",
-                  },
-                  {
-                    title: "Auth posture",
-                    value: "Bearer key",
-                    description: "Dashboard sessions are separate from the public API contract.",
-                  },
-                ].map((item) => (
-                  <div
-                    key={item.title}
-                    className="rounded-[20px] border border-[var(--border)] bg-[rgba(255,255,255,0.02)] px-5 py-5"
-                  >
-                    <p className="font-mono text-[11px] uppercase tracking-[0.16em] text-[var(--foreground-tertiary)]">
-                      {item.title}
-                    </p>
-                    <p className="mt-3 text-lg font-semibold text-white">{item.value}</p>
-                    <p className="mt-3 text-sm leading-6 text-[var(--foreground-secondary)]">
-                      {item.description}
-                    </p>
-                  </div>
-                ))}
-              </div>
-            </section>
-
-            {apiReferenceEndpoints.map((endpoint) => (
-              <section
-                key={endpoint.id}
-                id={endpoint.id}
-                className="scroll-mt-28 rounded-[24px] border border-[var(--border)] bg-[rgba(9,13,21,0.92)] px-6 py-6 shadow-[0_22px_60px_rgba(2,6,18,0.16)] sm:px-8"
-              >
-                <div className="border-b border-[var(--border)] pb-8">
-                  <div className="flex flex-wrap items-center gap-3">
-                    <span className={`rounded-full border px-3 py-1 text-sm font-semibold ${getMethodClasses(endpoint.method)}`}>
-                      {endpoint.method}
-                    </span>
-                    <span className="rounded-full border border-[var(--border)] px-3 py-1 font-mono text-sm text-white">
-                      {endpoint.path}
-                    </span>
-                    <span className="rounded-full border border-[var(--border)] px-3 py-1 text-sm text-[var(--foreground-secondary)]">
-                      {endpoint.group}
-                    </span>
-                  </div>
-                  <h2 className="mt-5 text-3xl font-semibold tracking-[-0.04em] text-white">
-                    {endpoint.title}
-                  </h2>
-                  <p className="mt-4 max-w-4xl text-base leading-8 text-[var(--foreground-secondary)]">
-                    {endpoint.description}
-                  </p>
-                </div>
-
-                <div className="mt-8 grid gap-4 xl:grid-cols-[0.95fr_1.05fr]">
-                  <div className="rounded-[20px] border border-[var(--border-brand)] bg-[rgba(34,211,238,0.08)] px-5 py-5">
-                    <p className="font-mono text-[11px] uppercase tracking-[0.16em] text-[var(--brand-bright)]">
-                      Authentication
-                    </p>
-                    <div className="mt-3 inline-flex rounded-full border border-[var(--border-brand)] bg-[var(--brand-subtle)] px-3 py-1 text-sm text-[var(--brand-bright)]">
-                      {endpoint.authLabel}
-                    </div>
-                    <p className="mt-3 text-sm leading-7 text-white">
-                      {endpoint.authDescription}
-                    </p>
-                  </div>
-
-                  <div className="rounded-[20px] border border-[var(--border)] bg-[rgba(255,255,255,0.02)] px-5 py-5">
-                    <p className="font-mono text-[11px] uppercase tracking-[0.16em] text-[var(--foreground-tertiary)]">
-                      Request contract
-                    </p>
-                    <p className="mt-3 text-sm leading-7 text-[var(--foreground-secondary)]">
-                      {endpoint.parameters.length > 0
-                        ? "Fields below describe the exact public contract. Optional inputs should be omitted rather than sent as empty placeholders."
-                        : "This route does not accept request body fields or query parameters in the public contract."}
-                    </p>
-                  </div>
-                </div>
-
-                <div className="mt-8">
-                  <p className="font-mono text-[11px] uppercase tracking-[0.16em] text-[var(--foreground-tertiary)]">
-                    Request parameters
-                  </p>
-                  <h3 className="mt-2 text-2xl font-semibold text-white">Inputs accepted by this route</h3>
-
-                  {endpoint.parameters.length > 0 ? (
-                    <div className="mt-4 overflow-hidden rounded-[20px] border border-[var(--border)]">
-                      <table className="w-full text-left text-sm">
-                        <thead className="bg-[rgba(255,255,255,0.03)] text-[var(--foreground-secondary)]">
-                          <tr>
-                            <th className="px-4 py-3 font-medium">Name</th>
-                            <th className="px-4 py-3 font-medium">Type</th>
-                            <th className="px-4 py-3 font-medium">Required</th>
-                            <th className="px-4 py-3 font-medium">Description</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {endpoint.parameters.map((parameter) => (
-                            <tr key={parameter.name} className="border-t border-[var(--border)]">
-                              <td className="px-4 py-4 font-mono text-white">{parameter.name}</td>
-                              <td className="px-4 py-4 text-[var(--foreground-secondary)]">{parameter.type}</td>
-                              <td className="px-4 py-4 text-[var(--foreground-secondary)]">{parameter.required}</td>
-                              <td className="px-4 py-4 text-[var(--foreground-secondary)]">{parameter.description}</td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  ) : (
-                    <div className="mt-4 rounded-[20px] border border-[var(--border)] bg-[rgba(255,255,255,0.02)] px-5 py-5">
-                      <p className="text-sm leading-7 text-[var(--foreground-secondary)]">
-                        No parameters are required for this endpoint.
-                      </p>
-                    </div>
-                  )}
-                </div>
-
-                <div className="mt-8">
-                  <p className="font-mono text-[11px] uppercase tracking-[0.16em] text-[var(--foreground-tertiary)]">
-                    Request examples
-                  </p>
-                  <h3 className="mt-2 text-2xl font-semibold text-white">Run the endpoint from your stack</h3>
-                  <div className="mt-4">
-                    <DocsTabs
-                      items={endpoint.requestExamples.map((example) => ({
-                        label: example.label,
-                        value: `${endpoint.id}-${example.label.toLowerCase()}`,
-                        content: (
-                          <CodeBlock
-                            code={example.code}
-                            language={example.language}
-                            filename={example.filename}
-                          />
-                        ),
-                      }))}
-                    />
-                  </div>
-                </div>
-
-                <div className="mt-8 grid gap-6 xl:grid-cols-2">
-                  <div className="rounded-[24px] border border-[var(--border)] bg-[rgba(255,255,255,0.02)] p-5">
-                    <p className="font-mono text-[11px] uppercase tracking-[0.16em] text-[var(--foreground-tertiary)]">
-                      Response schema
-                    </p>
-                    <div className="mt-4">
-                      <CodeBlock
-                        code={endpoint.responseSchema}
-                        language="json"
-                        filename="response-schema.json"
-                      />
-                    </div>
-                  </div>
-
-                  <div className="rounded-[24px] border border-[var(--border)] bg-[rgba(255,255,255,0.02)] p-5">
-                    <div className="flex items-center justify-between gap-3">
-                      <p className="font-mono text-[11px] uppercase tracking-[0.16em] text-[var(--foreground-tertiary)]">
-                        Response example
-                      </p>
-                      <span className="rounded-full border border-emerald-500/30 bg-emerald-500/10 px-3 py-1 text-sm text-emerald-300">
-                        200 OK
-                      </span>
-                    </div>
-                    <div className="mt-4">
-                      <CodeBlock
-                        code={endpoint.responseExample}
-                        language="json"
-                        filename="response-example.json"
-                      />
-                    </div>
-                  </div>
-                </div>
-              </section>
-            ))}
-          </main>
-
-          <aside className="space-y-6">
-            <section className="sticky top-24 space-y-6">
-              <div className="rounded-[24px] border border-[var(--border)] bg-[rgba(9,13,21,0.92)] p-5 shadow-[0_22px_60px_rgba(2,6,18,0.16)]">
-                <p className="font-mono text-[11px] uppercase tracking-[0.16em] text-[var(--foreground-tertiary)]">
-                  Navigation
+          <main data-ai-copy-root="true" className="min-w-0">
+            <article className="rounded-[28px] border border-[var(--border)] bg-[rgba(255,252,247,0.78)] px-6 py-8 shadow-[0_18px_48px_rgba(36,29,21,0.08)] backdrop-blur-xl sm:px-8">
+              <section id="overview" className="max-w-4xl border-b border-[var(--border)] pb-10">
+                <p className="font-mono text-[11px] uppercase tracking-[0.18em] text-[var(--brand-bright)]">
+                  API Reference
                 </p>
-                <div className="mt-4 space-y-3">
-                  <Link href="/docs/quickstart" className="button-secondary w-full justify-center">
-                    Quickstart
-                  </Link>
-                  <Link href="/docs/search-api" className="button-secondary w-full justify-center">
-                    Search guide
-                  </Link>
-                  <Link href="/docs/usage-api" className="button-secondary w-full justify-center">
-                    Usage guide
-                  </Link>
-                </div>
-              </div>
-
-              <div className="rounded-[24px] border border-[var(--border)] bg-[rgba(9,13,21,0.92)] p-5 shadow-[0_22px_60px_rgba(2,6,18,0.16)]">
-                <p className="font-mono text-[11px] uppercase tracking-[0.16em] text-[var(--foreground-tertiary)]">
-                  Reference notes
+                <h1 className="mt-4 text-4xl font-semibold tracking-[-0.05em] text-[var(--foreground)] sm:text-5xl">
+                  Public HTTP API
+                </h1>
+                <p className="mt-4 max-w-4xl text-[15px] leading-8 text-[var(--foreground-secondary)]">
+                  Cerul exposes a deliberately small public contract. Search, indexing, and usage
+                  are the stable authenticated routes today, with tracking redirects returned as
+                  public result URLs.
                 </p>
-                <div className="mt-4 space-y-4">
+
+                <div className="mt-5 flex flex-wrap items-center gap-2 text-sm text-[var(--foreground-secondary)]">
                   {[
-                    "Public docs only describe stable routes that exist today.",
-                    "Dashboard session endpoints are intentionally excluded from the public API contract.",
-                    "When in doubt, test `/v1/search` first and verify credits with `/v1/usage`.",
+                    "Base URL: https://api.cerul.ai",
+                    "Bearer authentication",
+                    "JSON payloads",
+                  ].map((item) => (
+                    <span
+                      key={item}
+                      className="rounded-full border border-[var(--border)] bg-white/70 px-3 py-1"
+                    >
+                      {item}
+                    </span>
+                  ))}
+                </div>
+
+                <div className="mt-6 grid gap-4 md:grid-cols-3">
+                  {[
+                    {
+                      title: "Base URL",
+                      value: "https://api.cerul.ai",
+                      description: "All public requests share the same API origin.",
+                    },
+                    {
+                      title: "Formats",
+                      value: "JSON request + response",
+                      description: "Authenticated routes are JSON-first with stable envelopes.",
+                    },
+                    {
+                      title: "Auth",
+                      value: "Bearer key",
+                      description: "Dashboard sessions are separate from the public API contract.",
+                    },
                   ].map((item) => (
                     <div
-                      key={item}
-                      className="rounded-[16px] border border-[var(--border)] bg-[rgba(255,255,255,0.02)] px-4 py-4"
+                      key={item.title}
+                      className="rounded-[18px] border border-[var(--border)] bg-[var(--background-elevated)] px-4 py-4"
                     >
-                      <p className="text-sm leading-6 text-white">{item}</p>
+                      <p className="font-mono text-[11px] uppercase tracking-[0.16em] text-[var(--foreground-tertiary)]">
+                        {item.title}
+                      </p>
+                      <p className="mt-3 text-base font-semibold text-[var(--foreground)]">
+                        {item.value}
+                      </p>
+                      <p className="mt-2 text-sm leading-6 text-[var(--foreground-secondary)]">
+                        {item.description}
+                      </p>
                     </div>
                   ))}
                 </div>
+
+                <div className="mt-7" data-docs-ai-anchor="true">
+                  <AIToolbar
+                    copyRootSelector="[data-ai-copy-root='true']"
+                    pageUrl="/docs/api-reference"
+                    pageTitle="Cerul API Reference"
+                  />
+                </div>
+              </section>
+
+              <div className="divide-y divide-[var(--border)]">
+                {apiReferenceEndpoints.map((endpoint) => (
+                  <section key={endpoint.id} id={endpoint.id} className="scroll-mt-28 py-10">
+                    <div className="max-w-4xl">
+                      <div className="flex flex-wrap items-center gap-3">
+                        <span
+                          className={`rounded-full border px-3 py-1 text-sm font-semibold ${getMethodClasses(endpoint.method)}`}
+                        >
+                          {endpoint.method}
+                        </span>
+                        <span className="rounded-full border border-[var(--border)] bg-white/70 px-3 py-1 font-mono text-sm text-[var(--foreground)]">
+                          {endpoint.path}
+                        </span>
+                        <span className="rounded-full border border-[var(--border)] px-3 py-1 text-sm text-[var(--foreground-secondary)]">
+                          {endpoint.group}
+                        </span>
+                      </div>
+                      <h2 className="mt-5 text-3xl font-semibold tracking-[-0.04em] text-[var(--foreground)]">
+                        {endpoint.title}
+                      </h2>
+                      <p className="mt-4 max-w-4xl text-[15px] leading-8 text-[var(--foreground-secondary)]">
+                        {endpoint.description}
+                      </p>
+                    </div>
+
+                    <div className="mt-6 grid gap-8 xl:grid-cols-[minmax(0,1fr)_460px]">
+                      <div className="space-y-6">
+                        <div className="rounded-[18px] border border-[var(--border-brand)] bg-[var(--brand-subtle)] px-4 py-4">
+                          <p className="font-mono text-[11px] uppercase tracking-[0.16em] text-[var(--brand-bright)]">
+                            Authentication
+                          </p>
+                          <div className="mt-3 inline-flex rounded-full border border-[var(--border-brand)] bg-white/65 px-3 py-1 text-sm text-[var(--brand-bright)]">
+                            {endpoint.authLabel}
+                          </div>
+                          <p className="mt-3 text-sm leading-7 text-[var(--foreground)]">
+                            {endpoint.authDescription}
+                          </p>
+                        </div>
+
+                        <div className="rounded-[18px] border border-[var(--border)] bg-[var(--background-elevated)] px-4 py-4">
+                          <p className="font-mono text-[11px] uppercase tracking-[0.16em] text-[var(--foreground-tertiary)]">
+                            Request contract
+                          </p>
+                          <p className="mt-3 text-sm leading-7 text-[var(--foreground-secondary)]">
+                            {endpoint.parameters.length > 0
+                              ? "Fields below describe the exact public contract. Omit optional values instead of sending empty placeholders."
+                              : "This route does not accept request body fields or query parameters in the public contract."}
+                          </p>
+                        </div>
+
+                        <div>
+                          <p className="font-mono text-[11px] uppercase tracking-[0.16em] text-[var(--foreground-tertiary)]">
+                            Request parameters
+                          </p>
+                          <h3 className="mt-2 text-2xl font-semibold text-[var(--foreground)]">
+                            Inputs accepted by this route
+                          </h3>
+
+                          {endpoint.parameters.length > 0 ? (
+                            <div className="mt-4 overflow-hidden rounded-[20px] border border-[var(--border)]">
+                              <table className="w-full text-left text-sm">
+                                <thead className="bg-[var(--background-elevated)] text-[var(--foreground-secondary)]">
+                                  <tr>
+                                    <th className="px-4 py-3 font-medium">Name</th>
+                                    <th className="px-4 py-3 font-medium">Type</th>
+                                    <th className="px-4 py-3 font-medium">Required</th>
+                                    <th className="px-4 py-3 font-medium">Description</th>
+                                  </tr>
+                                </thead>
+                                <tbody className="bg-white/65">
+                                  {endpoint.parameters.map((parameter) => (
+                                    <tr key={parameter.name} className="border-t border-[var(--border)]">
+                                      <td className="px-4 py-4 font-mono text-[var(--foreground)]">
+                                        {parameter.name}
+                                      </td>
+                                      <td className="px-4 py-4 text-[var(--foreground-secondary)]">
+                                        {parameter.type}
+                                      </td>
+                                      <td className="px-4 py-4 text-[var(--foreground-secondary)]">
+                                        {parameter.required}
+                                      </td>
+                                      <td className="px-4 py-4 text-[var(--foreground-secondary)]">
+                                        {parameter.description}
+                                      </td>
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                            </div>
+                          ) : (
+                            <div className="mt-4 rounded-[18px] border border-[var(--border)] bg-[var(--background-elevated)] px-4 py-4">
+                              <p className="text-sm leading-7 text-[var(--foreground-secondary)]">
+                                No parameters are required for this endpoint.
+                              </p>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="space-y-6">
+                        <div>
+                          <p className="font-mono text-[11px] uppercase tracking-[0.16em] text-[var(--foreground-tertiary)]">
+                            Request examples
+                          </p>
+                          <h3 className="mt-2 text-2xl font-semibold text-[var(--foreground)]">
+                            Run the endpoint from your stack
+                          </h3>
+                          <div className="mt-4">
+                            <DocsTabs
+                              items={endpoint.requestExamples.map((example) => ({
+                                label: example.label,
+                                value: `${endpoint.id}-${example.label.toLowerCase()}`,
+                                content: (
+                                  <CodeBlock
+                                    code={example.code}
+                                    language={example.language}
+                                    filename={example.filename}
+                                  />
+                                ),
+                              }))}
+                            />
+                          </div>
+                        </div>
+
+                        <div className="space-y-6">
+                          <div className="rounded-[18px] border border-[var(--border)] bg-[var(--background-elevated)] p-4">
+                            <p className="font-mono text-[11px] uppercase tracking-[0.16em] text-[var(--foreground-tertiary)]">
+                              Response schema
+                            </p>
+                            <div className="mt-4">
+                              <CodeBlock
+                                code={endpoint.responseSchema}
+                                language="json"
+                                filename="response-schema.json"
+                              />
+                            </div>
+                          </div>
+
+                          <div className="rounded-[18px] border border-[var(--border)] bg-[var(--background-elevated)] p-4">
+                            <div className="flex items-center justify-between gap-3">
+                              <p className="font-mono text-[11px] uppercase tracking-[0.16em] text-[var(--foreground-tertiary)]">
+                                Response example
+                              </p>
+                              <span className="rounded-full border border-[rgba(31,141,74,0.18)] bg-[rgba(31,141,74,0.12)] px-3 py-1 text-sm text-[var(--success)]">
+                                200 OK
+                              </span>
+                            </div>
+                            <div className="mt-4">
+                              <CodeBlock
+                                code={endpoint.responseExample}
+                                language="json"
+                                filename="response-example.json"
+                              />
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </section>
+                ))}
               </div>
-            </section>
-          </aside>
+            </article>
+          </main>
+
+          <DocsToc
+            items={tocItems}
+            subtitle="Jump between the introduction and each stable public route."
+            actions={[
+              { label: "Get API key", href: "/signup" },
+              { label: "Open playground", href: "/search" },
+            ]}
+          />
         </div>
+
+        <SiteFooter />
       </div>
     </div>
   );

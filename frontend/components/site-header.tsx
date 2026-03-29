@@ -12,12 +12,12 @@ export function SiteHeader({ currentPath }: SiteHeaderProps) {
 
   return (
     <header className="sticky top-4 z-50 mx-auto max-w-[1400px]">
-      <div className="surface-elevated flex flex-col gap-4 rounded-[26px] px-5 py-4 backdrop-blur-xl lg:grid lg:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] lg:items-center lg:gap-8 lg:px-6 xl:gap-12">
-        <div className="flex items-center gap-4 lg:pr-8">
+      <div className="surface-elevated flex flex-col gap-4 rounded-[30px] px-4 py-4 backdrop-blur-xl lg:grid lg:grid-cols-[auto_minmax(0,1fr)_auto] lg:items-center lg:gap-5 lg:px-5">
+        <div className="flex items-center gap-4">
           <BrandMark />
         </div>
 
-        <nav className="flex flex-wrap items-center gap-4 lg:justify-self-center lg:gap-7">
+        <nav className="flex flex-wrap items-center justify-center gap-2 lg:justify-self-center">
           {visibleNavigation.map((item) => {
             const isActive = isPrimaryNavigationActive(currentPath, item.href);
 
@@ -25,7 +25,11 @@ export function SiteHeader({ currentPath }: SiteHeaderProps) {
               <Link
                 key={item.label}
                 href={item.href}
-                className={`nav-link px-2 ${isActive ? "nav-link-active" : ""}`}
+                className={`rounded-full px-4 py-2 text-sm font-medium transition ${
+                  isActive
+                    ? "bg-[var(--background-sunken)] text-[var(--foreground)] shadow-[inset_0_1px_0_rgba(255,255,255,0.68)]"
+                    : "text-[var(--foreground-secondary)] hover:bg-white/40 hover:text-[var(--foreground)]"
+                }`}
               >
                 {item.label}
               </Link>
@@ -38,7 +42,7 @@ export function SiteHeader({ currentPath }: SiteHeaderProps) {
             href="https://github.com/JessyTsui/cerul"
             target="_blank"
             rel="noreferrer"
-            className="button-secondary focus-ring inline-flex items-center gap-2 border-[rgba(255,255,255,0.09)] px-4 text-[var(--foreground-secondary)]"
+            className="focus-ring inline-flex h-11 items-center gap-2 rounded-full border border-[var(--border)] bg-white/70 px-4 text-sm font-medium text-[var(--foreground-secondary)] transition hover:border-[var(--border-strong)] hover:bg-white hover:text-[var(--foreground)]"
           >
             <svg
               width="18"

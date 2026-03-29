@@ -69,27 +69,34 @@ export function AdminUsersScreen() {
           />
 
           <div className="grid gap-3 xl:grid-cols-2">
-            <article className="surface-elevated px-5 py-5">
-              <p className="mb-4 text-sm font-semibold text-white">Distribution</p>
+            <article className="surface-elevated rounded-[30px] px-5 py-5">
+              <p className="text-sm font-semibold text-[var(--foreground)]">Distribution</p>
+              <p className="mt-1 text-xs leading-6 text-[var(--foreground-tertiary)]">
+                The split between plan tiers and console roles in the selected window.
+              </p>
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <p className="mb-2 text-xs text-[var(--foreground-tertiary)]">Plan</p>
-                  <div className="space-y-1.5">
+                  <p className="mb-3 mt-4 text-xs uppercase tracking-[0.14em] text-[var(--foreground-tertiary)]">
+                    Plan
+                  </p>
+                  <div className="space-y-2">
                     {data.tiers.map((tier) => (
-                      <div key={tier.key} className="flex items-center justify-between text-xs">
+                      <div key={tier.key} className="flex items-center justify-between rounded-[16px] border border-[var(--border)] bg-white/62 px-3 py-2 text-xs">
                         <span className="text-[var(--foreground-secondary)]">{tier.label}</span>
-                        <span className="font-mono text-white">{tier.count}</span>
+                        <span className="font-mono text-[var(--foreground)]">{tier.count}</span>
                       </div>
                     ))}
                   </div>
                 </div>
                 <div>
-                  <p className="mb-2 text-xs text-[var(--foreground-tertiary)]">Role</p>
-                  <div className="space-y-1.5">
+                  <p className="mb-3 mt-4 text-xs uppercase tracking-[0.14em] text-[var(--foreground-tertiary)]">
+                    Role
+                  </p>
+                  <div className="space-y-2">
                     {data.consoleRoles.map((role) => (
-                      <div key={role.key} className="flex items-center justify-between text-xs">
+                      <div key={role.key} className="flex items-center justify-between rounded-[16px] border border-[var(--border)] bg-white/62 px-3 py-2 text-xs">
                         <span className="text-[var(--foreground-secondary)]">{role.label}</span>
-                        <span className="font-mono text-white">{role.count}</span>
+                        <span className="font-mono text-[var(--foreground)]">{role.count}</span>
                       </div>
                     ))}
                   </div>
@@ -97,22 +104,25 @@ export function AdminUsersScreen() {
               </div>
             </article>
 
-            <article className="surface-elevated overflow-hidden px-5 py-5">
-              <p className="mb-4 text-sm font-semibold text-white">Most active</p>
-              <table className="w-full text-left text-xs">
+            <article className="surface-elevated overflow-hidden rounded-[30px] px-5 py-5">
+              <p className="text-sm font-semibold text-[var(--foreground)]">Most active</p>
+              <p className="mt-1 text-xs leading-6 text-[var(--foreground-tertiary)]">
+                Accounts generating the most request activity in the current range.
+              </p>
+              <table className="admin-table mt-4">
                 <thead>
-                  <tr className="text-[var(--foreground-tertiary)]">
-                    <th className="pb-2 pr-3 font-medium">Email</th>
-                    <th className="pb-2 pr-3 font-medium">Req</th>
-                    <th className="pb-2 font-medium">Last</th>
+                  <tr>
+                    <th>Email</th>
+                    <th>Req</th>
+                    <th>Last</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-white/5">
+                <tbody>
                   {data.mostActiveUsers.map((user) => (
                     <tr key={user.userId}>
-                      <td className="py-2 pr-3 text-white">{user.email ?? user.userId.slice(0, 8)}</td>
-                      <td className="py-2 pr-3 text-[var(--foreground-secondary)]">{user.requestCount}</td>
-                      <td className="py-2 text-[var(--foreground-secondary)]">{formatAdminDateTime(user.lastRequestAt)}</td>
+                      <td className="admin-table-primary">{user.email ?? user.userId.slice(0, 8)}</td>
+                      <td>{user.requestCount}</td>
+                      <td>{formatAdminDateTime(user.lastRequestAt)}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -120,26 +130,30 @@ export function AdminUsersScreen() {
             </article>
           </div>
 
-          <article className="surface-elevated overflow-hidden px-5 py-5">
-            <p className="mb-4 text-sm font-semibold text-white">Recent signups</p>
-            <table className="w-full text-left text-xs">
+          <article className="surface-elevated overflow-hidden rounded-[30px] px-5 py-5">
+            <p className="text-sm font-semibold text-[var(--foreground)]">Recent signups</p>
+            <p className="mt-1 text-xs leading-6 text-[var(--foreground-tertiary)]">
+              New accounts, their current plan, and whether they have already created
+              API access.
+            </p>
+            <table className="admin-table mt-4">
               <thead>
-                <tr className="text-[var(--foreground-tertiary)]">
-                  <th className="pb-2 pr-3 font-medium">Email</th>
-                  <th className="pb-2 pr-3 font-medium">Tier</th>
-                  <th className="pb-2 pr-3 font-medium">Role</th>
-                  <th className="pb-2 pr-3 font-medium">Keys</th>
-                  <th className="pb-2 font-medium">Created</th>
+                <tr>
+                  <th>Email</th>
+                  <th>Tier</th>
+                  <th>Role</th>
+                  <th>Keys</th>
+                  <th>Created</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-white/5">
+              <tbody>
                 {data.recentUsers.map((user) => (
                   <tr key={user.userId}>
-                    <td className="py-2 pr-3 text-white">{user.email ?? user.userId}</td>
-                    <td className="py-2 pr-3 text-[var(--foreground-secondary)]">{user.tier}</td>
-                    <td className="py-2 pr-3 text-[var(--foreground-secondary)]">{user.consoleRole}</td>
-                    <td className="py-2 pr-3 text-[var(--foreground-secondary)]">{user.activeApiKeys}</td>
-                    <td className="py-2 text-[var(--foreground-secondary)]">{formatAdminDateTime(user.createdAt)}</td>
+                    <td className="admin-table-primary">{user.email ?? user.userId}</td>
+                    <td>{user.tier}</td>
+                    <td>{user.consoleRole}</td>
+                    <td>{user.activeApiKeys}</td>
+                    <td>{formatAdminDateTime(user.createdAt)}</td>
                   </tr>
                 ))}
               </tbody>

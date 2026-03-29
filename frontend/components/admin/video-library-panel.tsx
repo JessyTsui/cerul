@@ -12,15 +12,15 @@ const VIDEO_PAGE_SIZE = 8;
 
 function statusBadgeClass(status: string | null): string {
   if (status === "failed") {
-    return "border-red-500/30 bg-red-500/10 text-red-300";
+    return "border-[rgba(191,91,70,0.2)] bg-[rgba(191,91,70,0.12)] text-[var(--error)]";
   }
   if (status === "running" || status === "retrying" || status === "pending") {
-    return "border-blue-500/30 bg-blue-500/10 text-blue-300";
+    return "border-[var(--border-brand)] bg-[var(--brand-subtle)] text-[var(--brand-bright)]";
   }
   if (status === "completed") {
-    return "border-emerald-500/30 bg-emerald-500/10 text-emerald-300";
+    return "border-[rgba(31,141,74,0.2)] bg-[rgba(31,141,74,0.12)] text-[var(--success)]";
   }
-  return "border-[var(--border)] bg-[var(--background-secondary)] text-[var(--foreground-tertiary)]";
+  return "border-[var(--border)] bg-white/68 text-[var(--foreground-tertiary)]";
 }
 
 function VideoRow({
@@ -35,11 +35,11 @@ function VideoRow({
   const primaryUrl = video.sourceUrl ?? video.videoUrl;
 
   return (
-    <article className="rounded-2xl border border-[var(--border)]/70 bg-[var(--background-secondary)]/65 px-4 py-3">
+    <article className="rounded-[22px] border border-[var(--border)]/70 bg-white/68 px-4 py-4">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
-            <p className="truncate text-sm font-medium text-white">{video.title}</p>
+            <p className="truncate text-sm font-medium text-[var(--foreground)]">{video.title}</p>
             <span className="rounded-full border border-[var(--border)] px-2 py-0.5 text-[10px] uppercase tracking-[0.12em] text-[var(--foreground-tertiary)]">
               {video.source}
             </span>
@@ -66,8 +66,8 @@ function VideoRow({
           onClick={() => onDelete(video)}
           className={`shrink-0 rounded-md px-3 py-1 text-xs font-medium transition ${
             deleting
-              ? "cursor-not-allowed bg-red-500/10 text-red-200/70"
-              : "bg-red-500/15 text-red-200 hover:bg-red-500/25"
+              ? "cursor-not-allowed bg-[rgba(191,91,70,0.08)] text-[var(--error)]/60"
+              : "bg-[rgba(191,91,70,0.12)] text-[var(--error)] hover:bg-[rgba(191,91,70,0.18)]"
           }`}
         >
           {deleting ? "Deleting..." : "Delete"}
@@ -156,10 +156,10 @@ export function VideoLibraryPanel() {
   const rangeEnd = Math.min((data?.offset ?? 0) + videos.length, total);
 
   return (
-    <article className="surface-elevated overflow-hidden px-5 py-5">
+    <article className="surface-elevated overflow-hidden rounded-[30px] px-5 py-5">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <p className="text-sm font-semibold text-white">Indexed videos</p>
+          <p className="text-sm font-semibold text-[var(--foreground)]">Indexed videos</p>
           <p className="mt-1 text-xs text-[var(--foreground-tertiary)]">
             Search by title or original URL, then delete a video and all related indexed data.
           </p>
@@ -182,14 +182,14 @@ export function VideoLibraryPanel() {
           value={queryInput}
           onChange={(event) => setQueryInput(event.target.value)}
           placeholder="Search by title or original URL"
-          className="min-w-[280px] flex-1 rounded-xl border border-[var(--border)] bg-[var(--background-secondary)] px-3 py-2 text-sm text-white outline-none transition placeholder:text-[var(--foreground-tertiary)] focus:border-[var(--brand-bright)]"
+          className="admin-input min-w-[280px] flex-1 text-sm"
         />
         <button type="submit" className="button-primary" disabled={isLoading}>
           Search
         </button>
         <button
           type="button"
-          className="rounded-xl border border-[var(--border)] px-3 py-2 text-sm text-[var(--foreground-secondary)] transition hover:bg-[var(--background-secondary)]"
+          className="button-secondary"
           onClick={() => {
             setQueryInput("");
             setSearchQuery("");
@@ -202,13 +202,13 @@ export function VideoLibraryPanel() {
       </form>
 
       {notice ? (
-        <p className="mt-3 rounded-xl border border-emerald-500/20 bg-emerald-500/10 px-3 py-2 text-xs text-emerald-200">
+        <p className="mt-3 rounded-xl border border-[rgba(31,141,74,0.18)] bg-[rgba(31,141,74,0.12)] px-3 py-2 text-xs text-[var(--success)]">
           {notice}
         </p>
       ) : null}
 
       {error ? (
-        <p className="mt-3 rounded-xl border border-red-500/20 bg-red-500/10 px-3 py-2 text-xs text-red-200">
+        <p className="mt-3 rounded-xl border border-[rgba(191,91,70,0.18)] bg-[rgba(191,91,70,0.12)] px-3 py-2 text-xs text-[var(--error)]">
           {error}
         </p>
       ) : null}
@@ -235,7 +235,7 @@ export function VideoLibraryPanel() {
       </div>
 
       {total > VIDEO_PAGE_SIZE ? (
-        <div className="mt-4 flex items-center justify-between gap-3 rounded-xl border border-[var(--border)]/70 px-3 py-2 text-[11px] text-[var(--foreground-secondary)]">
+        <div className="mt-4 flex items-center justify-between gap-3 rounded-xl border border-[var(--border)]/70 bg-white/56 px-3 py-2 text-[11px] text-[var(--foreground-secondary)]">
           <p>
             Showing {rangeStart}-{rangeEnd} of {total}
           </p>

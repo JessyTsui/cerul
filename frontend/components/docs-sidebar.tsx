@@ -3,7 +3,7 @@
 import type { Route } from "next";
 import Link from "next/link";
 import { useId, useState } from "react";
-import { docsSidebarGroups } from "@/lib/docs";
+import { docsSidebarGroups, docsUtilityLinks } from "@/lib/docs";
 
 type DocsSidebarProps = {
   currentSlug?: string;
@@ -22,33 +22,63 @@ export function DocsSidebar({ currentSlug, currentPath }: DocsSidebarProps) {
         aria-expanded={mobileOpen}
         type="button"
         onClick={() => setMobileOpen(!mobileOpen)}
-        className="mb-4 flex w-full items-center justify-between rounded-[16px] border border-[var(--border)] bg-[rgba(255,255,255,0.03)] px-4 py-3 text-left text-sm text-[var(--foreground-secondary)] lg:hidden"
+        className="mb-4 flex w-full items-center justify-between rounded-[16px] border border-[var(--border)] bg-[rgba(255,252,247,0.76)] px-4 py-3 text-left text-sm text-[var(--foreground-secondary)] shadow-[0_12px_28px_rgba(36,29,21,0.05)] lg:hidden"
       >
-        <span>Documentation menu</span>
+        <span>Docs navigation</span>
         <span className="font-mono text-[11px] uppercase tracking-[0.16em] text-[var(--brand-bright)]">
           {mobileOpen ? "Close" : "Open"}
         </span>
       </button>
 
       <aside id={panelId} className={`${mobileOpen ? "block" : "hidden"} lg:block`}>
-        <div className="sticky top-24 overflow-hidden rounded-[24px] border border-[var(--border)] bg-[rgba(9,13,21,0.92)] p-4 shadow-[0_22px_60px_rgba(2,6,18,0.22)]">
+        <div className="sticky top-20 max-h-[calc(100vh-5.5rem)] overflow-y-auto rounded-[24px] border border-[var(--border)] bg-[rgba(255,252,247,0.76)] p-4 shadow-[0_18px_40px_rgba(36,29,21,0.06)] backdrop-blur-xl">
           <div className="border-b border-[var(--border)] pb-4">
             <p className="font-mono text-[11px] uppercase tracking-[0.18em] text-[var(--brand-bright)]">
               Documentation
             </p>
-            <p className="mt-3 text-lg font-semibold text-white">Cerul API</p>
-            <p className="mt-2 text-sm leading-6 text-[var(--foreground-secondary)]">
-              Quickstart, API guides, and platform notes for developers.
+            <p className="mt-2 text-base font-semibold text-[var(--foreground)]">Cerul API</p>
+            <p className="mt-1 text-sm leading-6 text-[var(--foreground-secondary)]">
+              Guides, references, and integration notes.
             </p>
           </div>
 
-          <div className="mt-5 space-y-5">
+          <div className="mt-4 flex flex-wrap gap-2 border-b border-[var(--border)] pb-4">
+            {docsUtilityLinks.map((item) => {
+              const isExternal = item.href.startsWith("http") || item.href.startsWith("mailto:");
+
+              if (isExternal) {
+                return (
+                  <a
+                    key={item.href}
+                    href={item.href}
+                    target={item.href.startsWith("http") ? "_blank" : undefined}
+                    rel={item.href.startsWith("http") ? "noreferrer" : undefined}
+                    className="rounded-full border border-[var(--border)] bg-[var(--background-elevated)] px-3 py-2 text-sm text-[var(--foreground-secondary)] transition hover:border-[var(--border-strong)] hover:bg-white hover:text-[var(--foreground)]"
+                  >
+                    {item.title}
+                  </a>
+                );
+              }
+
+              return (
+                <Link
+                  key={item.href}
+                  href={item.href as Route}
+                  className="rounded-full border border-[var(--border)] bg-[var(--background-elevated)] px-3 py-2 text-sm text-[var(--foreground-secondary)] transition hover:border-[var(--border-strong)] hover:bg-white hover:text-[var(--foreground)]"
+                >
+                  {item.title}
+                </Link>
+              );
+            })}
+          </div>
+
+          <div className="mt-4 space-y-5">
             {docsSidebarGroups.map((group) => (
               <section key={group.title}>
-                <h3 className="px-3 font-mono text-[11px] uppercase tracking-[0.18em] text-[var(--foreground-tertiary)]">
+                <h3 className="px-2 font-mono text-[11px] uppercase tracking-[0.18em] text-[var(--foreground-tertiary)]">
                   {group.title}
                 </h3>
-                <div className="mt-3 space-y-1">
+                <div className="mt-2 space-y-1">
                   {group.items.map((item) => {
                     const isActive =
                       (item.slug && item.slug === activeKey)
@@ -60,10 +90,10 @@ export function DocsSidebar({ currentSlug, currentPath }: DocsSidebarProps) {
                         key={item.href}
                         href={item.href as Route}
                         onClick={() => setMobileOpen(false)}
-                        className={`block rounded-[14px] border-l-2 px-3 py-3 transition ${
+                        className={`block rounded-[14px] border-l-2 px-3 py-2.5 transition ${
                           isActive
-                            ? "border-l-[var(--brand)] bg-[rgba(34,211,238,0.08)] text-white"
-                            : "border-l-transparent text-[var(--foreground-secondary)] hover:bg-[rgba(255,255,255,0.03)] hover:text-white"
+                            ? "border-l-[var(--brand-bright)] bg-[var(--brand-subtle)] text-[var(--foreground)]"
+                            : "border-l-transparent text-[var(--foreground-secondary)] hover:bg-white/70 hover:text-[var(--foreground)]"
                         }`}
                       >
                         <p className="text-sm font-medium">{item.title}</p>

@@ -72,53 +72,59 @@ export function AdminContentScreen() {
           />
 
           <div className="grid gap-3 xl:grid-cols-2">
-            <article className="surface-elevated overflow-hidden px-5 py-5">
-              <p className="mb-4 text-sm font-semibold text-white">Source growth</p>
-              <table className="w-full text-left text-xs">
+            <article className="surface-elevated overflow-hidden rounded-[30px] px-5 py-5">
+              <p className="text-sm font-semibold text-[var(--foreground)]">Source growth</p>
+              <p className="mt-1 text-xs leading-6 text-[var(--foreground-tertiary)]">
+                Which sources are contributing the most newly indexed content in this window.
+              </p>
+              <table className="admin-table mt-4">
                 <thead>
-                  <tr className="text-[var(--foreground-tertiary)]">
-                    <th className="pb-2 pr-3 font-medium">Source</th>
-                    <th className="pb-2 pr-3 font-medium">Track</th>
-                    <th className="pb-2 font-medium">Added</th>
+                  <tr>
+                    <th>Source</th>
+                    <th>Track</th>
+                    <th>Added</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-white/5">
+                <tbody>
                   {data.perSourceGrowth.map((source) => (
                     <tr key={`${source.track}-${source.sourceKey}`}>
-                      <td className="py-2 pr-3 text-white">{source.sourceKey}</td>
-                      <td className="py-2 pr-3 text-[var(--foreground-secondary)]">{source.track}</td>
-                      <td className="py-2 text-[var(--foreground-secondary)]">{source.additions}</td>
+                      <td className="admin-table-primary">{source.sourceKey}</td>
+                      <td>{source.track}</td>
+                      <td>{source.additions}</td>
                     </tr>
                   ))}
                 </tbody>
               </table>
             </article>
 
-            <article className="surface-elevated overflow-hidden px-5 py-5">
-              <p className="mb-4 text-sm font-semibold text-white">Stale sources</p>
-              <table className="w-full text-left text-xs">
+            <article className="surface-elevated overflow-hidden rounded-[30px] px-5 py-5">
+              <p className="text-sm font-semibold text-[var(--foreground)]">Stale sources</p>
+              <p className="mt-1 text-xs leading-6 text-[var(--foreground-tertiary)]">
+                Sources that look quiet or under-synced relative to the rest of the catalog.
+              </p>
+              <table className="admin-table mt-4">
                 <thead>
-                  <tr className="text-[var(--foreground-tertiary)]">
-                    <th className="pb-2 pr-3 font-medium">Source</th>
-                    <th className="pb-2 pr-3 font-medium">Track</th>
-                    <th className="pb-2 pr-3 font-medium">Jobs</th>
-                    <th className="pb-2 font-medium">Last job</th>
+                  <tr>
+                    <th>Source</th>
+                    <th>Track</th>
+                    <th>Jobs</th>
+                    <th>Last job</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-white/5">
+                <tbody>
                   {data.staleSources.map((source) => (
                     <tr key={source.sourceId}>
-                      <td className="py-2 pr-3 text-white">
+                      <td className="admin-table-primary">
                         {source.displayName}
                         {source.isStale ? (
-                          <span className="ml-1.5 rounded-full border border-amber-500/30 bg-amber-500/10 px-1.5 py-0.5 text-[10px] text-amber-200">
+                          <span className="ml-1.5 rounded-full border border-[rgba(212,156,105,0.22)] bg-[rgba(212,156,105,0.12)] px-1.5 py-0.5 text-[10px] text-[var(--accent-bright)]">
                             stale
                           </span>
                         ) : null}
                       </td>
-                      <td className="py-2 pr-3 text-[var(--foreground-secondary)]">{source.track}</td>
-                      <td className="py-2 pr-3 text-[var(--foreground-secondary)]">{source.jobsInRange}</td>
-                      <td className="py-2 text-[var(--foreground-secondary)]">{formatAdminDateTime(source.lastJobAt)}</td>
+                      <td>{source.track}</td>
+                      <td>{source.jobsInRange}</td>
+                      <td>{formatAdminDateTime(source.lastJobAt)}</td>
                     </tr>
                   ))}
                 </tbody>

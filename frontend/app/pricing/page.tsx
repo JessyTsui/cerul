@@ -14,15 +14,16 @@ export const metadata: Metadata = {
 
 export default function PricingPage() {
   return (
-    <div className="mx-auto flex min-h-screen max-w-[1400px] flex-col px-4 pb-8 pt-4 sm:px-6 lg:px-8">
-      <SiteHeader currentPath="/pricing" />
-      <main className="flex-1">
+    <div className="soft-theme">
+      <div className="mx-auto flex min-h-screen max-w-[1400px] flex-col px-4 pb-8 pt-4 sm:px-6 lg:px-8">
+        <SiteHeader currentPath="/pricing" />
+        <main className="flex-1">
         {/* Hero */}
-        <section className="surface-elevated mt-8 px-6 py-10 lg:px-10">
+          <section className="surface-elevated mt-8 rounded-[34px] px-6 py-10 lg:px-10">
           <div className="grid gap-8 lg:grid-cols-2 lg:items-end">
             <div className="space-y-4">
               <span className="label label-brand">Pricing</span>
-              <h1 className="text-4xl font-bold tracking-tight text-white sm:text-5xl">
+              <h1 className="text-4xl font-bold tracking-tight text-[var(--foreground)] sm:text-5xl">
                 One simple credit model from first request to production.
               </h1>
             </div>
@@ -34,7 +35,7 @@ export default function PricingPage() {
         </section>
 
         {/* Pricing tiers */}
-        <section className="mt-8 grid gap-4 lg:grid-cols-3">
+          <section className="mt-8 grid gap-4 lg:grid-cols-3">
           {pricingTiers.map((tier, index) => (
             <article
               key={tier.name}
@@ -53,7 +54,7 @@ export default function PricingPage() {
                 {tier.name}
               </p>
               <div className="mt-4 flex items-end gap-2">
-                <p className="text-5xl font-bold text-white">{tier.price}</p>
+                <p className="text-5xl font-bold text-[var(--foreground)]">{tier.price}</p>
                 <p className="mb-2 text-sm text-[var(--foreground-tertiary)]">
                   {tier.cadence}
                 </p>
@@ -107,13 +108,13 @@ export default function PricingPage() {
               </div>
             </article>
           ))}
-        </section>
+          </section>
 
         {/* Commercial stance + FAQ */}
-        <section className="mt-10 grid gap-5 lg:grid-cols-2">
-          <article className="surface-gradient px-6 py-6 lg:px-8">
+          <section className="mt-10 grid gap-5 lg:grid-cols-2">
+            <article className="surface-gradient rounded-[30px] px-6 py-6 lg:px-8">
             <p className="eyebrow">Commercial stance</p>
-            <h2 className="mt-3 text-3xl font-bold text-white">
+            <h2 className="mt-3 text-3xl font-bold text-[var(--foreground)]">
               Open core. Operational leverage in the service.
             </h2>
             <p className="mt-4 text-[var(--foreground-secondary)]">
@@ -123,25 +124,26 @@ export default function PricingPage() {
             </p>
           </article>
 
-          <article className="surface px-6 py-6 lg:px-8">
+            <article className="surface rounded-[30px] px-6 py-6 lg:px-8">
             <p className="eyebrow">FAQ</p>
             <div className="mt-5 space-y-4">
               {pricingFaqs.map((item) => (
                 <div
                   key={item.question}
-                  className="rounded-lg border border-[var(--border)] bg-[var(--surface)] px-4 py-4"
+                  className="rounded-[20px] border border-[var(--border)] bg-[var(--background-elevated)] px-4 py-4"
                 >
-                  <h3 className="font-semibold text-white">{item.question}</h3>
+                  <h3 className="font-semibold text-[var(--foreground)]">{item.question}</h3>
                   <p className="mt-2 text-sm leading-relaxed text-[var(--foreground-tertiary)]">
                     {item.answer}
                   </p>
                 </div>
               ))}
             </div>
-          </article>
-        </section>
-      </main>
-      <SiteFooter />
+            </article>
+          </section>
+        </main>
+        <SiteFooter />
+      </div>
     </div>
   );
 }
