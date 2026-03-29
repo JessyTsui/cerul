@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import { redirect } from "next/navigation";
 import { ConsoleViewerProvider } from "@/components/console/console-viewer-context";
+import { DashboardAppShell } from "@/components/dashboard/dashboard-app-shell";
 import { DashboardUsageProvider } from "@/components/dashboard/dashboard-usage-context";
 import { getConsoleViewer } from "@/lib/console-viewer";
 
@@ -20,7 +21,7 @@ export default async function DashboardAppLayout({
   return (
     <ConsoleViewerProvider viewer={viewer}>
       <DashboardUsageProvider>
-        {children}
+        <DashboardAppShell>{children}</DashboardAppShell>
       </DashboardUsageProvider>
     </ConsoleViewerProvider>
   );

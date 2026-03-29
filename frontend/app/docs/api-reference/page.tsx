@@ -112,12 +112,11 @@ export default function ApiReferencePage() {
                   API Reference
                 </p>
                 <h1 className="mt-4 text-4xl font-semibold tracking-[-0.05em] text-[var(--foreground)] sm:text-5xl">
-                  Public HTTP API
+                  API Reference
                 </h1>
                 <p className="mt-4 max-w-4xl text-[15px] leading-8 text-[var(--foreground-secondary)]">
-                  Cerul exposes a deliberately small public contract. Search, indexing, and usage
-                  are the stable authenticated routes today, with tracking redirects returned as
-                  public result URLs.
+                  Two endpoints: search videos and check usage. Both require a Bearer API key
+                  and return JSON responses.
                 </p>
 
                 <div className="mt-5 flex flex-wrap items-center gap-2 text-sm text-[var(--foreground-secondary)]">
@@ -348,7 +347,7 @@ export default function ApiReferencePage() {
             subtitle="Jump between the introduction and each stable public route."
             actions={[
               { label: "Get API key", href: "/signup" },
-              { label: "Open playground", href: "/search" },
+              { label: "Read quickstart", href: "/docs" },
             ]}
           />
         </div>

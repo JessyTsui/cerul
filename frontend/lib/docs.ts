@@ -80,9 +80,8 @@ export const docsNavigation = [
   { href: "#introduction", label: "Introduction", index: "01" },
   { href: "#authentication", label: "Authentication", index: "02" },
   { href: "#search", label: "Search API", index: "03" },
-  { href: "#index", label: "Index API", index: "04" },
-  { href: "#usage", label: "Usage API", index: "05" },
-  { href: "#response", label: "Response Format", index: "06" },
+  { href: "#usage", label: "Usage API", index: "04" },
+  { href: "#response", label: "Response Format", index: "05" },
 ] as const;
 
 export const docsLandingSections = [
@@ -91,12 +90,11 @@ export const docsLandingSections = [
     kicker: "Getting Started",
     title: "Cerul API Overview",
     description:
-      "The Cerul API provides video understanding capabilities for AI agents. Search what is shown in videos, not just what is said. All API requests are made to the base URL with your API key included in the Authorization header.",
+      "The Cerul API lets AI agents search video by meaning — across visual scenes, speech, and on-screen text. One endpoint, one API key, grounded results with timestamps.",
     list: [
       "Base URL: https://api.cerul.ai",
-      "All requests require Bearer token authentication",
+      "Bearer token authentication",
       "JSON request and response bodies",
-      "UTF-8 encoding required",
     ],
     code: undefined,
   },
@@ -105,77 +103,49 @@ export const docsLandingSections = [
     kicker: "Authentication",
     title: "API Key Authentication",
     description:
-      "All API requests must include your API key in the Authorization header using the Bearer token format. You can create and manage API keys from your dashboard.",
+      "Include your API key in the Authorization header as a Bearer token. Create and manage keys from your dashboard.",
     list: [
-      "Include API key in every request",
-      "Use 'Authorization: Bearer YOUR_API_KEY' header",
-      "Keep your API keys secure",
-      "Rotate keys periodically from the dashboard",
+      "Authorization: Bearer YOUR_CERUL_API_KEY",
+      "Free tier: 1,000 requests/month, no credit card",
+      "Keys start with cerul_ prefix",
     ],
     code: `curl "${API_BASE_URL}/v1/search" \\
   -H "Authorization: Bearer YOUR_CERUL_API_KEY" \\
-  -H "Content-Type: application/json"`,
+  -d '{"query": "your search query"}'`,
     language: "bash",
     filename: "auth.sh",
   },
   {
     id: "search",
-    kicker: "Search Endpoint",
+    kicker: "Core Endpoint",
     title: "POST /v1/search",
     description:
-      "The search endpoint is the primary retrieval surface. Cerul automatically blends summary, speech, and visual matches without asking callers to choose a track.",
+      "Send a natural-language query, get back timestamped video segments with relevance scores and source links. Cerul blends visual, speech, and summary evidence automatically.",
     list: [
-      "No search_type field",
-      "max_results: 1-50 (default: 10)",
-      "include_answer: true for AI-generated summaries",
-      "filters: speaker, published_after, min_duration, max_duration, source",
+      "query (required): natural-language search",
+      "max_results: 1–50 (default 10)",
+      "include_answer: AI-generated summary from matched evidence",
     ],
     code: `curl "${API_BASE_URL}/v1/search" \\
   -H "Authorization: Bearer YOUR_CERUL_API_KEY" \\
-  -H "Content-Type: application/json" \\
   -d '{
-    "query": "Sam Altman explains the AGI timeline",
+    "query": "Sam Altman views on AI video generation tools",
     "max_results": 5,
-    "filters": {
-      "speaker": "Sam Altman",
-      "source": "youtube"
-    }
+    "include_answer": true
   }'`,
     language: "bash",
     filename: "search.sh",
   },
   {
-    id: "index",
-    kicker: "Index Endpoint",
-    title: "POST /v1/index",
-    description:
-      "Index YouTube, Pexels, Pixabay, and direct video URLs through one worker-backed pipeline. Indexing is free and scoped to the API key owner.",
-    list: [
-      "YouTube, Pexels, Pixabay, and direct video URLs supported",
-      "force: true to re-index existing videos",
-      "GET /v1/index/{video_id} returns processing status",
-      "GET /v1/index lists the current user's indexed videos",
-    ],
-    code: `curl "${API_BASE_URL}/v1/index" \\
-  -H "Authorization: Bearer YOUR_CERUL_API_KEY" \\
-  -H "Content-Type: application/json" \\
-  -d '{
-    "url": "https://www.youtube.com/watch?v=hmtuvNfytjM"
-  }'`,
-    language: "bash",
-    filename: "index.sh",
-  },
-  {
     id: "usage",
-    kicker: "Usage Endpoint",
+    kicker: "Monitoring",
     title: "GET /v1/usage",
     description:
-      "Check your current usage, credit balance, and rate limits. This endpoint is useful for monitoring your consumption and preventing unexpected quota exhaustion.",
+      "Check your current request count, remaining quota, and rate limits. Call this before scaling traffic.",
     list: [
-      "Returns current tier information",
-      "Shows credits used and remaining",
-      "Includes rate limit status",
-      "Real-time credit tracking",
+      "Current billing period and request counts",
+      "Rate limit status per tier",
+      "No request body needed",
     ],
     code: `curl "${API_BASE_URL}/v1/usage" \\
   -H "Authorization: Bearer YOUR_CERUL_API_KEY"`,
@@ -185,14 +155,14 @@ export const docsLandingSections = [
   {
     id: "response",
     kicker: "Response Format",
-    title: "Understanding API Responses",
+    title: "Understanding Responses",
     description:
-      "API responses follow a consistent JSON structure. Successful requests return HTTP 200 with result data. Errors return appropriate HTTP status codes with detailed error messages.",
+      "All responses return JSON. Each search result includes a relevance score, timestamps, source metadata, and a tracking URL that redirects to the original video.",
     list: [
-      "Results array contains video matches",
-      "Each result includes a Cerul tracking URL",
-      "Score indicates relevance (0.0-1.0)",
-      "unit_type tells you whether the match is summary, speech, or visual",
+      "results[]: array of matched video segments",
+      "score: relevance from 0.0 to 1.0",
+      "url: Cerul tracking link → redirects to source",
+      "unit_type: summary, speech, or visual",
     ],
     code: `{
   "results": [
@@ -203,8 +173,6 @@ export const docsLandingSections = [
       "title": "Sam Altman on AGI Timeline",
       "snippet": "AGI is coming sooner than most people expect.",
       "thumbnail_url": "https://i.ytimg.com/vi/hmtuvNfytjM/hqdefault.jpg",
-      "keyframe_url": "https://cdn.cerul.ai/frames/hmtuvNfytjM/f012.jpg",
-      "duration": 5400,
       "source": "youtube",
       "speaker": "Sam Altman",
       "timestamp_start": 1223.0,
@@ -212,7 +180,7 @@ export const docsLandingSections = [
       "unit_type": "speech"
     }
   ],
-  "answer": "Cerul summarizes the grounded evidence when include_answer is true.",
+  "answer": "Summary grounded in the matched evidence.",
   "credits_used": 1,
   "credits_remaining": 999,
   "request_id": "req_abc123xyz"
@@ -224,201 +192,27 @@ export const docsLandingSections = [
 
 export const docsPages: DocPage[] = [
   {
-    slug: "quickstart",
-    title: "Quickstart Guide",
-    summary: "Get up and running with the Cerul API in under 5 minutes. Learn how to make your first search request and understand the response format.",
-    kicker: "Start here",
-    readingTime: "5 min read",
-    sections: [
-      {
-        title: "Get your API key",
-        body:
-          "Before making any requests, you need an API key. Sign up for a free account at cerul.ai and create your first API key from the dashboard. The free tier includes 1,000 credits to get started.",
-        bullets: [
-          "Create account at https://cerul.ai",
-          "Navigate to Dashboard > API Keys",
-          "Click 'Create new key'",
-          "Copy your key (starts with 'cerul_')",
-        ],
-      },
-      {
-        title: "Make your first request",
-        body:
-          "Use curl to make a test request. Replace YOUR_CERUL_API_KEY with your actual API key. This example searches the unified retrieval surface without a search_type field.",
-        code: `curl "${API_BASE_URL}/v1/search" \\
-  -H "Authorization: Bearer YOUR_CERUL_API_KEY" \\
-  -H "Content-Type: application/json" \\
-  -d '{
-    "query": "Sam Altman explains the AGI timeline",
-    "max_results": 3
-  }'`,
-        language: "bash",
-        filename: "first_request.sh",
-      },
-      {
-        title: "Understanding the response",
-        body:
-          "The API returns a JSON object containing an array of results. Each result includes a Cerul tracking URL, metadata, timestamps when available, and optional answer text at the top level.",
-        code: `{
-  "results": [
-    {
-      "id": "unit_hmtuvNfytjM_1223",
-      "score": 0.92,
-      "url": "https://cerul.ai/v/a8f3k2x",
-      "title": "Sam Altman on AGI Timeline",
-      "snippet": "AGI is coming sooner than most people expect.",
-      "thumbnail_url": "https://i.ytimg.com/vi/hmtuvNfytjM/hqdefault.jpg",
-      "duration": 5400,
-      "source": "youtube",
-      "unit_type": "speech"
-    }
-  ],
-  "answer": "Cerul can optionally synthesize an answer grounded in returned units.",
-  "credits_used": 1,
-  "credits_remaining": 999
-}`,
-        language: "json",
-        filename: "first_response.json",
-      },
-      {
-        title: "Using the tracking URL",
-        body:
-          "The url in the response is a Cerul tracking link. It redirects to the source video, records click events, and can also power detail pages inside Cerul-owned surfaces.",
-        bullets: [
-          "url: Tracking redirect to the source video",
-          "thumbnail_url: Preview image",
-          "keyframe_url: Optional frame-level context",
-          "unit_type: summary, speech, or visual",
-        ],
-      },
-    ],
-  },
-  {
-    slug: "search-api",
-    title: "Search API Reference",
-    summary: "Complete reference for the /v1/search endpoint. Learn about request parameters, filters, and response fields for the public search API.",
-    kicker: "API Reference",
-    readingTime: "8 min read",
-    sections: [
-      {
-        title: "Endpoint",
-        body:
-          "The search endpoint accepts POST requests with a JSON body containing your search parameters.",
-        code: `POST ${API_BASE_URL}/v1/search
-Content-Type: application/json
-Authorization: Bearer YOUR_CERUL_API_KEY`,
-        language: "http",
-        filename: "endpoint.http",
-      },
-      {
-        title: "Request parameters",
-        body:
-          "All search requests share one structure. Cerul handles retrieval-unit mixing automatically, so there is no search_type field.",
-        code: `{
-  "query": string,           // Required: Search query
-  "max_results": number,     // Optional: 1-50 (default: 10)
-  "include_answer": boolean, // Optional: AI summary (default: false)
-  "filters": {               // Optional: Unified filters
-    "speaker": string,
-    "published_after": string,
-    "min_duration": number,
-    "max_duration": number,
-    "source": string
-  }
-}`,
-        language: "json",
-        filename: "request_params.json",
-      },
-      {
-        title: "Unified search example",
-        body:
-          "Search the unified retrieval layer with optional filters. Cerul may return summary, speech, or visual units depending on what matches best.",
-        code: `curl "${API_BASE_URL}/v1/search" \\
-  -H "Authorization: Bearer YOUR_CERUL_API_KEY" \\
-  -H "Content-Type: application/json" \\
-  -d '{
-    "query": "business handshake in modern office",
-    "max_results": 5,
-    "filters": {
-      "min_duration": 3,
-      "max_duration": 15,
-      "source": "pexels"
-    }
-  }'`,
-        language: "bash",
-        filename: "search_filtered.sh",
-      },
-      {
-        title: "Search with answer generation",
-        body:
-          "Ask for a grounded answer when you want Cerul to summarize the best matching evidence for you.",
-        code: `curl "${API_BASE_URL}/v1/search" \\
-  -H "Authorization: Bearer YOUR_CERUL_API_KEY" \\
-  -H "Content-Type: application/json" \\
-  -d '{
-    "query": "sam altman explains the agi timeline",
-    "max_results": 5,
-    "include_answer": true,
-    "filters": {
-      "speaker": "Sam Altman",
-      "published_after": "2023-01-01"
-    }
-  }'`,
-        language: "bash",
-        filename: "knowledge_search.sh",
-      },
-      {
-        title: "Response fields",
-        body:
-          "The response contains an array of results, each with standardized fields across summaries, speech units, and visual units.",
-        code: `{
-  "results": [{
-    "id": string,           // Unique result identifier
-    "score": number,        // Relevance score (0.0-1.0)
-    "url": string,          // Cerul tracking URL
-    "title": string,        // Video title
-    "snippet": string,      // Transcript or visual summary
-    "thumbnail_url": string,// Preview image
-    "keyframe_url": string, // Optional keyframe image
-    "duration": number,     // Length in seconds
-    "source": string,       // Content source
-    "speaker": string,      // Optional speaker
-    "timestamp_start": number,
-    "timestamp_end": number,
-    "unit_type": string     // summary | speech | visual
-  }],
-  "answer": string,         // If include_answer: true
-  "credits_used": number,
-  "credits_remaining": number,
-  "request_id": string
-}`,
-        language: "json",
-        filename: "response_fields.json",
-      },
-    ],
-  },
-  {
     slug: "usage-api",
-    title: "Usage API Reference",
-    summary: "Monitor your API consumption with the /v1/usage endpoint. Track credits, rate limits, and billing information.",
-    kicker: "API Reference",
-    readingTime: "4 min read",
+    title: "Usage",
+    summary: "Monitor your credit balance, billing window, and rate limits with GET /v1/usage.",
+    kicker: "API reference",
+    readingTime: "2 min",
     sections: [
       {
         title: "Check usage",
         body:
-          "The usage endpoint returns your current credit balance and consumption statistics. Use this to monitor your quota and prevent service interruption.",
-        code: `curl "${API_BASE_URL}/v1/usage" \\
+          "Returns your current billing period, credit balance, active key count, and rate limit. No request body needed.",
+        code: `curl "https://api.cerul.ai/v1/usage" \\
   -H "Authorization: Bearer YOUR_CERUL_API_KEY"`,
         language: "bash",
-        filename: "check_usage.sh",
+        filename: "usage.sh",
       },
       {
-        title: "Response format",
+        title: "Response",
         body:
-          "The usage response includes your current tier, billing period, and credit information.",
+          "The response includes your plan tier, billing window, credit balance, and active API key count.",
         code: `{
-  "tier": "free",           // free, builder, or enterprise
+  "tier": "free",
   "period_start": "2026-03-01",
   "period_end": "2026-03-31",
   "credits_limit": 1000,
@@ -428,70 +222,17 @@ Authorization: Bearer YOUR_CERUL_API_KEY`,
   "api_keys_active": 1
 }`,
         language: "json",
-        filename: "usage_response.json",
+        filename: "usage-response.json",
       },
       {
-        title: "Rate limiting",
+        title: "Rate limits",
         body:
-          "API requests are rate-limited based on your tier. The rate_limit_per_sec field shows your current limit. Exceeding the limit returns HTTP 429.",
+          "Requests exceeding your rate limit return HTTP 429. The limit resets every second.",
         bullets: [
-          "Free tier: 1 request/second",
-          "Builder tier: 10 requests/second",
-          "Enterprise: Custom limits",
-          "Rate limit resets every second",
-        ],
-      },
-    ],
-  },
-  {
-    slug: "architecture",
-    title: "System Architecture",
-    summary: "Understand how Cerul processes video search requests. Learn about our distributed architecture and data flow.",
-    kicker: "System Design",
-    readingTime: "6 min read",
-    sections: [
-      {
-        title: "Request flow",
-        body:
-          "When you make a search request, it travels through several components to deliver results. Understanding this flow helps optimize your integration.",
-        bullets: [
-          "1. API Gateway validates your API key",
-          "2. Query is embedded into the unified retrieval space",
-          "3. Search mixes summary, speech, and visual candidates with diversity caps",
-          "4. Results are ranked and formatted",
-          "5. Tracking URLs are generated",
-          "6. Response is returned with usage tracking",
-        ],
-      },
-      {
-        title: "Unified retrieval units",
-        body:
-          "Cerul indexes each video into multiple retrieval-unit types instead of forcing callers to choose a product track up front.",
-        code: `Summary units:
-- One high-level entry point per video
-- Good for broad semantic recall
-
-Speech units:
-- Timestamped transcript-backed segments
-- Good for quoted claims and spoken explanations
-
-Visual units:
-- Keyframe-backed descriptions
-- Good for slides, charts, demos, and on-screen evidence`,
-        language: "text",
-        filename: "retrieval_units.txt",
-      },
-      {
-        title: "Technology stack",
-        body:
-          "Cerul is built on modern infrastructure designed for scalability and reliability.",
-        bullets: [
-          "Frontend: Next.js 16 with React Server Components",
-          "API: Hono running on Cloudflare Workers",
-          "Database: Neon PostgreSQL with pgvector",
-          "Search: Vector similarity with HNSW indexing",
-          "Workers: Python for video processing and indexing",
-          "CDN: Global edge caching for video delivery",
+          "Free: 1 request/second, 1,000 requests/month",
+          "Pay as you go: 5 requests/second",
+          "Monthly: 10 requests/second, 5,000 requests included",
+          "Enterprise: custom limits",
         ],
       },
     ],
@@ -526,125 +267,101 @@ export const docsSidebarGroups: DocsNavGroup[] = [
     title: "Getting Started",
     items: [
       {
-        title: "Overview",
-        href: "/docs",
-        description: "Landing page and quick navigation",
-      },
-      {
         title: "Quickstart",
-        href: "/docs/quickstart",
-        slug: "quickstart",
-        description: "Create a key and make the first request",
+        href: "/docs",
+        description: "Get your key and make the first request",
       },
     ],
   },
   {
-    title: "API Guides",
+    title: "API Reference",
     items: [
       {
-        title: "Search API",
+        title: "Search",
         href: "/docs/search-api",
         slug: "search-api",
-        description: "Primary retrieval endpoint",
+        description: "POST /v1/search",
       },
       {
-        title: "Usage API",
+        title: "Usage",
         href: "/docs/usage-api",
         slug: "usage-api",
-        description: "Credits and rate posture",
+        description: "GET /v1/usage",
       },
       {
-        title: "API Reference",
+        title: "All Endpoints",
         href: "/docs/api-reference",
         slug: "api-reference",
-        description: "Structured endpoint reference",
-      },
-    ],
-  },
-  {
-    title: "Platform",
-    items: [
-      {
-        title: "Architecture",
-        href: "/docs/architecture",
-        slug: "architecture",
-        description: "Request flow and retrieval backbone",
+        description: "Full endpoint reference",
       },
     ],
   },
 ];
 
 export const docsShellTabs = [
-  { label: "Home", href: "/docs" },
-  { label: "Introduction", href: "/docs/quickstart" },
-  { label: "API & SDKs", href: "/docs/api-reference" },
-  { label: "Playground", href: "/search" },
-  { label: "Pricing", href: "/pricing" },
+  { label: "Quickstart", href: "/docs" },
+  { label: "Search", href: "/docs/search-api" },
+  { label: "Usage", href: "/docs/usage-api" },
+  { label: "API Reference", href: "/docs/api-reference" },
 ] as const;
 
 export const docsUtilityLinks = [
   {
-    title: "API Playground",
-    href: "/search",
-    description: "Test one request in the Cerul playground.",
+    title: "Quickstart",
+    href: "/docs",
+    description: "Get your key and make the first request.",
   },
   {
     title: "GitHub",
     href: "https://github.com/JessyTsui/cerul",
-    description: "Inspect the public repository and examples.",
+    description: "Source code and examples.",
   },
   {
     title: "Support",
-    href: "mailto:team@cerul.ai",
-    description: "Reach the team when a public route is unclear.",
+    href: "mailto:support@cerul.ai",
+    description: "Contact the team.",
   },
 ] as const;
 
 export const docsPopularTopics = [
   {
+    title: "Make your first request",
+    href: "/docs",
+    description: "Get an API key and search videos in under 5 minutes.",
+  },
+  {
+    title: "Search parameters",
+    href: "/docs/search-api",
+    description: "All the fields you can send to POST /v1/search.",
+  },
+  {
     title: "Rate limits and quotas",
     href: "/docs/usage-api",
-    description: "Understand credit posture before wiring high-volume traffic.",
+    description: "Understand your tier limits before scaling traffic.",
   },
   {
-    title: "Search payload design",
-    href: "/docs/search-api",
-    description: "Shape one request body cleanly and know which fields change result behavior.",
-  },
-  {
-    title: "Response schemas",
+    title: "Full endpoint reference",
     href: "/docs/api-reference",
-    description: "See the exact request and response envelopes for the public API.",
-  },
-  {
-    title: "First request flow",
-    href: "/docs/quickstart",
-    description: "Generate a key, send a request, and inspect usage in one pass.",
+    description: "Request and response schemas for every public route.",
   },
 ] as const;
 
 export const docsFeatureCards: DocsFeatureCard[] = [
   {
     title: "Authentication",
-    description: "Secure your requests with API keys created from the dashboard.",
-    snippet: "Authorization: Bearer <TOKEN>",
-    href: "/docs/quickstart",
+    description: "Bearer token with API keys from the dashboard.",
+    snippet: "Authorization: Bearer <KEY>",
+    href: "/docs",
   },
   {
-    title: "Search endpoint",
-    description: "Retrieve matched video results from one public route.",
+    title: "Search",
+    description: "Search videos by meaning across speech, visuals, and text.",
     snippet: "POST /v1/search",
     href: "/docs/search-api",
   },
   {
-    title: "Index endpoint",
-    description: "Submit videos for indexing and poll status through one shared pipeline.",
-    snippet: "POST /v1/index",
-    href: "/docs/api-reference",
-  },
-  {
-    title: "Usage summary",
-    description: "Monitor tier, billing period, remaining credits, and active API keys.",
+    title: "Usage",
+    description: "Check request counts, quotas, and rate limits.",
     snippet: "GET /v1/usage",
     href: "/docs/usage-api",
   },
@@ -652,18 +369,24 @@ export const docsFeatureCards: DocsFeatureCard[] = [
 
 export function getDocsSearchEntries(): DocsSearchEntry[] {
   return [
+    {
+      title: "Quickstart",
+      description: "Get your API key and make your first search request.",
+      href: "/docs",
+      category: "Get started",
+    },
+    {
+      title: "Search API",
+      description: "Full reference for POST /v1/search — parameters, filters, response fields.",
+      href: "/docs/search-api",
+      category: "API reference",
+    },
     ...docsPages.map((page) => ({
       title: page.title,
       description: page.summary,
       href: `/docs/${page.slug}`,
       category: page.kicker,
     })),
-    {
-      title: "Documentation overview",
-      description: "Landing page and quick navigation for the Cerul public docs.",
-      href: "/docs",
-      category: "Home",
-    },
     ...apiReferenceEndpoints.map((endpoint) => ({
       title: `${endpoint.method} ${endpoint.path}`,
       description: endpoint.title,
@@ -681,35 +404,42 @@ export const apiReferenceEndpoints: ApiReferenceEndpoint[] = [
     path: "/v1/search",
     title: "Search videos",
     description:
-      "Unified retrieval endpoint for summary, speech, and visual matches.",
+      "Search across visual scenes, speech, and on-screen text in one call. Returns ranked video segments with relevance scores, timestamps, and source links.",
     authLabel: "Bearer API key",
     authDescription:
-      "Requires a Cerul API key from the dashboard in the Authorization header.",
+      "Requires a Cerul API key in the Authorization header.",
     parameters: [
       {
         name: "query",
         type: "string",
-        required: "Yes",
-        description: "Natural-language search request.",
+        required: "Required",
+        description: "Natural-language search query (max 400 characters).",
       },
       {
         name: "max_results",
         type: "integer",
-        required: "No",
-        description: "Result count from 1 to 50. Defaults to 10.",
+        required: "Optional",
+        description: "Number of results to return, 1–50. Default: 10.",
       },
       {
         name: "include_answer",
         type: "boolean",
-        required: "No",
-        description: "Adds a synthesized grounded answer.",
+        required: "Optional",
+        description: "Generate an AI summary grounded in the matched evidence. Default: false.",
+      },
+      {
+        name: "ranking_mode",
+        type: "string",
+        required: "Optional",
+        description:
+          "\"embedding\" (default) for vector similarity, or \"rerank\" for LLM-based reranking.",
       },
       {
         name: "filters",
         type: "object",
-        required: "No",
+        required: "Optional",
         description:
-          "Unified filters such as speaker, published_after, duration, and source.",
+          "Filter results by speaker, source, published_after (YYYY-MM-DD), min_duration, or max_duration (seconds).",
       },
     ],
     requestExamples: [
@@ -717,17 +447,12 @@ export const apiReferenceEndpoints: ApiReferenceEndpoint[] = [
         label: "cURL",
         language: "bash",
         filename: "search.sh",
-        code: `curl "${API_BASE_URL}/v1/search" \\
+        code: `curl "https://api.cerul.ai/v1/search" \\
   -H "Authorization: Bearer YOUR_CERUL_API_KEY" \\
-  -H "Content-Type: application/json" \\
   -d '{
     "query": "Sam Altman views on AI video generation tools",
-    "max_results": 3,
-    "include_answer": true,
-    "filters": {
-      "speaker": "Sam Altman",
-      "source": "youtube"
-    }
+    "max_results": 5,
+    "include_answer": true
   }'`,
       },
       {
@@ -736,242 +461,79 @@ export const apiReferenceEndpoints: ApiReferenceEndpoint[] = [
         filename: "search.py",
         code: `import requests
 
-headers = {
-    "Authorization": "Bearer YOUR_CERUL_API_KEY",
-    "Content-Type": "application/json",
-}
+response = requests.post(
+    "https://api.cerul.ai/v1/search",
+    headers={"Authorization": "Bearer YOUR_CERUL_API_KEY"},
+    json={
+        "query": "Sam Altman views on AI video generation tools",
+        "max_results": 5,
+        "include_answer": True,
+    },
+)
 
-payload = {
-    "query": "Sam Altman views on AI video generation tools",
-    "max_results": 3,
-    "include_answer": True,
-    "filters": {"speaker": "Sam Altman", "source": "youtube"},
-}
-
-response = requests.post("${API_BASE_URL}/v1/search", headers=headers, json=payload)
 print(response.json())`,
+      },
+      {
+        label: "JavaScript",
+        language: "javascript",
+        filename: "search.js",
+        code: `const response = await fetch("https://api.cerul.ai/v1/search", {
+  method: "POST",
+  headers: {
+    "Authorization": "Bearer YOUR_CERUL_API_KEY",
+  },
+  body: JSON.stringify({
+    query: "Sam Altman views on AI video generation tools",
+    max_results: 5,
+    include_answer: true,
+  }),
+});
+
+const data = await response.json();
+console.log(data);`,
       },
     ],
     responseSchema: `{
   "results": [
     {
       "id": "string",
-      "score": "number",
-      "url": "string",
+      "score": "number (0.0–1.0)",
+      "url": "string (tracking URL → redirects to source)",
       "title": "string",
       "snippet": "string",
       "thumbnail_url": "string",
-      "keyframe_url": "string | null",
-      "duration": "integer",
       "source": "string",
       "speaker": "string | null",
       "timestamp_start": "number | null",
       "timestamp_end": "number | null",
-      "unit_type": "\"summary\" | \"speech\" | \"visual\""
+      "unit_type": "summary | speech | visual"
     }
   ],
   "answer": "string | null",
   "credits_used": "integer",
   "credits_remaining": "integer",
-  "request_id": "req_<24 hex>"
+  "request_id": "string"
 }`,
     responseExample: `{
   "results": [
     {
-      "id": "unit_yt_talk_segment_12",
+      "id": "unit_hmtuvNfytjM_1223",
       "score": 0.93,
       "url": "https://cerul.ai/v/a8f3k2x",
-      "title": "AI video tools discussion",
-      "snippet": "The speaker frames current AI video generation tools as improving quickly, but still constrained by controllability and reliability.",
-      "thumbnail_url": "https://cdn.cerul.ai/previews/yt_talk_segment_12.jpg",
-      "keyframe_url": "https://cdn.cerul.ai/frames/yt_talk_segment_12/f012.jpg",
-      "duration": 5400,
+      "title": "Sam Altman on AI video generation",
+      "snippet": "Current AI video generation tools are improving quickly but still constrained by controllability.",
+      "thumbnail_url": "https://i.ytimg.com/vi/hmtuvNfytjM/hqdefault.jpg",
       "source": "youtube",
       "speaker": "Sam Altman",
-      "timestamp_start": 812.4,
-      "timestamp_end": 854.6,
+      "timestamp_start": 1223.0,
+      "timestamp_end": 1345.0,
       "unit_type": "speech"
     }
   ],
-  "answer": "The speaker frames current AI video generation tools as improving quickly, but still constrained by controllability and production reliability.",
+  "answer": "Sam Altman frames current AI video generation tools as improving quickly but still constrained by controllability and production reliability.",
   "credits_used": 2,
   "credits_remaining": 998,
   "request_id": "req_9f8c1d5b2a9f7d1a8c4e6b02"
-}`,
-  },
-  {
-    id: "index-submit-v1",
-    group: "Index",
-    method: "POST",
-    path: "/v1/index",
-    title: "Submit a video for indexing",
-    description: "Queue a video URL for unified indexing. Indexing is free and scoped to the current API key owner.",
-    authLabel: "Bearer API key",
-    authDescription:
-      "Requires a Cerul API key. The queued video becomes searchable after processing completes.",
-    parameters: [
-      {
-        name: "url",
-        type: "string",
-        required: "Yes",
-        description: "YouTube, Pexels, Pixabay, or direct video URL to index.",
-      },
-      {
-        name: "force",
-        type: "boolean",
-        required: "No",
-        description: "Re-index the video even if it already exists.",
-      },
-    ],
-    requestExamples: [
-      {
-        label: "cURL",
-        language: "bash",
-        filename: "index-submit.sh",
-        code: `curl "${API_BASE_URL}/v1/index" \\
-  -H "Authorization: Bearer YOUR_CERUL_API_KEY" \\
-  -H "Content-Type: application/json" \\
-  -d '{
-    "url": "https://www.youtube.com/watch?v=hmtuvNfytjM"
-  }'`,
-      },
-    ],
-    responseSchema: `{
-  "video_id": "uuid",
-  "status": "\"processing\" | \"completed\"",
-  "request_id": "req_<24 hex>"
-}`,
-    responseExample: `{
-  "video_id": "2ec9d7af-5d4f-4ec9-9fd9-ecf6bc0ec3d4",
-  "status": "processing",
-  "request_id": "req_9f8c1d5b2a9f7d1a8c4e6b02"
-}`,
-  },
-  {
-    id: "index-status-v1",
-    group: "Index",
-    method: "GET",
-    path: "/v1/index/{video_id}",
-    title: "Check index status",
-    description: "Return status, timing, and unit counts for one indexed video.",
-    authLabel: "Bearer API key",
-    authDescription:
-      "Requires a Cerul API key belonging to the user who indexed the video.",
-    parameters: [],
-    requestExamples: [
-      {
-        label: "cURL",
-        language: "bash",
-        filename: "index-status.sh",
-        code: `curl "${API_BASE_URL}/v1/index/2ec9d7af-5d4f-4ec9-9fd9-ecf6bc0ec3d4" \\
-  -H "Authorization: Bearer YOUR_CERUL_API_KEY"`,
-      },
-    ],
-    responseSchema: `{
-  "video_id": "uuid",
-  "status": "\"processing\" | \"completed\" | \"failed\"",
-  "title": "string | null",
-  "current_step": "string | null",
-  "steps_completed": "integer | null",
-  "steps_total": "integer | null",
-  "duration": "integer | null",
-  "units_created": "integer | null",
-  "error": "string | null",
-  "created_at": "datetime",
-  "completed_at": "datetime | null",
-  "failed_at": "datetime | null"
-}`,
-    responseExample: `{
-  "video_id": "2ec9d7af-5d4f-4ec9-9fd9-ecf6bc0ec3d4",
-  "status": "completed",
-  "title": "Sam Altman on AGI",
-  "current_step": null,
-  "steps_completed": 8,
-  "steps_total": 8,
-  "duration": 5400,
-  "units_created": 24,
-  "error": null,
-  "created_at": "2026-03-21T10:00:00Z",
-  "completed_at": "2026-03-21T10:03:45Z",
-  "failed_at": null
-}`,
-  },
-  {
-    id: "index-list-v1",
-    group: "Index",
-    method: "GET",
-    path: "/v1/index",
-    title: "List indexed videos",
-    description: "Return videos indexed by the current API key owner.",
-    authLabel: "Bearer API key",
-    authDescription:
-      "Requires a Cerul API key. Only videos visible to the current owner are returned.",
-    parameters: [],
-    requestExamples: [
-      {
-        label: "cURL",
-        language: "bash",
-        filename: "index-list.sh",
-        code: `curl "${API_BASE_URL}/v1/index?page=1&per_page=20" \\
-  -H "Authorization: Bearer YOUR_CERUL_API_KEY"`,
-      },
-    ],
-    responseSchema: `{
-  "videos": [
-    {
-      "video_id": "uuid",
-      "title": "string",
-      "status": "string",
-      "units_created": "integer",
-      "created_at": "datetime",
-      "completed_at": "datetime | null"
-    }
-  ],
-  "total": "integer",
-  "page": "integer",
-  "per_page": "integer"
-}`,
-    responseExample: `{
-  "videos": [
-    {
-      "video_id": "2ec9d7af-5d4f-4ec9-9fd9-ecf6bc0ec3d4",
-      "title": "Sam Altman on AGI",
-      "status": "completed",
-      "units_created": 24,
-      "created_at": "2026-03-21T10:00:00Z",
-      "completed_at": "2026-03-21T10:03:45Z"
-    }
-  ],
-  "total": 1,
-  "page": 1,
-  "per_page": 20
-}`,
-  },
-  {
-    id: "index-delete-v1",
-    group: "Index",
-    method: "DELETE",
-    path: "/v1/index/{video_id}",
-    title: "Delete indexed video access",
-    description: "Delete the current user's access to an indexed video.",
-    authLabel: "Bearer API key",
-    authDescription:
-      "Requires a Cerul API key. Shared video data is only deleted when no access rows remain.",
-    parameters: [],
-    requestExamples: [
-      {
-        label: "cURL",
-        language: "bash",
-        filename: "index-delete.sh",
-        code: `curl -X DELETE "${API_BASE_URL}/v1/index/2ec9d7af-5d4f-4ec9-9fd9-ecf6bc0ec3d4" \\
-  -H "Authorization: Bearer YOUR_CERUL_API_KEY"`,
-      },
-    ],
-    responseSchema: `{
-  "deleted": "boolean"
-}`,
-    responseExample: `{
-  "deleted": true
 }`,
   },
   {
@@ -980,18 +542,44 @@ print(response.json())`,
     method: "GET",
     path: "/v1/usage",
     title: "Check usage",
-    description: "Return current plan posture, billing window, credit usage, and active key count.",
+    description: "Returns your current plan tier, billing period, request counts, and rate limit.",
     authLabel: "Bearer API key",
     authDescription:
-      "Requires a Cerul API key. Use it to monitor usage before automating heavier traffic.",
+      "Requires a Cerul API key. Use this to monitor usage before scaling traffic.",
     parameters: [],
     requestExamples: [
       {
         label: "cURL",
         language: "bash",
         filename: "usage.sh",
-        code: `curl "${API_BASE_URL}/v1/usage" \\
+        code: `curl "https://api.cerul.ai/v1/usage" \\
   -H "Authorization: Bearer YOUR_CERUL_API_KEY"`,
+      },
+      {
+        label: "Python",
+        language: "python",
+        filename: "usage.py",
+        code: `import requests
+
+response = requests.get(
+    "https://api.cerul.ai/v1/usage",
+    headers={"Authorization": "Bearer YOUR_CERUL_API_KEY"},
+)
+
+print(response.json())`,
+      },
+      {
+        label: "JavaScript",
+        language: "javascript",
+        filename: "usage.js",
+        code: `const response = await fetch("https://api.cerul.ai/v1/usage", {
+  headers: {
+    "Authorization": "Bearer YOUR_CERUL_API_KEY",
+  },
+});
+
+const data = await response.json();
+console.log(data);`,
       },
     ],
     responseSchema: `{
@@ -1013,35 +601,6 @@ print(response.json())`,
   "credits_remaining": 872,
   "rate_limit_per_sec": 1,
   "api_keys_active": 1
-}`,
-  },
-  {
-    id: "meta-v1",
-    group: "Meta",
-    method: "GET",
-    path: "/v1/meta",
-    title: "Read service metadata",
-    description: "Lightweight public metadata route for service identity and environment sanity checks.",
-    authLabel: "No auth",
-    authDescription: "This route is public and can be used for non-sensitive health or environment checks.",
-    parameters: [],
-    requestExamples: [
-      {
-        label: "cURL",
-        language: "bash",
-        filename: "meta.sh",
-        code: `curl "${API_BASE_URL}/v1/meta"`,
-      },
-    ],
-    responseSchema: `{
-  "service": "string",
-  "framework": "string",
-  "environment": "string"
-}`,
-    responseExample: `{
-  "service": "cerul-api",
-  "framework": "fastapi",
-  "environment": "development"
 }`,
   },
 ] as const;

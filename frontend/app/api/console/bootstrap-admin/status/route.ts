@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { sql } from "kysely";
-import { getAuthDatabase } from "@/lib/auth-db";
+import { getAuthDatabase, withAuthDatabaseRecovery } from "@/lib/auth-db";
 import { getServerSessionUncached } from "@/lib/auth-server";
 import {
   getConfiguredAdminEmails,
@@ -19,11 +19,13 @@ type BootstrapReason =
   | "admin_exists";
 
 async function countStoredAdmins(): Promise<number> {
-  const result = await sql<{ count: number }>`
-    SELECT COUNT(*)::int AS count
-    FROM user_profiles
-    WHERE console_role = 'admin'
-  `.execute(getAuthDatabase());
+  const result = await withAuthDatabaseRecovery(() =>
+    sql<{ count: number }>`
+      SELECT COUNT(*)::int AS count
+      FROM user_profiles
+      WHERE console_role = 'admin'
+    `.execute(getAuthDatabase()),
+  );
 
   return Number(result.rows[0]?.count ?? 0);
 }

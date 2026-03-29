@@ -14,22 +14,14 @@ type DocsHeaderProps = {
 
 function isDocsTabActive(currentPath: string, href: string): boolean {
   if (href === "/docs") {
-    return currentPath === "/docs";
+    return currentPath === "/docs" || currentPath.startsWith("/docs/quickstart");
   }
 
   if (href === "/docs/api-reference") {
-    return (
-      currentPath.startsWith("/docs/api-reference")
-      || currentPath.startsWith("/docs/search-api")
-      || currentPath.startsWith("/docs/usage-api")
-    );
+    return currentPath.startsWith("/docs/api-reference");
   }
 
-  if (href === "/docs/quickstart") {
-    return currentPath.startsWith("/docs/quickstart") || currentPath.startsWith("/docs/architecture");
-  }
-
-  return currentPath === href;
+  return currentPath === href || currentPath.startsWith(`${href}/`);
 }
 
 export function DocsHeader({ currentPath }: DocsHeaderProps) {
@@ -71,12 +63,6 @@ export function DocsHeader({ currentPath }: DocsHeaderProps) {
           <div className="flex items-center gap-3">
             <div className="flex min-w-0 items-center gap-3">
               <BrandMark />
-              <Link
-                href="/docs"
-                className="hidden rounded-full border border-[var(--border)] bg-white/72 px-3 py-1 text-xs uppercase tracking-[0.16em] text-[var(--foreground-secondary)] md:inline-flex"
-              >
-                Docs
-              </Link>
             </div>
 
             <div className="hidden min-w-0 flex-1 items-center gap-2 lg:flex">
@@ -118,7 +104,7 @@ export function DocsHeader({ currentPath }: DocsHeaderProps) {
                 Search
               </button>
               <a
-                href="mailto:team@cerul.ai"
+                href="mailto:support@cerul.ai"
                 className="hidden rounded-full px-3 py-2 text-sm text-[var(--foreground-tertiary)] transition hover:bg-white/40 hover:text-[var(--foreground)] sm:inline-flex"
               >
                 Support

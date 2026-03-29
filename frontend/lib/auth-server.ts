@@ -2,7 +2,13 @@ import { betterAuth } from "better-auth";
 import { toNextJsHandler } from "better-auth/next-js";
 import { headers } from "next/headers";
 import { cache } from "react";
-import { getAuthDatabase, upsertUserProfile } from "./auth-db";
+import {
+  getAuthDatabase,
+  getAuthDatabaseGeneration,
+  isRetryableAuthDatabaseError,
+  resetAuthDatabaseState,
+  upsertUserProfile,
+} from "./auth-db";
 
 const DEFAULT_DEV_AUTH_SECRET =
   "cerul-local-better-auth-secret-for-development-only";
@@ -104,6 +110,7 @@ function createAuth() {
 }
 
 let authInstance: ReturnType<typeof createAuth> | null = null;
+let authInstanceGeneration = -1;
 const SESSION_CACHE_TTL_MS = process.env.NODE_ENV === "development" ? 15_000 : 5_000;
 const SESSION_CACHE_LIMIT = 128;
 const sessionCache = new Map<
@@ -135,15 +142,50 @@ function pruneExpiredSessionCache(now: number) {
 }
 
 export function getAuth() {
-  if (!authInstance) {
+  const currentGeneration = getAuthDatabaseGeneration();
+
+  if (!authInstance || authInstanceGeneration !== currentGeneration) {
     authInstance = createAuth();
+    authInstanceGeneration = currentGeneration;
   }
 
   return authInstance;
 }
 
+async function runAuthOperationWithRecovery<T>(
+  operation: (auth: ReturnType<typeof createAuth>) => Promise<T>,
+  retryOperation?: (auth: ReturnType<typeof createAuth>) => Promise<T>,
+): Promise<T> {
+  try {
+    return await operation(getAuth());
+  } catch (error) {
+    if (!isRetryableAuthDatabaseError(error)) {
+      throw error;
+    }
+
+    sessionCache.clear();
+    await resetAuthDatabaseState();
+
+    return (retryOperation ?? operation)(getAuth());
+  }
+}
+
 export function getAuthRouteHandlers() {
-  return toNextJsHandler(getAuth());
+  return {
+    GET(request: Request) {
+      return runAuthOperationWithRecovery((auth) =>
+        toNextJsHandler(auth).GET(request),
+      );
+    },
+    POST(request: Request) {
+      const retryRequest = request.clone();
+
+      return runAuthOperationWithRecovery((auth) =>
+        toNextJsHandler(auth).POST(request),
+        (auth) => toNextJsHandler(auth).POST(retryRequest),
+      );
+    },
+  };
 }
 
 async function readServerSession(input: {
@@ -164,9 +206,11 @@ async function readServerSession(input: {
       return cached.value;
     }
 
-    const session = await getAuth().api.getSession({
-      headers: requestHeaders,
-    });
+    const session = await runAuthOperationWithRecovery((auth) =>
+      auth.api.getSession({
+        headers: requestHeaders,
+      }),
+    );
 
     sessionCache.set(cookieHeader, {
       expiresAt: now + SESSION_CACHE_TTL_MS,
@@ -177,9 +221,11 @@ async function readServerSession(input: {
     return session;
   }
 
-  return getAuth().api.getSession({
-    headers: requestHeaders,
-  });
+  return runAuthOperationWithRecovery((auth) =>
+    auth.api.getSession({
+      headers: requestHeaders,
+    }),
+  );
 }
 
 export async function getServerSessionUncached() {

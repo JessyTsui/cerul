@@ -125,7 +125,7 @@ describe("tracking proxy route", () => {
       headers: {
         accept: "text/html",
         "user-agent": "Mozilla/5.0 test",
-        referer: "http://127.0.0.1:3001/search",
+        referer: "http://127.0.0.1:3001/docs",
         "x-forwarded-for": "203.0.113.7",
       },
     });
@@ -140,7 +140,7 @@ describe("tracking proxy route", () => {
     expect((init?.headers as Headers).get("accept")).toBe("text/html");
     expect((init?.headers as Headers).get("user-agent")).toBe("Mozilla/5.0 test");
     expect((init?.headers as Headers).get("referer")).toBe(
-      "http://127.0.0.1:3001/search",
+      "http://127.0.0.1:3001/docs",
     );
     expect((init?.headers as Headers).get("x-forwarded-for")).toBe("203.0.113.7");
   });

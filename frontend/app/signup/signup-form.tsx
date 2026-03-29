@@ -91,7 +91,7 @@ export function SignupForm({ nextPath }: SignupFormProps) {
                 id="signup-name"
                 className="auth-input"
                 type="text"
-                placeholder="Jessy Tsui"
+                placeholder="Your full name"
                 autoComplete="name"
                 value={fullName}
                 onChange={(event) => setFullName(event.target.value)}
@@ -220,14 +220,14 @@ export function SignupForm({ nextPath }: SignupFormProps) {
           </div>
 
           {error ? (
-            <div className="rounded-xl border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm text-red-400">
+            <div className="rounded-[18px] border border-[rgba(191,91,70,0.18)] bg-[rgba(191,91,70,0.12)] px-4 py-3 text-sm text-[var(--error)]">
               {error}
             </div>
           ) : null}
 
           <button
             type="submit"
-            className="h-11 w-full rounded-xl bg-white text-sm font-semibold text-[#090c14] transition hover:bg-white/90 disabled:cursor-not-allowed disabled:opacity-70"
+            className="button-primary w-full"
             disabled={isSubmitting}
           >
             {isSubmitting ? "Creating account..." : "Create account"}
@@ -239,7 +239,7 @@ export function SignupForm({ nextPath }: SignupFormProps) {
         Already have an account?{" "}
         <Link
           href={buildAuthPageHref("/login", nextPath) as Route}
-          className="font-medium text-white transition hover:text-[var(--brand-bright)]"
+          className="font-medium text-[var(--foreground)] transition hover:text-[var(--brand-bright)]"
         >
           Sign in
         </Link>

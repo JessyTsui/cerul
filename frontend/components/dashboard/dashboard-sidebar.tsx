@@ -137,8 +137,8 @@ export function DashboardSidebar({ currentPath }: DashboardSidebarProps) {
             </p>
             <div className="mt-3 space-y-1.5">
               {[
-                { href: "/search", label: "Search Playground", external: false },
                 { href: "/docs", label: "Documentation", external: false },
+                { href: "/docs/api-reference", label: "API reference", external: false },
                 { href: "/pricing", label: "Pricing", external: false },
               ].map((item) => (
                 <Link

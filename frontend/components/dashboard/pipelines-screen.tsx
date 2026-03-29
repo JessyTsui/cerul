@@ -860,7 +860,7 @@ export function DashboardPipelinesScreen() {
     <AdminLayout
       actions={
         <>
-          <Link className="button-secondary" href="/docs/architecture">
+          <Link className="button-secondary" href="/docs">
             Architecture guide
           </Link>
           <button className="button-primary" onClick={() => void refreshAll()} type="button">
@@ -922,7 +922,7 @@ export function DashboardPipelinesScreen() {
             listData.totalCount === 0 && statusFilter === "all" && trackFilter === "all" ? (
               <DashboardState
                 action={
-                  <Link className="button-secondary" href="/docs/architecture">
+                  <Link className="button-secondary" href="/docs">
                     Read pipeline docs
                   </Link>
                 }

@@ -36,10 +36,8 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
 
   return (
     <AuthShell
-      heroEyebrow="Console access"
-      heroTitle="Search video evidence without losing console clarity."
-      heroDescription="Sign in to manage API keys, usage, and billing in one clean console while your production integrations keep using scoped bearer keys."
-      highlights={["Operator console", "Scoped API keys", "Usage and billing"]}
+      heroTitle="Give your agent eyes on every video."
+      heroDescription="Cerul indexes video by meaning — so your agent can find the exact scene it needs across thousands of hours."
     >
       <LoginForm nextPath={nextPath} />
     </AuthShell>

@@ -1,6 +1,5 @@
 export const primaryNavigation = [
   { label: "Home", href: "/" },
-  { label: "Playground", href: "/search" },
   { label: "Docs", href: "/docs" },
   { label: "Pricing", href: "/pricing" },
   { label: "Dashboard", href: "/dashboard" },
@@ -10,19 +9,22 @@ export const ACCOUNT_SETTINGS_ROUTE = "/dashboard/settings#account" as const;
 
 export const marketingMetrics = [
   {
-    label: "Search surface",
-    value: "1 endpoint",
-    caption: "One query surface blends summary, speech, and visual retrieval.",
+    label: "Visual search",
+    value: "See what's on screen",
+    caption:
+      "Slides, charts, demos, and whiteboard sketches become searchable context for your agent.",
   },
   {
-    label: "Public API",
-    value: "3 endpoints",
-    caption: "Index, search, and usage stay public while heavy processing stays behind workers.",
+    label: "Speech + transcript",
+    value: "Hear what's said",
+    caption:
+      "Every spoken word is indexed and aligned with the visual timeline, so you can search both.",
   },
   {
-    label: "Agent path",
-    value: "Skill-first",
-    caption: "Installable skills and direct HTTP before extra adapters.",
+    label: "One API call",
+    value: "Built for agents",
+    caption:
+      "A single endpoint returns grounded results with timestamps, relevance scores, and source links.",
   },
 ] as const;
 
@@ -143,68 +145,86 @@ export const pricingTiers = [
   {
     name: "Free",
     price: "$0",
-    cadence: "for early evaluation",
+    cadence: "to get started",
     description:
-      "Best for trying the public API surface and validating the first real search flow.",
+      "1,000 free requests per month to try the API — no credit card required.",
     ctaLabel: "Start free",
     ctaHref: "/signup",
     accent: "sky",
     features: [
-      "1,000 monthly credits",
+      "1,000 requests / month",
       "Full public search API access",
-      "Single API key",
       "Community support",
     ],
   },
   {
-    name: "Builder",
-    price: "$20",
-    cadence: "per month",
+    name: "Pay as you go",
+    price: "$8",
+    cadence: "per 1,000 requests",
     description:
-      "For teams that need predictable usage, more keys, and cleaner day-to-day operations.",
-    ctaLabel: "Request sandbox",
-    ctaHref: "/login",
+      "Flexible usage-based pricing. Pay only for the requests your agents make.",
+    ctaLabel: "Get started",
+    ctaHref: "/signup",
     accent: "orange",
     features: [
-      "10,000 monthly credits",
-      "5 active API keys",
+      "Unlimited requests",
       "Usage insights and search logs",
+      "Email support",
+    ],
+  },
+  {
+    name: "Monthly",
+    price: "$30",
+    cadence: "per month",
+    description:
+      "5,000 requests included with higher rate limits for production workloads.",
+    ctaLabel: "Subscribe",
+    ctaHref: "/signup",
+    accent: "blue",
+    features: [
+      "5,000 requests / month",
+      "Higher rate limits",
       "Priority email support",
     ],
   },
   {
     name: "Enterprise",
     price: "Custom",
-    cadence: "volume and support matched",
+    cadence: "let\u2019s talk",
     description:
-      "For production deployments with private indexing pipelines, SLA expectations, and compliance review.",
+      "For production deployments with private indexing, SLA expectations, and compliance review.",
     ctaLabel: "Talk to us",
-    ctaHref: "mailto:team@cerul.ai",
+    ctaHref: "mailto:support@cerul.ai",
     accent: "ink",
     features: [
-      "Custom credit limits and rate policies",
+      "Custom volume pricing",
       "Private indexing workflows",
       "Dedicated onboarding and review",
-      "Enterprise security and billing coordination",
+      "Enterprise security and SLAs",
     ],
   },
 ] as const;
 
 export const pricingFaqs = [
   {
-    question: "Why start with credits instead of raw request counts?",
+    question: "How does per-request pricing work?",
     answer:
-      "Credits let Cerul price heavier and lighter requests fairly without forcing users to think about internal execution details for each call.",
+      "Every search API call counts as one request. Pay-as-you-go costs $8 per 1,000 requests, billed based on actual usage.",
   },
   {
-    question: "Does one pricing model cover the full public API?",
+    question: "What happens if I exceed 5,000 requests on Monthly?",
     answer:
-      "Yes. The public API uses one credit and API key model, so evaluation, staging, and production integrations can follow the same billing shape.",
+      "Additional requests beyond the included 5,000 are billed at the pay-as-you-go rate of $8 per 1,000 requests.",
+  },
+  {
+    question: "Why choose Monthly over Pay as you go?",
+    answer:
+      "The Monthly plan gives you a lower effective rate ($6 per 1,000 requests) and higher rate limits, which matters for production agent workloads.",
   },
   {
     question: "When does enterprise make sense?",
     answer:
-      "Once a team needs private indexing, multiple administrators, security review, or predictable throughput guarantees, the enterprise path becomes the cleaner fit.",
+      "Once a team needs private indexing, custom rate limits, security review, or volume pricing, reach out and we\u2019ll put together a plan that fits.",
   },
 ] as const;
 

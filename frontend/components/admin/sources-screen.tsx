@@ -1008,184 +1008,195 @@ export function AdminSourcesScreen() {
                   >
                     {/* Main row — always visible */}
                     <div
-                      className="flex cursor-pointer items-center gap-3 px-5 py-4"
+                      className="cursor-pointer px-5 py-4"
                       onClick={() => setExpandedId(isExpanded ? null : source.id)}
                     >
-                      <ChannelAvatar url={thumbnailUrl} name={source.displayName} />
+                      <div className="flex items-start justify-between gap-4">
+                        <div className="flex min-w-0 flex-1 items-start gap-4">
+                          <ChannelAvatar url={thumbnailUrl} name={source.displayName} />
 
-                      {/* Name + description — fixed proportion */}
-                      <div className="min-w-0 w-[280px] shrink-0">
-                        <div className="flex items-center gap-2">
-                          <p className="truncate font-semibold text-[var(--foreground)]">
-                            {source.displayName}
-                          </p>
-                          <span
-                            className={`inline-flex shrink-0 items-center rounded-full px-2 py-0.5 text-[10px] ${
-                              source.isActive
-                                ? "border border-[rgba(31,141,74,0.18)] bg-[rgba(31,141,74,0.12)] text-[var(--success)]"
-                                : "border border-[var(--border)] bg-white/72 text-[var(--foreground-tertiary)]"
-                            }`}
-                          >
-                            {source.isActive ? "Active" : "Paused"}
-                          </span>
-                        </div>
-                        <p className="mt-0.5 truncate text-xs text-[var(--foreground-tertiary)]">
-                          {source.slug}
-                          {description ? ` · ${description.slice(0, 60)}` : ""}
-                        </p>
-                        <div className="mt-2">
-                          <div className="flex flex-wrap items-center gap-3 text-[10px] text-[var(--foreground-tertiary)]">
-                            <span>
-                              <span className="font-semibold text-[var(--foreground)]">
-                                {analytics?.jobsCompleted ?? 0}
-                              </span>{" "}
-                              done
-                            </span>
-                            <span>
-                              <span className="font-semibold text-[var(--brand-bright)]">
-                                {analytics?.running ?? 0}
-                              </span>{" "}
-                              running
-                            </span>
-                            <span>
-                              <span className="font-semibold text-[var(--accent-bright)]">
-                                {analytics?.backlog ?? 0}
-                              </span>{" "}
-                              queued
-                            </span>
-                            <span>
+                          <div className="min-w-0 flex-1">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <p className="truncate font-semibold text-[var(--foreground)]">
+                                {source.displayName}
+                              </p>
                               <span
-                                className={`font-semibold ${
-                                  (analytics?.jobsFailed ?? 0) > 0
-                                    ? "text-[var(--error)]"
-                                    : "text-[var(--foreground)]"
+                                className={`inline-flex shrink-0 items-center rounded-full px-2 py-0.5 text-[10px] ${
+                                  source.isActive
+                                    ? "border border-[rgba(31,141,74,0.18)] bg-[rgba(31,141,74,0.12)] text-[var(--success)]"
+                                    : "border border-[var(--border)] bg-white/72 text-[var(--foreground-tertiary)]"
                                 }`}
                               >
-                                {analytics?.jobsFailed ?? 0}
-                              </span>{" "}
-                              failed
-                            </span>
+                                {source.isActive ? "Active" : "Paused"}
+                              </span>
+                            </div>
+                            <p className="mt-0.5 truncate text-xs text-[var(--foreground-tertiary)]">
+                              {source.slug}
+                              {description ? ` · ${description.slice(0, 80)}` : ""}
+                            </p>
+                            <div className="mt-2">
+                              <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[10px] text-[var(--foreground-tertiary)]">
+                                <span>
+                                  <span className="font-semibold text-[var(--foreground)]">
+                                    {analytics?.jobsCompleted ?? 0}
+                                  </span>{" "}
+                                  done
+                                </span>
+                                <span>
+                                  <span className="font-semibold text-[var(--brand-bright)]">
+                                    {analytics?.running ?? 0}
+                                  </span>{" "}
+                                  running
+                                </span>
+                                <span>
+                                  <span className="font-semibold text-[var(--accent-bright)]">
+                                    {analytics?.backlog ?? 0}
+                                  </span>{" "}
+                                  queued
+                                </span>
+                                <span>
+                                  <span
+                                    className={`font-semibold ${
+                                      (analytics?.jobsFailed ?? 0) > 0
+                                        ? "text-[var(--error)]"
+                                        : "text-[var(--foreground)]"
+                                    }`}
+                                  >
+                                    {analytics?.jobsFailed ?? 0}
+                                  </span>{" "}
+                                  failed
+                                </span>
+                                {keywords.length > 0 ? (
+                                  <span className="text-[var(--foreground-tertiary)]">
+                                    {keywords.length} tags
+                                  </span>
+                                ) : null}
+                              </div>
+                              <SourceProgressBar analytics={analytics} />
+                            </div>
                           </div>
-                          <SourceProgressBar analytics={analytics} />
+                        </div>
+
+                        <span className="mt-1 shrink-0 text-xs text-[var(--foreground-tertiary)]">
+                          {isExpanded ? "▲" : "▼"}
+                        </span>
+                      </div>
+
+                      <div className="mt-4 flex flex-col gap-3 xl:flex-row xl:items-start xl:justify-between">
+                        <div className="grid gap-2 sm:grid-cols-3 xl:flex-1 xl:grid-cols-7">
+                          {[
+                            {
+                              label: "subs",
+                              value: formatCount(subscriberCount),
+                              valueClassName: "text-[var(--foreground)]",
+                            },
+                            {
+                              label: "vids",
+                              value: formatCount(videoCount),
+                              valueClassName: "text-[var(--foreground)]",
+                            },
+                            {
+                              label: "views",
+                              value: formatCount(viewCount),
+                              valueClassName: "text-[var(--foreground)]",
+                            },
+                            {
+                              label: "idx",
+                              value: String(analytics ? analytics.jobsCompleted : 0),
+                              valueClassName: "text-[var(--foreground)]",
+                              delta: analytics
+                                ? (
+                                    <DeltaBadge
+                                      current={analytics.jobsCompleted}
+                                      previous={analytics.prevJobsCompleted}
+                                    />
+                                  )
+                                : null,
+                            },
+                            {
+                              label: "run",
+                              value: String(analytics ? analytics.running : 0),
+                              valueClassName: "text-[var(--brand-bright)]",
+                            },
+                            {
+                              label: "queued",
+                              value: String(analytics ? analytics.backlog : 0),
+                              valueClassName: "text-[var(--accent-bright)]",
+                            },
+                            {
+                              label: "fail",
+                              value: String(analytics ? analytics.jobsFailed : 0),
+                              valueClassName:
+                                (analytics?.jobsFailed ?? 0) > 0
+                                  ? "text-[var(--error)]"
+                                  : "text-[var(--foreground)]",
+                            },
+                          ].map((item) => (
+                            <div
+                              key={item.label}
+                              className="rounded-[16px] border border-[var(--border)] bg-white/72 px-3 py-2"
+                            >
+                              <p className={`text-sm font-semibold ${item.valueClassName}`}>
+                                {item.value}
+                                {item.delta ?? null}
+                              </p>
+                              <p className="mt-1 text-[10px] uppercase tracking-[0.14em] text-[var(--foreground-tertiary)]">
+                                {item.label}
+                              </p>
+                            </div>
+                          ))}
+                        </div>
+
+                        <div
+                          className="flex shrink-0 flex-wrap items-center gap-2 xl:max-w-[320px] xl:justify-end"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          {channelId ? (
+                            <a
+                              href={getChannelUrl(channelId)}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-flex h-8 items-center rounded-full border border-[var(--border)] px-3 text-xs text-[var(--foreground-secondary)] transition hover:border-[var(--brand)] hover:bg-white hover:text-[var(--foreground)]"
+                            >
+                              YouTube
+                            </a>
+                          ) : null}
+                          <button
+                            className="inline-flex h-8 items-center rounded-full border border-[var(--border)] px-3 text-xs text-[var(--foreground-secondary)] transition hover:border-[rgba(31,141,74,0.18)] hover:bg-[rgba(31,141,74,0.08)] hover:text-[var(--success)]"
+                            disabled={syncingId === source.id}
+                            onClick={() => void handleSync(source)}
+                            type="button"
+                          >
+                            {syncingId === source.id ? "Syncing..." : "Sync"}
+                          </button>
+                          <button
+                            className="inline-flex h-8 items-center rounded-full border border-[var(--border)] px-3 text-xs text-[var(--foreground-secondary)] transition hover:border-[var(--brand)] hover:bg-white hover:text-[var(--foreground)]"
+                            onClick={() => openEditForm(source)}
+                            type="button"
+                          >
+                            Edit
+                          </button>
+                          <button
+                            className="inline-flex h-8 items-center rounded-full border border-[var(--border)] px-3 text-xs text-[var(--foreground-secondary)] transition hover:border-[rgba(212,156,105,0.22)] hover:bg-[rgba(212,156,105,0.08)] hover:text-[var(--accent-bright)]"
+                            disabled={togglingId === source.id}
+                            onClick={() => void handleToggleActive(source)}
+                            type="button"
+                          >
+                            {togglingId === source.id
+                              ? "..."
+                              : source.isActive
+                                ? "Pause"
+                                : "Resume"}
+                          </button>
+                          <button
+                            className="inline-flex h-8 items-center rounded-full border border-[rgba(191,91,70,0.22)] bg-[rgba(191,91,70,0.12)] px-3 text-xs text-[var(--error)] transition hover:border-[rgba(191,91,70,0.3)] hover:bg-[rgba(191,91,70,0.18)]"
+                            onClick={() => setConfirmDeleteSource(source)}
+                            type="button"
+                          >
+                            Delete
+                          </button>
                         </div>
                       </div>
-
-                      {/* Stats columns — fixed widths for alignment */}
-                      <div className="hidden shrink-0 items-center text-xs lg:flex">
-                        <span className="w-[90px] text-right font-semibold text-[var(--foreground)]">
-                          {formatCount(subscriberCount)}
-                          <span className="ml-1 font-normal text-[var(--foreground-tertiary)]">subs</span>
-                        </span>
-                        <span className="w-[90px] text-right font-semibold text-[var(--foreground)]">
-                          {formatCount(videoCount)}
-                          <span className="ml-1 font-normal text-[var(--foreground-tertiary)]">vids</span>
-                        </span>
-                        <span className="w-[100px] text-right font-semibold text-[var(--foreground)]">
-                          {formatCount(viewCount)}
-                          <span className="ml-1 font-normal text-[var(--foreground-tertiary)]">views</span>
-                        </span>
-                        <span className="ml-3 w-[100px] border-l border-[var(--border)] pl-3 text-right">
-                          <span className="font-semibold text-[var(--foreground)]">
-                            {analytics ? analytics.jobsCompleted : 0}
-                          </span>
-                          {analytics ? (
-                            <DeltaBadge current={analytics.jobsCompleted} previous={analytics.prevJobsCompleted} />
-                          ) : null}
-                          <span className="ml-1 font-normal text-[var(--foreground-tertiary)]">idx</span>
-                        </span>
-                        <span className="w-[92px] text-right font-semibold text-[var(--brand-bright)]">
-                          {analytics ? analytics.running : 0}
-                          <span className="ml-1 font-normal text-[var(--foreground-tertiary)]">run</span>
-                        </span>
-                        <span className="w-[92px] text-right font-semibold text-[var(--accent-bright)]">
-                          {analytics ? analytics.backlog : 0}
-                          <span className="ml-1 font-normal text-[var(--foreground-tertiary)]">queued</span>
-                        </span>
-                        <span
-                          className={`w-[88px] text-right font-semibold ${
-                            (analytics?.jobsFailed ?? 0) > 0
-                              ? "text-[var(--error)]"
-                              : "text-[var(--foreground)]"
-                          }`}
-                        >
-                          {analytics ? analytics.jobsFailed : 0}
-                          <span className="ml-1 font-normal text-[var(--foreground-tertiary)]">fail</span>
-                        </span>
-                      </div>
-
-                      {/* Tags — fill remaining space */}
-                      <div className="hidden min-w-0 flex-1 xl:block">
-                        {keywords.length > 0 ? (
-                          <div className="flex flex-wrap gap-1">
-                            {keywords.slice(0, 3).map((kw) => (
-                              <span
-                                key={kw}
-                                className="truncate rounded-full border border-[var(--border)] bg-[rgba(255,255,255,0.04)] px-2 py-0.5 text-[10px] text-[var(--foreground-tertiary)]"
-                              >
-                                {kw}
-                              </span>
-                            ))}
-                            {keywords.length > 3 ? (
-                              <span className="py-0.5 text-[10px] text-[var(--foreground-tertiary)]">
-                                +{keywords.length - 3}
-                              </span>
-                            ) : null}
-                          </div>
-                        ) : null}
-                      </div>
-
-                      {/* Actions */}
-                      <div className="flex shrink-0 items-center gap-2" onClick={(e) => e.stopPropagation()}>
-                        {channelId ? (
-                          <a
-                            href={getChannelUrl(channelId)}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="inline-flex h-7 items-center rounded-lg border border-[var(--border)] px-2.5 text-xs text-[var(--foreground-secondary)] transition hover:border-[var(--brand)] hover:bg-white hover:text-[var(--foreground)]"
-                          >
-                            YouTube
-                          </a>
-                        ) : null}
-                        <button
-                          className="inline-flex h-7 items-center rounded-lg border border-[var(--border)] px-2.5 text-xs text-[var(--foreground-secondary)] transition hover:border-[rgba(31,141,74,0.18)] hover:bg-[rgba(31,141,74,0.08)] hover:text-[var(--success)]"
-                          disabled={syncingId === source.id}
-                          onClick={() => void handleSync(source)}
-                          type="button"
-                        >
-                          {syncingId === source.id ? "Syncing..." : "Sync"}
-                        </button>
-                        <button
-                          className="inline-flex h-7 items-center rounded-lg border border-[var(--border)] px-2.5 text-xs text-[var(--foreground-secondary)] transition hover:border-[var(--brand)] hover:bg-white hover:text-[var(--foreground)]"
-                          onClick={() => openEditForm(source)}
-                          type="button"
-                        >
-                          Edit
-                        </button>
-                        <button
-                          className="inline-flex h-7 items-center rounded-lg border border-[var(--border)] px-2.5 text-xs text-[var(--foreground-secondary)] transition hover:border-[rgba(212,156,105,0.22)] hover:bg-[rgba(212,156,105,0.08)] hover:text-[var(--accent-bright)]"
-                          disabled={togglingId === source.id}
-                          onClick={() => void handleToggleActive(source)}
-                          type="button"
-                        >
-                          {togglingId === source.id
-                            ? "..."
-                            : source.isActive
-                              ? "Pause"
-                              : "Resume"}
-                        </button>
-                        <button
-                          className="inline-flex h-7 items-center rounded-lg border border-[rgba(191,91,70,0.22)] bg-[rgba(191,91,70,0.12)] px-2.5 text-xs text-[var(--error)] transition hover:border-[rgba(191,91,70,0.3)] hover:bg-[rgba(191,91,70,0.18)]"
-                          onClick={() => setConfirmDeleteSource(source)}
-                          type="button"
-                        >
-                          Delete
-                        </button>
-                      </div>
-
-                      {/* Expand indicator */}
-                      <span className="shrink-0 text-xs text-[var(--foreground-tertiary)]">
-                        {isExpanded ? "▲" : "▼"}
-                      </span>
                     </div>
 
                     {/* Sync result toast */}

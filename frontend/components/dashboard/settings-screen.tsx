@@ -328,9 +328,9 @@ export function DashboardSettingsScreen() {
                       description: "Keep request shapes close to the settings surface users actually revisit.",
                     },
                     {
-                      href: "/search",
-                      title: "Search playground",
-                      description: "Test one request before you create more keys or raise traffic.",
+                      href: "/docs",
+                      title: "Quickstart guide",
+                      description: "Walk through the first authenticated request before you scale traffic.",
                     },
                   ].map((item) => (
                     <Link

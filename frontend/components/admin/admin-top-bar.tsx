@@ -59,12 +59,6 @@ export function AdminTopBar({ currentPath, title }: AdminTopBarProps) {
           >
             Docs
           </Link>
-          <Link
-            href={"/search" as Route}
-            className="inline-flex h-10 items-center rounded-full border border-[var(--border)] bg-white/72 px-4 text-sm font-medium text-[var(--foreground-secondary)] transition hover:border-[var(--border-strong)] hover:bg-white hover:text-[var(--foreground)]"
-          >
-            Playground
-          </Link>
           <UserAvatarMenu />
         </div>
       </div>

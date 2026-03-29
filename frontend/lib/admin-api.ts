@@ -640,7 +640,9 @@ function buildRangeQuery(range: AdminRange): string {
 export function normalizeAdminSummary(payload: unknown): AdminSummary {
   const raw = ensureObject(payload, "Invalid admin summary response.");
   const metrics = ensureObject(raw.metrics, "Admin summary is missing metrics.");
-  const workerSeriesPayload = raw.workers_series;
+  const workerSeriesPayload = Array.isArray(raw.workers_series)
+    ? raw.workers_series
+    : raw.ingestion_series;
 
   return {
     generatedAt: typeof raw.generated_at === "string" ? raw.generated_at : "",
@@ -1189,13 +1191,25 @@ export const admin = {
   },
 
   async getWorkers(range: AdminRange): Promise<AdminWorkersSummary> {
-    const payload = await fetchWithAuth<unknown>(
-      `/admin/workers/summary${buildRangeQuery(range)}`,
-      {
+    const query = buildRangeQuery(range);
+    let payload: unknown;
+
+    try {
+      payload = await fetchWithAuth<unknown>(`/admin/workers/summary${query}`, {
         method: "GET",
         cache: "no-store",
-      },
-    );
+      });
+    } catch (error) {
+      if (!(error instanceof ApiClientError) || error.status !== 404) {
+        throw error;
+      }
+
+      // Older API deploys still expose the legacy ingestion summary path.
+      payload = await fetchWithAuth<unknown>(`/admin/ingestion/summary${query}`, {
+        method: "GET",
+        cache: "no-store",
+      });
+    }
 
     return normalizeAdminWorkersSummary(payload);
   },
@@ -1258,12 +1272,24 @@ export const admin = {
   },
 
   async getWorkerNodes(): Promise<AdminWorkerNodesResponse> {
-    const payload = await fetchWithAuth<unknown>("/admin/workers", {
-      method: "GET",
-      cache: "no-store",
-    });
+    try {
+      const payload = await fetchWithAuth<unknown>("/admin/workers", {
+        method: "GET",
+        cache: "no-store",
+      });
 
-    return normalizeAdminWorkerNodesResponse(payload);
+      return normalizeAdminWorkerNodesResponse(payload);
+    } catch (error) {
+      if (!(error instanceof ApiClientError) || error.status !== 404) {
+        throw error;
+      }
+
+      // Heartbeat snapshots shipped after the legacy ingestion-only API.
+      return {
+        generatedAt: "",
+        nodes: [],
+      };
+    }
   },
 
   async retryJob(jobId: string): Promise<{ ok: boolean; jobId: string }> {

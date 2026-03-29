@@ -104,18 +104,27 @@ load_env() {
 }
 
 resolve_database_url() {
+  local url=""
+
   if [[ -n "${DATABASE_URL_OVERRIDE}" ]]; then
-    printf '%s\n' "${DATABASE_URL_OVERRIDE}"
-    return 0
+    url="${DATABASE_URL_OVERRIDE}"
+  elif [[ -n "${DATABASE_URL:-}" ]]; then
+    url="${DATABASE_URL}"
+  else
+    echo "[migrate-db] DATABASE_URL is not set. Provide it in ${ENV_FILE} or use --database-url." >&2
+    exit 1
   fi
 
-  if [[ -n "${DATABASE_URL:-}" ]]; then
-    printf '%s\n' "${DATABASE_URL}"
-    return 0
+  # Ensure a connect_timeout is set (Neon serverless can take seconds to wake)
+  if [[ "${url}" != *"connect_timeout"* ]]; then
+    if [[ "${url}" == *"?"* ]]; then
+      url="${url}&connect_timeout=30"
+    else
+      url="${url}?connect_timeout=30"
+    fi
   fi
 
-  echo "[migrate-db] DATABASE_URL is not set. Provide it in ${ENV_FILE} or use --database-url." >&2
-  exit 1
+  printf '%s\n' "${url}"
 }
 
 should_include_migration() {
@@ -134,12 +143,33 @@ should_include_migration() {
 
 psql_query() {
   local sql="$1"
+  local output
+  local attempt
 
-  psql "${DATABASE_URL_VALUE}" -Atqc "${sql}"
+  for attempt in 1 2 3; do
+    if output="$(psql "${DATABASE_URL_VALUE}" -Atqc "${sql}" 2>&1)"; then
+      printf '%s' "${output}"
+      return 0
+    fi
+
+    if [[ ${attempt} -lt 3 ]]; then
+      echo "[migrate-db] psql query failed (attempt ${attempt}/3), retrying in 2s..." >&2
+      sleep 2
+    fi
+  done
+
+  echo "[migrate-db] psql query failed after 3 attempts: ${output}" >&2
+  return 1
 }
 
 ensure_migration_table() {
-  if [[ "$(psql_query "SELECT CASE WHEN to_regclass('${MIGRATION_TABLE}') IS NULL THEN 'false' ELSE 'true' END")" != "true" ]]; then
+  local table_exists
+  table_exists="$(psql_query "SELECT CASE WHEN to_regclass('${MIGRATION_TABLE}') IS NULL THEN 'false' ELSE 'true' END")" || {
+    echo "[migrate-db] Failed to check migration table existence." >&2
+    exit 1
+  }
+
+  if [[ "${table_exists}" != "true" ]]; then
     psql "${DATABASE_URL_VALUE}" -v ON_ERROR_STOP=1 <<SQL >/dev/null
 CREATE TABLE ${MIGRATION_TABLE} (
     name TEXT PRIMARY KEY,
@@ -149,20 +179,28 @@ CREATE TABLE ${MIGRATION_TABLE} (
 SQL
   fi
 
-  if [[ "$(psql_query "SELECT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'schema_migrations' AND column_name = 'checksum')")" != "t" ]]; then
+  local has_checksum
+  has_checksum="$(psql_query "SELECT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'schema_migrations' AND column_name = 'checksum')")" || exit 1
+  if [[ "${has_checksum}" != "t" ]]; then
     psql "${DATABASE_URL_VALUE}" -v ON_ERROR_STOP=1 -c "ALTER TABLE ${MIGRATION_TABLE} ADD COLUMN checksum TEXT"
   fi
 
-  if [[ "$(psql_query "SELECT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'schema_migrations' AND column_name = 'applied_at')")" != "t" ]]; then
+  local has_applied_at
+  has_applied_at="$(psql_query "SELECT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'schema_migrations' AND column_name = 'applied_at')")" || exit 1
+  if [[ "${has_applied_at}" != "t" ]]; then
     psql "${DATABASE_URL_VALUE}" -v ON_ERROR_STOP=1 -c "ALTER TABLE ${MIGRATION_TABLE} ADD COLUMN applied_at TIMESTAMPTZ NOT NULL DEFAULT NOW()"
   fi
 
-  if [[ "$(psql_query "SELECT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'schema_migrations' AND column_name = 'name')")" == "t" ]]; then
+  local has_name
+  has_name="$(psql_query "SELECT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'schema_migrations' AND column_name = 'name')")" || exit 1
+  if [[ "${has_name}" == "t" ]]; then
     MIGRATION_NAME_COLUMN="name"
     return 0
   fi
 
-  if [[ "$(psql_query "SELECT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'schema_migrations' AND column_name = 'filename')")" == "t" ]]; then
+  local has_filename
+  has_filename="$(psql_query "SELECT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'schema_migrations' AND column_name = 'filename')")" || exit 1
+  if [[ "${has_filename}" == "t" ]]; then
     MIGRATION_NAME_COLUMN="filename"
     return 0
   fi
@@ -256,6 +294,12 @@ echo "=========================================="
 echo "[migrate-db] env file: ${ENV_FILE}"
 echo "[migrate-db] migrations: ${MIGRATIONS_DIR}"
 echo ""
+
+# Verify database connectivity before proceeding (psql_query retries internally)
+psql_query "SELECT 1" >/dev/null || {
+  echo "[migrate-db] Cannot connect to database after retries. Check DATABASE_URL and ensure the database is reachable." >&2
+  exit 1
+}
 
 ensure_migration_table
 
