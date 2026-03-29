@@ -128,11 +128,6 @@ kill_port() {
 }
 
 clean_frontend() {
-  if [ "${FAST_MODE}" = "true" ]; then
-    echo "[clean] Fast mode: keeping frontend caches."
-    return 0
-  fi
-
   echo "[clean] Removing frontend generated files..."
   rm -rf "${FRONTEND_DIR}/.next"
   rm -rf "${FRONTEND_DIR}/coverage"
@@ -140,33 +135,32 @@ clean_frontend() {
   rm -rf "${FRONTEND_DIR}/.turbo"
   rm -rf "${FRONTEND_DIR}/.vercel"
   rm -f "${FRONTEND_DIR}/tsconfig.tsbuildinfo"
-  rm -rf "${FRONTEND_DIR}/node_modules"
+
+  if [ "${FAST_MODE}" = "false" ]; then
+    rm -rf "${FRONTEND_DIR}/node_modules"
+  fi
 }
 
 clean_api() {
-  if [ "${FAST_MODE}" = "true" ]; then
-    echo "[clean] Fast mode: keeping API caches."
-    return 0
-  fi
-
   echo "[clean] Removing API generated files..."
   rm -rf "${API_DIR}/.wrangler"
-  rm -rf "${API_DIR}/node_modules"
+
+  if [ "${FAST_MODE}" = "false" ]; then
+    rm -rf "${API_DIR}/node_modules"
+  fi
 }
 
 clean_workers() {
-  if [ "${FAST_MODE}" = "true" ]; then
-    echo "[clean] Fast mode: keeping worker caches."
-    return 0
-  fi
-
   echo "[clean] Removing worker generated files..."
   find "${WORKERS_DIR}" -type d -name "__pycache__" -prune -exec rm -rf {} +
   find "${WORKERS_DIR}" -type f -name "*.pyc" -delete
   rm -rf "${WORKERS_DIR}/.pytest_cache"
   rm -rf "${WORKERS_DIR}/.mypy_cache"
   rm -rf "${WORKERS_DIR}/.ruff_cache"
-  rm -rf "${WORKERS_VENV}"
+
+  if [ "${FAST_MODE}" = "false" ]; then
+    rm -rf "${WORKERS_VENV}"
+  fi
 }
 
 install_frontend() {
@@ -259,10 +253,6 @@ else
 fi
 
 ensure_local_infra
-
-if [ "${FAST_MODE}" = "true" ]; then
-  SKIP_MIGRATIONS="true"
-fi
 run_migrations
 
 echo ""
