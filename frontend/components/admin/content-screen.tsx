@@ -66,8 +66,6 @@ export function AdminContentScreen() {
             <AdminMetricCard label="Segments added" metric={data.metrics.knowledgeSegmentsAdded} />
           </section>
 
-          <VideoLibraryPanel />
-
           <AdminTrendChart
             title="Segment growth"
             data={toAdminChartData(data.dailySeries, "knowledgeSegmentsAdded")}
