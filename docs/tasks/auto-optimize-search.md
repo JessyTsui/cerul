@@ -21,14 +21,14 @@ Our loop: modify search config → commit → run eval queries → compute NDCG 
   - `mmr_lambda` (diversity vs relevance tradeoff, currently ~0.5)
   - rerank `top_n` (how many candidates to rerank)
   - candidate_limit multiplier
-- `backend/app/search/unified.py` — retrieval logic:
+- `api/src/services/search.ts` — retrieval logic:
   - candidate_limit formula
   - `_cap_per_video` limit
   - score blending between embedding similarity and rerank score
   - query preprocessing (expansion, rewriting)
   - snippet building strategy
-- `backend/app/search/rerank.py` — rerank prompt and model selection
-- `backend/app/search/answer.py` — answer generation prompt
+- `api/src/services/rerank.ts` — rerank prompt and model selection
+- `api/src/services/answer.ts` — answer generation prompt
 
 ## Metric
 

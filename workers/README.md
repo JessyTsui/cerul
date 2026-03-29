@@ -1,6 +1,6 @@
 # Workers Workspace
 
-This directory is reserved for Cerul ingestion and indexing workers.
+This directory is reserved for Cerul indexing and processing workers.
 
 - `broll/` for the lightweight stock-footage pipeline
 - `knowledge/` for the knowledge-video pipeline

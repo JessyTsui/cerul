@@ -1,5 +1,7 @@
 # Codex Prompts for Search Optimization Tasks
 
+> Note: this prompt doc predates the current TypeScript/Hono implementation. File paths below now point to the active monorepo layout, and old Python-style symbols should be mapped to the current camelCase helpers in `api/src/services/search.ts`.
+
 Copy each prompt into a separate Codex session/worktree.
 
 ---
@@ -31,7 +33,7 @@ psql "$DATABASE_URL" -c "SELECT indexname FROM pg_indexes WHERE tablename = 'ret
 ## Task 2: Merge speech + visual into Single Query
 
 ```
-In `backend/app/search/unified.py`, the `search` method currently runs multiple separate pgvector queries in a loop — one per unit_type (speech, visual, optionally summary). This doubles the DB round trips.
+In `api/src/services/search.ts`, the `search` method currently runs multiple separate pgvector queries in a loop — one per unit_type (speech, visual, optionally summary). This doubles the DB round trips.
 
 Merge them into a single query. Here's what to change:
 
@@ -53,7 +55,7 @@ Run backend tests after: `cd backend && python -m pytest tests/ -x -q`
 ## Task 3: Deduplicate Same-Segment Results
 
 ```
-In `backend/app/search/unified.py`, the `_dedupe_rows` method currently only deduplicates by retrieval_unit `id`. This means the same video segment (same video_id + same timestamp_start + same timestamp_end) can appear twice in results — once as a `speech` unit and once as a `visual` unit with identical scores.
+In `api/src/services/search.ts`, the `_dedupe_rows` method currently only deduplicates by retrieval_unit `id`. This means the same video segment (same video_id + same timestamp_start + same timestamp_end) can appear twice in results — once as a `speech` unit and once as a `visual` unit with identical scores.
 
 Replace the `_dedupe_rows` method with a two-step deduplication:
 
@@ -115,7 +117,7 @@ Run backend tests: `cd backend && python -m pytest tests/ -x -q`
 
 Then test manually:
 ```bash
-curl -X POST "http://localhost:8000/v1/search" \
+curl -X POST "http://localhost:8787/v1/search" \
   -H "Authorization: Bearer $API_KEY" \
   -H "Content-Type: application/json" \
   -d '{"query": "rocket launch", "max_results": 5}'
@@ -132,17 +134,17 @@ Remove the `unit_type` field from the public search API response. It's an intern
 
 Changes needed:
 
-1. `backend/app/search/models.py` — In the `SearchResult` class, remove the `unit_type` field entirely. It's currently defined as something like:
+1. `api/src/types.ts` — In the `SearchResult` type, remove the `unit_type` field entirely if it is still exposed. It used to look roughly like:
    ```python
    unit_type: Literal["speech", "visual", "summary"] | None = None
    ```
    Delete this field.
 
-2. `backend/app/search/unified.py` — In the `search` method where `SearchResult` objects are constructed (look for `SearchResult(` around line 152-168), remove the `unit_type=...` argument.
+2. `api/src/services/search.ts` — In the public search result construction logic, remove any `unit_type` exposure from returned results.
 
 3. Do NOT remove `unit_type` from the `tracking_links` dict in the same method — tracking links are internal data used for analytics and should keep this field.
 
-4. Check the search router `backend/app/routers/search.py` for any references to `unit_type` in the response handling. Remove if found.
+4. Check the search router `api/src/routes/search.ts` for any references to `unit_type` in the response handling. Remove if found.
 
 5. Update any tests that assert on `unit_type` in search responses.
 

@@ -1,11 +1,3 @@
-import { existsSync, readFileSync } from "node:fs";
-import path from "node:path";
-
-type DashboardSettingsSnapshot = {
-  adminEmails: string[];
-  bootstrapAdminSecret: string | null;
-};
-
 function normalizeEmail(value: string): string | null {
   const normalized = value.trim().toLowerCase();
   return normalized || null;
@@ -188,120 +180,6 @@ function parseInlineList(value: string): string[] {
   return emails;
 }
 
-function parseDashboardSettingsFromYaml(content: string): Partial<DashboardSettingsSnapshot> {
-  const parsed: Partial<DashboardSettingsSnapshot> = {};
-  const lines = content.split(/\r?\n/);
-  let inDashboard = false;
-  let collectingAdminEmails = false;
-  let adminEmails: string[] = [];
-
-  for (const rawLine of lines) {
-    const indent = rawLine.match(/^ */)?.[0].length ?? 0;
-    const trimmed = rawLine.trim();
-
-    if (!trimmed || trimmed.startsWith("#")) {
-      continue;
-    }
-
-    if (!inDashboard) {
-      if (indent === 0 && trimmed === "dashboard:") {
-        inDashboard = true;
-      }
-      continue;
-    }
-
-    if (indent === 0 && !trimmed.startsWith("- ")) {
-      if (collectingAdminEmails) {
-        parsed.adminEmails = adminEmails;
-      }
-      break;
-    }
-
-    if (collectingAdminEmails) {
-      if (indent >= 2 && trimmed.startsWith("- ")) {
-        const scalar = parseScalar(trimmed.slice(2));
-        const normalized = scalar ? normalizeEmail(scalar) : null;
-        if (normalized && !adminEmails.includes(normalized)) {
-          adminEmails.push(normalized);
-        }
-        continue;
-      }
-
-      parsed.adminEmails = adminEmails;
-      collectingAdminEmails = false;
-    }
-
-    if (trimmed.startsWith("admin_emails:")) {
-      const value = trimmed.slice("admin_emails:".length).trim();
-
-      if (!value) {
-        adminEmails = [];
-        collectingAdminEmails = true;
-        continue;
-      }
-
-      parsed.adminEmails = parseYamlEmailValue(value);
-      continue;
-    }
-
-    if (trimmed.startsWith("bootstrap_admin_secret:")) {
-      const value = trimmed.slice("bootstrap_admin_secret:".length).trim();
-      parsed.bootstrapAdminSecret = parseScalar(value);
-    }
-  }
-
-  if (collectingAdminEmails) {
-    parsed.adminEmails = adminEmails;
-  }
-
-  return parsed;
-}
-
-function resolveConfigDir(): string {
-  const configuredDir = process.env.CERUL_CONFIG_DIR?.trim();
-
-  if (configuredDir) {
-    return configuredDir;
-  }
-
-  const repoRelativeDir = path.resolve(process.cwd(), "..", "config");
-  if (existsSync(repoRelativeDir)) {
-    return repoRelativeDir;
-  }
-
-  return path.resolve(process.cwd(), "config");
-}
-
-function loadDashboardSettingsFromConfig(): DashboardSettingsSnapshot {
-  const configDir = resolveConfigDir();
-  const environment = process.env.CERUL_ENV?.trim().toLowerCase() || "development";
-  const snapshot: DashboardSettingsSnapshot = {
-    adminEmails: [],
-    bootstrapAdminSecret: null,
-  };
-
-  for (const configPath of [
-    path.join(configDir, "base.yaml"),
-    path.join(configDir, `${environment}.yaml`),
-  ]) {
-    if (!existsSync(configPath)) {
-      continue;
-    }
-
-    const parsed = parseDashboardSettingsFromYaml(readFileSync(configPath, "utf8"));
-
-    if (parsed.adminEmails) {
-      snapshot.adminEmails = parsed.adminEmails;
-    }
-
-    if (Object.prototype.hasOwnProperty.call(parsed, "bootstrapAdminSecret")) {
-      snapshot.bootstrapAdminSecret = parsed.bootstrapAdminSecret ?? null;
-    }
-  }
-
-  return snapshot;
-}
-
 function hasEnvOverride(name: string): boolean {
   return Object.prototype.hasOwnProperty.call(process.env, name);
 }
@@ -317,7 +195,7 @@ export function getConfiguredAdminEmails(): Set<string> {
     ]);
   }
 
-  return new Set(loadDashboardSettingsFromConfig().adminEmails);
+  return new Set();
 }
 
 export function getConfiguredBootstrapAdminSecret(): string | null {
@@ -329,5 +207,5 @@ export function getConfiguredBootstrapAdminSecret(): string | null {
     return parseScalar(process.env.CERUL__DASHBOARD__BOOTSTRAP_ADMIN_SECRET ?? "");
   }
 
-  return loadDashboardSettingsFromConfig().bootstrapAdminSecret;
+  return null;
 }

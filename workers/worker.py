@@ -1063,7 +1063,7 @@ def _parse_worker_concurrency(value: str) -> int:
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Run the Cerul ingestion worker.")
+    parser = argparse.ArgumentParser(description="Run the Cerul indexing worker.")
     parser.add_argument("--db-url", default=os.getenv("DATABASE_URL", "").strip())
     parser.add_argument("--worker-id", default=build_default_worker_id())
     parser.add_argument("--poll-interval", type=float, default=5)

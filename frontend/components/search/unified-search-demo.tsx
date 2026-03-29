@@ -166,7 +166,7 @@ function buildIndexResponse(url: string, force: boolean): IndexResponse {
     estimated_steps: [
       "Resolve provider metadata",
       "Fetch media and key frames",
-      "Run shared ingestion pipeline",
+      "Run shared indexing pipeline",
       "Publish retrieval units into the index",
     ],
   };

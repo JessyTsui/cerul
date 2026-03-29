@@ -32,7 +32,7 @@ Default architectural assumptions:
 - api: Hono on Cloudflare Workers
 - database: Neon PostgreSQL with pgvector
 - auth: Better Auth
-- heavy ingestion and media processing: Python workers
+- heavy indexing and media processing: Python workers
 - first agent integration path: installable skill over direct HTTP API
 
 Do not introduce a second primary backend stack, ORM stack, or deployment platform without an explicit decision. In particular, do not casually pivot the project toward TanStack Start, Cloudflare D1, or Drizzle as the default foundation.
@@ -46,13 +46,13 @@ For agent integrations, keep the first phase simple:
 Keep these boundaries intact:
 
 - `api/` handles request orchestration, auth, usage, and API responses
-- `workers/` handles ingestion, indexing, and media-heavy processing
+- `workers/` handles indexing and other media-heavy processing
 - `workers/common/` holds shared Python runtime helpers used by workers and evaluation scripts
 - frontend pages should not become the primary business logic layer
 
-Worker-side ingestion should continue to follow a shared step-pipeline approach:
+Worker-side indexing should continue to follow a shared step-pipeline approach:
 
-- keep ingestion flows step-based and composable
+- keep indexing flows step-based and composable
 - prefer shared context over ad hoc cross-step state passing
 - keep idempotency in mind for every pipeline step
 - avoid embedding heavy media logic directly inside API handlers
@@ -235,7 +235,7 @@ Recommended issue title patterns:
 - `[Bug] Usage endpoint returns wrong remaining credits`
 - `[Docs] Clarify open-source scope`
 - `[Infra] Add Neon migration workflow`
-- `[Decision] Define ingestion queue strategy`
+- `[Decision] Define indexing queue strategy`
 
 Issue rules:
 

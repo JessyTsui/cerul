@@ -926,7 +926,7 @@ export function DashboardPipelinesScreen() {
                     Read pipeline docs
                   </Link>
                 }
-                description="No processing jobs have been written yet. Once workers start ingesting or indexing sources, recent jobs and step timelines will appear here."
+                description="No processing jobs have been written yet. Once workers start processing or indexing sources, recent jobs and step timelines will appear here."
                 title="No pipeline jobs yet"
               />
             ) : (

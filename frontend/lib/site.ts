@@ -37,7 +37,7 @@ export const capabilityHighlights = [
     kicker: "Thin orchestration",
     title: "Keep the API layer narrow",
     description:
-      "Hono on Cloudflare Workers handles auth, usage, and response shaping. Ingestion, indexing, and media-heavy work stay in Python workers.",
+      "Hono on Cloudflare Workers handles auth, usage, and response shaping. Indexing and other media-heavy work stay in Python workers.",
   },
   {
     kicker: "Replaceable models",
@@ -53,7 +53,7 @@ export const searchTracks = [
     name: "B-roll",
     grain: "asset-level",
     description:
-      "A lightweight showcase that proves the value of visual search quickly, with lower ingestion cost and immediate demo value.",
+      "A lightweight showcase that proves the value of visual search quickly, with lower indexing cost and immediate demo value.",
     points: [
       "Semantic search over stock footage sources such as Pexels and Pixabay",
       "Fast CLIP-based indexing without ASR",
@@ -177,7 +177,7 @@ export const pricingTiers = [
     price: "Custom",
     cadence: "volume and support matched",
     description:
-      "For production deployments with private ingestion pipelines, SLA expectations, and compliance review.",
+      "For production deployments with private indexing pipelines, SLA expectations, and compliance review.",
     ctaLabel: "Talk to us",
     ctaHref: "mailto:team@cerul.ai",
     accent: "ink",
@@ -204,7 +204,7 @@ export const pricingFaqs = [
   {
     question: "When does enterprise make sense?",
     answer:
-      "Once a team needs private ingestion, multiple administrators, security review, or predictable throughput guarantees, the enterprise path becomes the cleaner fit.",
+      "Once a team needs private indexing, multiple administrators, security review, or predictable throughput guarantees, the enterprise path becomes the cleaner fit.",
   },
 ] as const;
 

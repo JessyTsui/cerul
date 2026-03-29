@@ -1,5 +1,7 @@
 # Search Optimization: Deduplication, Index, and Query Merge
 
+> Note: this task predates the current TypeScript/Hono implementation. File paths below now point to the active monorepo layout, and old Python-style helper names should be mapped to the current camelCase helpers in `api/src/services/search.ts`.
+
 ## Background
 
 Current search has several issues:
@@ -66,7 +68,7 @@ LIMIT 10;
 **Goal**: Instead of running two separate pgvector queries (one per `unit_type`), run a single query that returns both speech and visual units together. This halves the DB round trips and simplifies the search pipeline.
 
 **Files to modify**:
-- `backend/app/search/unified.py`
+- `api/src/services/search.ts`
 
 **Current code** (lines 72-87 in `unified.py`):
 ```python
@@ -127,7 +129,7 @@ Change the logic so that:
 **Goal**: When the same video segment (same `video_id` + overlapping `timestamp_start`/`timestamp_end`) appears as both a `speech` result and a `visual` result, merge them into a single result taking the higher score. The API should return one result per unique segment, not one per unit type.
 
 **Files to modify**:
-- `backend/app/search/unified.py` — the `_dedupe_rows` method
+- `api/src/services/search.ts` — the `_dedupe_rows` method
 
 **Current code** (`_dedupe_rows` at line ~280):
 ```python
@@ -218,13 +220,13 @@ def _dedupe_rows(self, rows: Sequence[dict[str, Any]]) -> list[dict[str, Any]]:
 **Goal**: Stop exposing `unit_type` in the search API response. It's an internal implementation detail. After deduplication (Task 3), a result may represent merged speech+visual data, making `unit_type` meaningless.
 
 **Files to modify**:
-- `backend/app/search/models.py` — `SearchResult` model
-- `backend/app/search/unified.py` — where `SearchResult` is constructed
-- `backend/app/routers/search.py` — if `unit_type` is referenced in the route
+- `api/src/types.ts` — `SearchResult` model
+- `api/src/services/search.ts` — where `SearchResult` is constructed
+- `api/src/routes/search.ts` — if `unit_type` is referenced in the route
 
 ### Step 1: Update `SearchResult` model
 
-In `backend/app/search/models.py`, find the `SearchResult` class and remove the `unit_type` field:
+In `api/src/types.ts`, find the `SearchResult` type and remove the `unit_type` field if it is still exposed:
 
 ```python
 # REMOVE this field:
@@ -233,7 +235,7 @@ unit_type: Literal["speech", "visual", "summary"] | None = None
 
 ### Step 2: Update result construction
 
-In `backend/app/search/unified.py`, find where `SearchResult` is constructed (around line 152-168). Remove the `unit_type=...` line:
+In `api/src/services/search.ts`, find the public search result construction logic and remove any `unit_type` exposure from returned results:
 
 ```python
 # REMOVE this line:
@@ -286,7 +288,7 @@ cd backend && python -m pytest tests/ -x -q
 
 And do a manual search test:
 ```bash
-curl -X POST "http://localhost:8000/v1/search" \
+curl -X POST "http://localhost:8787/v1/search" \
   -H "Authorization: Bearer $API_KEY" \
   -H "Content-Type: application/json" \
   -d '{"query": "SpaceX rocket stage separation", "max_results": 5, "include_answer": true}'

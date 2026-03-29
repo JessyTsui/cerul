@@ -46,7 +46,7 @@ describe("normalizeAdminSummary", () => {
         },
       ],
       content_series: [],
-      ingestion_series: [],
+      workers_series: [],
       notices: [
         {
           tone: "warning",
@@ -138,7 +138,7 @@ describe("admin targets client", () => {
           },
           request_series: [],
           content_series: [],
-          ingestion_series: [],
+          workers_series: [],
           notices: [],
         }),
         {
@@ -161,7 +161,7 @@ describe("admin targets client", () => {
     );
   });
 
-  it("keeps the workers page on the ingestion summary endpoint for backward compatibility", async () => {
+  it("fetches the workers summary from the workers endpoint", async () => {
     vi.mocked(global.fetch).mockResolvedValueOnce(
       new Response(
         JSON.stringify({
@@ -206,7 +206,7 @@ describe("admin targets client", () => {
     await admin.getWorkers("7d");
 
     expect(global.fetch).toHaveBeenCalledWith(
-      "/api/console/admin/ingestion/summary?range=7d",
+      "/api/console/admin/workers/summary?range=7d",
       expect.objectContaining({
         credentials: "include",
         method: "GET",

@@ -61,7 +61,7 @@ export function AdminRequestsScreen() {
             <p className="eyebrow">Latency</p>
             <p className="mt-3 text-sm leading-7 text-[var(--foreground-secondary)]">
               Focus on tail latency first. This is usually where search quality and
-              ingestion load start to show up for users.
+              indexing load start to show up for users.
             </p>
             <div className="mt-5 grid gap-3 md:grid-cols-3">
               {[

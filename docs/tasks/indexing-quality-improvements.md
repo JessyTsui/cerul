@@ -170,7 +170,7 @@ After making these changes:
 ## Constraints
 
 - Do NOT change the embedding model or dimension (Gemini Embedding 2, 3072-dim)
-- Do NOT change the search layer (`backend/app/search/`)
+- Do NOT change the search layer (`api/src/services/search.ts`)
 - Do NOT change the eval script or benchmark dataset
 - Do NOT change the pipeline step order or add new steps
 - Keep the changes minimal — each change should be independently testable

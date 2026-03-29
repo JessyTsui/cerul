@@ -95,6 +95,7 @@ describe("fetchWithAuth", () => {
       expect.objectContaining<ApiClientError>({
         name: "ApiClientError",
         status: 404,
+        code: "unknown_error",
         message: "Stripe customer not found for this user.",
       }),
     );
@@ -368,7 +369,7 @@ describe("dashboard API client", () => {
           id: "job_1",
           track: "broll",
           source_id: null,
-          job_type: "ingest",
+          job_type: "index_video",
           status: "failed",
           input_payload: {
             source_url: "https://example.com/video.mp4",
@@ -411,7 +412,7 @@ describe("dashboard API client", () => {
       id: "job_1",
       track: "broll",
       sourceId: null,
-      jobType: "ingest",
+      jobType: "index_video",
       status: "failed",
       inputPayload: {
         source_url: "https://example.com/video.mp4",

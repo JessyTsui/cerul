@@ -196,7 +196,7 @@ database as a release/predeploy step before rolling out code that depends on the
 - [x] Unified `index + search` flow on the shared retrieval stack
 - [x] Summary, speech, and visual retrieval units in one embedding space
 - [x] Agent-facing integrations via installable skills and direct HTTP access
-- [ ] Higher-scale production validation for ingestion coverage and retrieval quality
+- [ ] Higher-scale production validation for indexing coverage and retrieval quality
 - [ ] Stripe billing validation in test mode
 - [ ] Python & TypeScript SDKs, only if direct API + skill access proves insufficient
 

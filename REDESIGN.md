@@ -356,15 +356,15 @@ Rewrite the docs landing page to match `02-docs-landing.png`:
 
 - **Header**: Cerul logo (cyan "Documentation" text) + search bar
 - **Three-column layout**:
-  - **Left sidebar**: Categorized navigation — Getting Started, API Guides (Getting Started, Authentication, Video Ingestion), Knowledge Track (Authentication, Video Ingestion, Search Queries), Broll Track (Video Ingestion, Broll Priovoits), Advanced (Rate Limiting, Error Handling, Search Queries, Webhooks, Authors, Webhooks)
+  - **Left sidebar**: Categorized navigation — Getting Started, API Guides (Getting Started, Authentication, Video Indexing), Knowledge Track (Authentication, Video Indexing, Search Queries), Broll Track (Video Indexing, Broll Priovoits), Advanced (Rate Limiting, Error Handling, Search Queries, Webhooks, Authors, Webhooks)
   - **Center content**:
     - "Welcome to Cerul Docs" heading
     - Subtitle: "Explore our powerful API for seamless video data integration, search, and management."
     - Green "Quickstart" button with rocket icon
     - Four feature cards in 2x2 grid:
       - Authentication: `Authorization: Bearer <TOKEN>`
-      - Video Ingestion: `POST /videos/ingest`
-      - Search Queries: `GET /search?q=keyword`
+      - Video Indexing: `POST /v1/index`
+      - Search Queries: `POST /v1/search`
       - Webhooks: `POST /webhooks/register`
   - **Right sidebar**: "Popular Topics" — Rate Limiting, Error Handling, Data Models, Client Libraries
 
@@ -473,7 +473,7 @@ Create a **new** API Reference page matching `04-api-reference.png`. This page d
 - `components/api-reference/api-endpoint.tsx` — endpoint detail display
 - `components/api-reference/api-response.tsx` — response schema/example panel
 
-**Data source**: Build endpoint definitions from the existing backend routes (`backend/` directory) or hardcode initial content based on the sketch. Add `// TODO: generate from OpenAPI spec` comments where appropriate.
+**Data source**: Build endpoint definitions from the existing API routes (`api/src/routes/` directory) or hardcode initial content based on the sketch. Add `// TODO: generate from OpenAPI spec` comments where appropriate.
 
 **How to verify**:
 

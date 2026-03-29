@@ -75,6 +75,8 @@ export function UserAvatarMenu() {
           className="flex h-10 w-10 items-center justify-center overflow-hidden rounded-full border border-[var(--border)] bg-[var(--surface)] transition-colors hover:border-[var(--border-strong)]"
         >
           {viewer.image ? (
+            // Avatar hosts come from auth providers, so we intentionally avoid a global next/image allowlist here.
+            // eslint-disable-next-line @next/next/no-img-element
             <img
               src={viewer.image}
               alt=""
@@ -93,6 +95,8 @@ export function UserAvatarMenu() {
               <div className="flex items-center gap-3">
                 <div className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-full border border-[var(--border)] bg-[var(--surface)]">
                   {viewer.image ? (
+                    // Avatar hosts come from auth providers, so we intentionally avoid a global next/image allowlist here.
+                    // eslint-disable-next-line @next/next/no-img-element
                     <img src={viewer.image} alt="" className="h-full w-full object-cover" />
                   ) : (
                     <span className="text-sm font-semibold text-[var(--foreground-secondary)]">

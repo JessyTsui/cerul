@@ -640,9 +640,7 @@ function buildRangeQuery(range: AdminRange): string {
 export function normalizeAdminSummary(payload: unknown): AdminSummary {
   const raw = ensureObject(payload, "Invalid admin summary response.");
   const metrics = ensureObject(raw.metrics, "Admin summary is missing metrics.");
-  const workerSeriesPayload = Array.isArray(raw.workers_series)
-    ? raw.workers_series
-    : raw.ingestion_series;
+  const workerSeriesPayload = raw.workers_series;
 
   return {
     generatedAt: typeof raw.generated_at === "string" ? raw.generated_at : "",
@@ -1192,7 +1190,7 @@ export const admin = {
 
   async getWorkers(range: AdminRange): Promise<AdminWorkersSummary> {
     const payload = await fetchWithAuth<unknown>(
-      `/admin/ingestion/summary${buildRangeQuery(range)}`,
+      `/admin/workers/summary${buildRangeQuery(range)}`,
       {
         method: "GET",
         cache: "no-store",

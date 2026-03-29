@@ -35,7 +35,7 @@ Please do not add an MCP layer unless there is a documented reason and a clear u
 ```text
 frontend/     Next.js application
 api/          Hono / Cloudflare Workers API
-workers/      Indexing pipelines, ingestion workers, and shared Python helpers
+workers/      Indexing pipelines, background workers, and shared Python helpers
 docs/         Public project docs
 db/           Migrations and public-safe seeds
 skills/       Installable agent skills

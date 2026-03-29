@@ -127,12 +127,6 @@ export function createAdminRouter(): any {
     return c.json(await fetchWorkersSummary(db, parseAdminRange(c.req.query("range"))));
   });
 
-  // Backward compat — remove after next API deploy
-  router.get("/ingestion/summary", async (c: any) => {
-    const db = c.get("db") as DatabaseClient;
-    return c.json(await fetchWorkersSummary(db, parseAdminRange(c.req.query("range"))));
-  });
-
   router.get("/targets", async (c: any) => {
     const db = c.get("db") as DatabaseClient;
     return c.json(await fetchTargetsSummary(db, parseAdminRange(c.req.query("range"))));

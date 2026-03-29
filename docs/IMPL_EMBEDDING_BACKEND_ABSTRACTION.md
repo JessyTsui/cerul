@@ -2,6 +2,8 @@
 
 > **给 Codex 的实现指令文档**
 > 实现后不切换默认后端，仍然用 Gemini。只是让代码支持通过环境变量无缝切换。
+>
+> 注：下面的文件路径已经按当前 monorepo 结构更新，worker 侧 embedding 实现在 `workers/common/embedding/*`，API 侧 provider 分派在 `api/src/services/embedding.ts`。
 
 ---
 
@@ -40,7 +42,7 @@ EMBEDDING_BACKEND=gemini
 
 ## 2. EmbeddingBackend 接口规范
 
-**文件：`backend/app/embedding/base.py`**（如果不存在就新建）
+**文件：`workers/common/embedding/base.py`**（如果不存在就新建）
 
 确保 `EmbeddingBackend` 基类/协议有以下方法：
 
@@ -84,7 +86,7 @@ class EmbeddingBackend(Protocol):
 
 ## 3. 新增 OpenAI Compatible Embedding Backend
 
-**新文件：`backend/app/embedding/openai_compatible.py`**
+**新文件：`workers/common/embedding/openai_compatible.py`**
 
 ```python
 """
@@ -242,7 +244,7 @@ class OpenAICompatibleEmbeddingBackend:
 
 ## 4. 工厂函数
 
-**文件：`backend/app/embedding/__init__.py`**
+**文件：`workers/common/embedding/__init__.py`**
 
 新增工厂函数：
 
@@ -280,8 +282,8 @@ def create_embedding_backend(
 
 **文件列表：**
 
-- `backend/app/search/unified.py` — UnifiedSearchService 初始化 embedding backend 的地方
-- `backend/app/routers/search.py` — 如果这里有创建 embedding backend
+- `workers/common/embedding/__init__.py` — `create_embedding_backend()` 的工厂入口
+- `api/src/services/embedding.ts` — API 侧 embedding client 的 provider 分派
 - `workers/unified/pipeline.py` — UnifiedIndexingPipeline.__init__ 中的 `GeminiEmbeddingBackend(output_dimension=...)`
 - `workers/knowledge/pipeline.py` — KnowledgeIndexingPipeline 中创建 embedding backend 的地方
 
@@ -341,7 +343,7 @@ embedding:
 
 ### 新增测试
 
-**文件：`backend/tests/test_embedding_backends.py`**（新建）
+**文件：`workers/tests/test_openai_compatible_embedding.py`**（新建）
 
 ```python
 def test_create_embedding_backend_default_is_gemini():
@@ -371,8 +373,8 @@ def test_openai_compatible_dimension():
 
 ### 回归测试
 
-- `pytest backend/tests -q` 全部通过
 - `pytest workers/tests -q` 全部通过
+- `npm --prefix api run check` 全部通过
 - 启动服务（`./rebuild.sh --fast`），搜索功能正常（默认仍用 Gemini）
 
 ---

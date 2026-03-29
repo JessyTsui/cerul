@@ -853,7 +853,6 @@ export async function fetchAdminSummary(db: DatabaseClient, rangeKey: string): P
     metrics,
     request_series: series,
     content_series: series,
-    ingestion_series: series,
     workers_series: series,
     notices
   };

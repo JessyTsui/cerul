@@ -16,7 +16,7 @@ print_help() {
   cat <<'EOF'
 Usage: ./run-worker.sh [OPTIONS]
 
-Start the Cerul ingestion worker independently from the dev server.
+Start the Cerul indexing worker independently from the dev server.
 
 Options:
   -c, --concurrency N   Number of concurrent jobs (default: auto based on CPU)

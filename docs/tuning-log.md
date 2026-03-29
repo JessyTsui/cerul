@@ -31,7 +31,7 @@ Config: embedding-only mode, `candidate_mult=8`, `rerank_top_n=20`, `mmr_lambda=
 
 **Result:** NDCG@5 +9.7%, MRR +18.6%, Hit@3 +10.7% over embedding-only baseline.
 
-**Files changed:** `backend/app/search/rerank.py` (added `JinaRerankerBackend`), `config/base.yaml` (`rerank_model: jina-reranker-v3`).
+**Files changed:** `api/src/services/rerank.ts` (added `JinaRerankerBackend`), `config/base.yaml` (`rerank_model: jina-reranker-v3`).
 
 #### 2. rerank_top_n: 20 → 30
 
