@@ -81,8 +81,9 @@ if [ -z "${DATABASE_URL:-}" ]; then
   exit 1
 fi
 
-# Build args
-ARGS=("--db-url" "${DATABASE_URL}")
+# Build args — DATABASE_URL is read from the environment by worker.py
+# so we do NOT pass --db-url to avoid leaking credentials via `ps`.
+ARGS=()
 
 if [ -n "${CONCURRENCY}" ]; then
   ARGS+=("--concurrency" "${CONCURRENCY}")
