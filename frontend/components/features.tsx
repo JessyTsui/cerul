@@ -62,23 +62,12 @@ interface FeatureCardProps {
 }
 
 function FeatureCard({ icon, title, description, href }: FeatureCardProps) {
-  const CardWrapper = href
-    ? ({ children }: { children: React.ReactNode }) => (
-        <Link
-          href={href as Route}
-          className="group block h-full rounded-3xl border border-[var(--border)] bg-[var(--surface)] p-8 transition-all duration-300 hover:border-[var(--border-brand)] hover:bg-[var(--surface-hover)] hover:shadow-[0_0_40px_-10px_rgba(136,165,242,0.15)]"
-        >
-          {children}
-        </Link>
-      )
-    : ({ children }: { children: React.ReactNode }) => (
-        <div className="h-full rounded-3xl border border-[var(--border)] bg-[var(--surface)] p-8 transition-all duration-300 hover:border-[var(--border-strong)] hover:bg-[var(--surface-hover)]">
-          {children}
-        </div>
-      );
+  const wrapperClassName = href
+    ? "group block h-full rounded-3xl border border-[var(--border)] bg-[var(--surface)] p-8 transition-all duration-300 hover:border-[var(--border-brand)] hover:bg-[var(--surface-hover)] hover:shadow-[0_0_40px_-10px_rgba(136,165,242,0.15)]"
+    : "group h-full rounded-3xl border border-[var(--border)] bg-[var(--surface)] p-8 transition-all duration-300 hover:border-[var(--border-strong)] hover:bg-[var(--surface-hover)]";
 
-  return (
-    <CardWrapper>
+  const content = (
+    <>
       <div className="mb-5 inline-flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-[var(--brand-subtle)] to-transparent text-[var(--brand-bright)] ring-1 ring-[var(--border-brand)] transition-transform duration-300 group-hover:scale-110">
         {icon}
       </div>
@@ -88,7 +77,7 @@ function FeatureCard({ icon, title, description, href }: FeatureCardProps) {
       <p className="mt-3 text-[15px] leading-relaxed text-[var(--foreground-secondary)]">
         {description}
       </p>
-      {href && (
+      {href ? (
         <div className="mt-5 flex items-center gap-2 text-sm font-medium text-[var(--brand-bright)] transition-colors group-hover:text-[var(--foreground)]">
           Learn more
           <svg
@@ -105,9 +94,19 @@ function FeatureCard({ icon, title, description, href }: FeatureCardProps) {
             />
           </svg>
         </div>
-      )}
-    </CardWrapper>
+      ) : null}
+    </>
   );
+
+  if (href) {
+    return (
+      <Link href={href as Route} className={wrapperClassName}>
+        {content}
+      </Link>
+    );
+  }
+
+  return <div className={wrapperClassName}>{content}</div>;
 }
 
 interface FeatureGridProps {
@@ -121,7 +120,7 @@ interface FeatureGridProps {
 export function FeatureGrid({ features }: FeatureGridProps) {
   return (
     <div className="grid gap-px overflow-hidden rounded-[28px] bg-[var(--border)] sm:grid-cols-2 lg:grid-cols-4">
-      {features.map((feature, index) => (
+      {features.map((feature) => (
         <div
           key={feature.title}
           className="group bg-[var(--background)] p-8 transition-colors duration-300 hover:bg-[var(--surface)]"

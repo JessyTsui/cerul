@@ -96,8 +96,8 @@ export default async function DocDetailPage({ params }: DocPageProps) {
                   <Link href="/docs/api-reference" className="button-secondary">
                     API Reference
                   </Link>
-                  <Link href="/search" className="button-secondary">
-                    Playground
+                  <Link href="/docs/quickstart" className="button-secondary">
+                    Quickstart
                   </Link>
                 </div>
 
@@ -165,7 +165,7 @@ export default async function DocDetailPage({ params }: DocPageProps) {
             subtitle="Jump to the part of the guide you need."
             actions={[
               { label: "Get API key", href: "/signup" },
-              { label: "Open playground", href: "/search" },
+              { label: "Read quickstart", href: "/docs/quickstart" },
             ]}
           />
         </div>

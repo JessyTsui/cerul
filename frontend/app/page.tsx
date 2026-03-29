@@ -1,6 +1,5 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import Image from "next/image";
 import { SiteFooter } from "@/components/site-footer";
 import { SiteHeader } from "@/components/site-header";
 import { Features } from "@/components/features";
@@ -198,10 +197,10 @@ export default function HomePage() {
                     </p>
 
                     <div className="mt-6 flex flex-wrap items-center gap-4">
-                      <Link href="/search" className="button-gradient">
-                        Open playground
+                      <Link href="/signup" className="button-gradient">
+                        Get API key
                       </Link>
-                      <Link href="/docs" className="button-secondary">
+                      <Link href="/docs/quickstart" className="button-secondary">
                         Read quickstart
                       </Link>
                     </div>
@@ -311,8 +310,8 @@ export default function HomePage() {
                       Start building today with our free tier. No credit card required.
                     </p>
                     <div className="mt-8 flex flex-wrap items-center justify-center gap-4">
-                      <Link href="/search" className="button-gradient">
-                        Try it out
+                      <Link href="/signup" className="button-gradient">
+                        Get started
                       </Link>
                       <Link href="/docs" className="button-secondary">
                         Read the docs

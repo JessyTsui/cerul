@@ -578,15 +578,14 @@ export const docsShellTabs = [
   { label: "Home", href: "/docs" },
   { label: "Introduction", href: "/docs/quickstart" },
   { label: "API & SDKs", href: "/docs/api-reference" },
-  { label: "Playground", href: "/search" },
   { label: "Pricing", href: "/pricing" },
 ] as const;
 
 export const docsUtilityLinks = [
   {
-    title: "API Playground",
-    href: "/search",
-    description: "Test one request in the Cerul playground.",
+    title: "Quickstart",
+    href: "/docs/quickstart",
+    description: "Make your first authenticated request against Cerul.",
   },
   {
     title: "GitHub",

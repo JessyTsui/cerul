@@ -241,4 +241,34 @@ describe("console proxy route", () => {
     });
     expect(global.fetch).toHaveBeenCalledTimes(1);
   });
+
+  it("returns a controlled proxy error when reading the request body fails", async () => {
+    const request = new NextRequest(
+      "http://127.0.0.1:3000/api/console/admin/targets",
+      {
+        method: "PUT",
+        headers: {
+          accept: "application/json",
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          maxRequestLatencyMs: 3000,
+        }),
+      },
+    );
+
+    request.arrayBuffer = vi.fn().mockRejectedValue(new Error("stream closed"));
+
+    const response = await PUT(request, {
+      params: Promise.resolve({
+        path: ["admin", "targets"],
+      }),
+    });
+
+    expect(response.status).toBe(502);
+    expect(await response.json()).toEqual({
+      detail: "Console API proxy could not reach the backend.",
+    });
+    expect(global.fetch).not.toHaveBeenCalled();
+  });
 });

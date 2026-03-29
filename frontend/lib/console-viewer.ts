@@ -1,6 +1,6 @@
 import { sql } from "kysely";
 import { cache } from "react";
-import { getAuthDatabase } from "./auth-db";
+import { getAuthDatabase, withAuthDatabaseRecovery } from "./auth-db";
 import { getServerSession } from "./auth-server";
 import { getConfiguredAdminEmails } from "./console-settings";
 
@@ -78,11 +78,13 @@ export const getConsoleViewer = cache(async function getConsoleViewer(): Promise
     return cached.value;
   }
 
-  const result = await sql<ConsoleProfileRow>`
-    SELECT id, email, display_name, console_role
-    FROM user_profiles
-    WHERE id = ${session.user.id}
-  `.execute(getAuthDatabase());
+  const result = await withAuthDatabaseRecovery(() =>
+    sql<ConsoleProfileRow>`
+      SELECT id, email, display_name, console_role
+      FROM user_profiles
+      WHERE id = ${session.user.id}
+    `.execute(getAuthDatabase()),
+  );
 
   const profile = result.rows[0] ?? null;
   const email = normalizeEmail(profile?.email ?? session.user.email ?? null);

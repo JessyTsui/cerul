@@ -348,7 +348,7 @@ export default function ApiReferencePage() {
             subtitle="Jump between the introduction and each stable public route."
             actions={[
               { label: "Get API key", href: "/signup" },
-              { label: "Open playground", href: "/search" },
+              { label: "Read quickstart", href: "/docs/quickstart" },
             ]}
           />
         </div>

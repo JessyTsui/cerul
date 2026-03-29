@@ -1,3 +1,4 @@
+import type { Route } from "next";
 import Link from "next/link";
 import { BrandMark } from "./brand-mark";
 import { FadeIn } from "./animations";
@@ -8,7 +9,6 @@ export function SiteFooter() {
       title: "Product",
       links: [
         { label: "Search API", href: "/docs" },
-        { label: "Playground", href: "/search" },
         { label: "Pricing", href: "/pricing" },
         { label: "Dashboard", href: "/dashboard" },
       ],
@@ -87,7 +87,7 @@ export function SiteFooter() {
                       </a>
                     ) : (
                       <Link
-                        href={link.href}
+                        href={link.href as Route}
                         className="text-[15px] text-[var(--foreground-secondary)] transition hover:text-[var(--foreground)]"
                       >
                         {link.label}

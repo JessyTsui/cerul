@@ -272,7 +272,7 @@ export default function DocsPage() {
             subtitle="Use this page as the map for the rest of the docs."
             actions={[
               { label: "Get API key", href: "/signup" },
-              { label: "Open playground", href: "/search" },
+              { label: "Read quickstart", href: "/docs/quickstart" },
             ]}
           />
         </div>

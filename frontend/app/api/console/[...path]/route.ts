@@ -236,11 +236,12 @@ async function proxyConsoleRequest(
       { status: 503 },
     );
   }
-  const requestBody = canIncludeBody(request.method)
-    ? await readRequestBody(request)
-    : undefined;
 
   try {
+    const requestBody = canIncludeBody(request.method)
+      ? await readRequestBody(request)
+      : undefined;
+
     let response = await fetchUpstreamResponse({
       request,
       upstreamUrl,

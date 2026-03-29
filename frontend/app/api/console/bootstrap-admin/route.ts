@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { sql } from "kysely";
-import { getAuthDatabase } from "@/lib/auth-db";
+import { getAuthDatabase, withAuthDatabaseRecovery } from "@/lib/auth-db";
 import { getServerSessionUncached } from "@/lib/auth-server";
 import {
   getConfiguredAdminEmails,
@@ -25,31 +25,33 @@ async function promoteCurrentUserToAdminIfEligible(input: {
   const normalizedEmail = input.email?.trim().toLowerCase() ?? null;
   const displayName = input.name?.trim() || null;
 
-  return getAuthDatabase().transaction().execute(async (trx) => {
-    await sql`SELECT pg_advisory_xact_lock(${BOOTSTRAP_ADMIN_LOCK_KEY})`.execute(trx);
+  return withAuthDatabaseRecovery(() =>
+    getAuthDatabase().transaction().execute(async (trx) => {
+      await sql`SELECT pg_advisory_xact_lock(${BOOTSTRAP_ADMIN_LOCK_KEY})`.execute(trx);
 
-    const adminCount = await sql<{ count: number }>`
-      SELECT COUNT(*)::int AS count
-      FROM user_profiles
-      WHERE console_role = 'admin' AND id <> ${input.userId}
-    `.execute(trx);
+      const adminCount = await sql<{ count: number }>`
+        SELECT COUNT(*)::int AS count
+        FROM user_profiles
+        WHERE console_role = 'admin' AND id <> ${input.userId}
+      `.execute(trx);
 
-    if (Number(adminCount.rows[0]?.count ?? 0) > 0) {
-      return "admin_exists";
-    }
+      if (Number(adminCount.rows[0]?.count ?? 0) > 0) {
+        return "admin_exists";
+      }
 
-    await sql`
-      INSERT INTO user_profiles (id, email, display_name, console_role)
-      VALUES (${input.userId}, ${normalizedEmail}, ${displayName}, 'admin')
-      ON CONFLICT (id) DO UPDATE
-      SET email = COALESCE(EXCLUDED.email, user_profiles.email),
-          display_name = COALESCE(EXCLUDED.display_name, user_profiles.display_name),
-          console_role = 'admin',
-          updated_at = NOW()
-    `.execute(trx);
+      await sql`
+        INSERT INTO user_profiles (id, email, display_name, console_role)
+        VALUES (${input.userId}, ${normalizedEmail}, ${displayName}, 'admin')
+        ON CONFLICT (id) DO UPDATE
+        SET email = COALESCE(EXCLUDED.email, user_profiles.email),
+            display_name = COALESCE(EXCLUDED.display_name, user_profiles.display_name),
+            console_role = 'admin',
+            updated_at = NOW()
+      `.execute(trx);
 
-    return "promoted";
-  });
+      return "promoted";
+    }),
+  );
 }
 
 export async function POST(request: NextRequest) {

@@ -182,8 +182,8 @@ export function AdminSidebar({ currentPath }: AdminSidebarProps) {
             </p>
             <div className="mt-3 space-y-1.5">
               {[
-                { href: "/search", label: "Search playground" },
                 { href: "/docs", label: "Documentation" },
+                { href: "/docs/api-reference", label: "API reference" },
                 { href: ACCOUNT_SETTINGS_ROUTE, label: "Account settings" },
               ].map((item) => (
                 <Link
