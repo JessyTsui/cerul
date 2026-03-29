@@ -954,7 +954,10 @@ export async function fetchWorkerNodes(
               pj.locked_by = wh.worker_id
               OR pj.locked_by LIKE wh.worker_id || '-slot-%'
           )
-         AND pj.updated_at >= NOW() - INTERVAL '24 hours'
+         AND (
+             pj.status = 'running'
+             OR pj.updated_at >= NOW() - INTERVAL '24 hours'
+         )
       GROUP BY
           wh.worker_id,
           wh.hostname,

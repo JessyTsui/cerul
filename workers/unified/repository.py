@@ -337,7 +337,6 @@ class AsyncpgUnifiedRepository:
                         error_message = NULL,
                         completed_at = NOW(),
                         next_retry_at = NULL,
-                        locked_by = NULL,
                         locked_at = NULL,
                         updated_at = NOW()
                     WHERE id = $1::uuid
