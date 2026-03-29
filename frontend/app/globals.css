@@ -547,6 +547,41 @@ button:focus-visible,
   box-shadow: 0 0 30px var(--accent-glow);
 }
 
+.glow-cyan {
+  box-shadow: 0 0 15px -3px rgba(6, 182, 212, 0.3);
+}
+
+.text-glow-cyan {
+  text-shadow: 0 0 10px rgba(6, 182, 212, 0.5);
+}
+
+/* Admin sidebar active nav item */
+.active-nav-item {
+  background: linear-gradient(90deg, rgba(6, 182, 212, 0.1) 0%, transparent 100%);
+  border-left: 3px solid #06b6d4;
+  color: #fff;
+}
+
+/* Card with gradient border (top-to-bottom fade) */
+.card-border-gradient {
+  position: relative;
+  background: #111827;
+  border-radius: 0.75rem;
+}
+
+.card-border-gradient::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 0.75rem;
+  padding: 1px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.1) 0%, rgba(255, 255, 255, 0) 100%);
+  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  pointer-events: none;
+}
+
 /* Gradient borders */
 .gradient-border {
   position: relative;

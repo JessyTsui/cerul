@@ -8,6 +8,7 @@ export type ConsoleViewer = {
   userId: string;
   email: string | null;
   displayName: string | null;
+  image: string | null;
   consoleRole: string;
   isAdmin: boolean;
 };
@@ -90,10 +91,15 @@ export const getConsoleViewer = cache(async function getConsoleViewer(): Promise
   const adminEmails = getConfiguredAdminEmails();
   const isAdmin = normalizedRole === "admin" || (email !== null && adminEmails.has(email));
 
+  const image = typeof session.user.image === "string" && session.user.image.trim()
+    ? session.user.image.trim()
+    : null;
+
   const viewer = {
     userId: session.user.id,
     email,
     displayName,
+    image,
     consoleRole: isAdmin ? "admin" : "user",
     isAdmin,
   };

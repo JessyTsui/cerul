@@ -632,121 +632,133 @@ export function WorkerLivePanel() {
   const failedRangeEnd = Math.min(data.failedJobsOffset + failedJobs.length, failedJobsTotal);
 
   return (
-    <section className="space-y-3">
+    <section className="space-y-4">
+      {/* Queue status bar */}
       <div className="flex flex-wrap items-center gap-2">
-        <span className="text-xs font-semibold text-white">Worker</span>
         {[
-          { label: "pending", value: queue.pending, color: "text-[var(--foreground-secondary)]" },
-          { label: "running", value: queue.running, color: "text-blue-300" },
-          { label: "retrying", value: queue.retrying, color: "text-amber-300" },
+          { label: "pending", value: queue.pending, color: "text-slate-300" },
+          { label: "running", value: queue.running, color: "text-blue-400" },
+          { label: "retrying", value: queue.retrying, color: "text-amber-400" },
           { label: "completed", value: queue.completed, color: "text-emerald-400" },
           { label: "failed", value: queue.failed, color: "text-red-400" },
         ].map(({ label, value, color }) => (
-          <span key={label} className="rounded-full border border-[var(--border)] px-2.5 py-0.5 text-xs">
+          <span key={label} className="rounded border border-slate-700 bg-[#151c2c] px-2.5 py-1 text-xs">
             <span className={`font-semibold ${color}`}>{value}</span>{" "}
-            <span className="text-[var(--foreground-tertiary)]">{label}</span>
+            <span className="text-slate-500">{label}</span>
           </span>
         ))}
-        <span className="ml-auto text-[10px] text-[var(--foreground-tertiary)]">
-          {error ? <span className="text-red-400">{error}</span> : "↻ 4s"}
+        <span className="ml-auto text-[10px] text-slate-500">
+          {error ? <span className="text-red-400">{error}</span> : "Auto-refresh 4s"}
         </span>
       </div>
 
       {activeJobs.length === 0 && recentCompleted.length === 0 && failedJobs.length === 0 ? (
-        <p className="text-xs text-[var(--foreground-tertiary)]">No active or recent jobs.</p>
+        <div className="card-border-gradient p-6 text-center">
+          <p className="text-sm text-slate-500">No active or recent jobs.</p>
+        </div>
       ) : (
-        <div className="grid gap-3 xl:grid-cols-3">
-          {activeJobs.length > 0 ? (
-            <div className="space-y-2">
-              <p className="text-xs text-[var(--foreground-tertiary)]">Active</p>
-              {activeJobs.map((job) => (
-                <ActiveJobCard key={job.jobId} job={job} referenceNowMs={referenceNowMs} />
-              ))}
-            </div>
-          ) : null}
-
-          {recentCompleted.length > 0 ? (
-            <div className="space-y-2">
-              <p className="text-xs text-[var(--foreground-tertiary)]">Recently completed</p>
-              <article className="surface divide-y divide-[var(--border)]">
-                {recentCompleted.map((job) => (
-                  <div key={job.jobId} className="flex items-center justify-between gap-3 px-4 py-2.5">
-                    <div className="min-w-0">
-                      <p className="truncate text-xs text-[var(--foreground-secondary)]">
-                        {job.title ?? job.videoId ?? job.jobId.slice(0, 8)}
-                      </p>
-                      {typeof job.totalDurationMs === "number" ? (
-                        <p className="mt-0.5 text-[10px] text-[var(--foreground-tertiary)]">
-                          {formatDuration(job.totalDurationMs)}
-                        </p>
-                      ) : null}
-                    </div>
-                    <div className="shrink-0 text-right">
-                      <span className="text-xs text-emerald-400">{job.segmentCount} seg</span>
-                    </div>
+        <div className="flex gap-4">
+          {/* Main column: Active jobs */}
+          <div className="flex-1 space-y-3">
+            {activeJobs.length > 0 ? (
+              <>
+                {activeJobs.map((job) => (
+                  <div key={job.jobId} className="card-border-gradient relative overflow-hidden border border-cyan-500/30 p-5">
+                    {/* Glow background */}
+                    <div className="pointer-events-none absolute right-0 top-0 h-64 w-64 bg-cyan-500/5 blur-3xl" />
+                    <ActiveJobCard job={job} referenceNowMs={referenceNowMs} />
                   </div>
                 ))}
-              </article>
-            </div>
-          ) : null}
-
-          {failedJobs.length > 0 ? (
-            <div className="space-y-2">
-              <div className="flex items-center gap-2">
-                <p className="text-xs text-[var(--foreground-tertiary)]">Failed Jobs</p>
-                <span className="rounded-full border border-red-500/30 px-2 py-0.5 text-[10px] text-red-300">
-                  {failedJobsTotal}
-                </span>
-              </div>
-              <div className="space-y-2">
-                {failedJobs.map((job) => (
-                  <FailedJobCard
-                    key={job.jobId}
-                    job={job}
-                    referenceNowMs={referenceNowMs}
-                    retrying={retryingJobIds.has(job.jobId)}
-                    killing={killingJobIds.has(job.jobId)}
-                    onRetry={handleRetry}
-                    onKill={handleKill}
-                  />
-                ))}
-              </div>
-              {failedJobsTotal > FAILED_JOBS_PAGE_SIZE ? (
-                <div className="flex items-center justify-between gap-3 rounded-xl border border-[var(--border)]/70 px-3 py-2 text-[11px] text-[var(--foreground-secondary)]">
-                  <p>
-                    Showing {failedRangeStart}-{failedRangeEnd} of {failedJobsTotal}
-                  </p>
-                  <div className="flex items-center gap-2">
-                    <button
-                      type="button"
-                      onClick={() =>
-                        setFailedOffset((current) =>
-                          Math.max(current - FAILED_JOBS_PAGE_SIZE, 0),
-                        )
-                      }
-                      disabled={data.failedJobsOffset === 0}
-                      className="rounded-md border border-[var(--border)] px-2.5 py-1 disabled:cursor-not-allowed disabled:opacity-40"
-                    >
-                      Prev
-                    </button>
-                    <span className="text-[10px] text-[var(--foreground-tertiary)]">
-                      Page {failedCurrentPage} / {failedTotalPages}
-                    </span>
-                    <button
-                      type="button"
-                      onClick={() =>
-                        setFailedOffset((current) => current + FAILED_JOBS_PAGE_SIZE)
-                      }
-                      disabled={data.failedJobsOffset + FAILED_JOBS_PAGE_SIZE >= failedJobsTotal}
-                      className="rounded-md border border-[var(--border)] px-2.5 py-1 disabled:cursor-not-allowed disabled:opacity-40"
-                    >
-                      Next
-                    </button>
+              </>
+            ) : (
+              <div className="card-border-gradient p-5">
+                <div className="flex items-center gap-3">
+                  <div className="flex h-10 w-10 items-center justify-center rounded border border-slate-700 bg-slate-800">
+                    <svg className="h-5 w-5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M5 12h14M5 12a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v4a2 2 0 01-2 2M5 12a2 2 0 00-2 2v4a2 2 0 002 2h14a2 2 0 002-2v-4a2 2 0 00-2-2m-2-4h.01M17 16h.01" strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} /></svg>
                   </div>
+                  <div>
+                    <h3 className="text-sm font-semibold text-white">Worker Idle</h3>
+                    <p className="text-[10px] text-slate-400">No active jobs in progress</p>
+                  </div>
+                  <span className="ml-auto rounded border border-emerald-500/30 bg-emerald-500/10 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-400">IDLE</span>
                 </div>
-              ) : null}
-            </div>
-          ) : null}
+              </div>
+            )}
+          </div>
+
+          {/* Side column: Recent completed + Failed */}
+          <div className="w-72 shrink-0 space-y-3">
+            {recentCompleted.length > 0 ? (
+              <div className="card-border-gradient p-4">
+                <p className="mb-3 text-[10px] font-semibold uppercase tracking-wider text-slate-400">Recently Completed</p>
+                <div className="divide-y divide-slate-800/50">
+                  {recentCompleted.map((job) => (
+                    <div key={job.jobId} className="flex items-center justify-between gap-2 py-2">
+                      <div className="min-w-0">
+                        <p className="truncate text-xs text-slate-300">
+                          {job.title ?? job.videoId ?? job.jobId.slice(0, 8)}
+                        </p>
+                        {typeof job.totalDurationMs === "number" ? (
+                          <p className="mt-0.5 text-[10px] text-slate-500">{formatDuration(job.totalDurationMs)}</p>
+                        ) : null}
+                      </div>
+                      <span className="shrink-0 text-xs text-emerald-400">{job.segmentCount} seg</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ) : null}
+
+            {failedJobs.length > 0 ? (
+              <div className="card-border-gradient p-4">
+                <div className="mb-3 flex items-center justify-between">
+                  <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">Failed</p>
+                  <span className="rounded border border-red-500/30 bg-red-500/10 px-1.5 py-0.5 text-[10px] font-semibold text-red-400">
+                    {failedJobsTotal}
+                  </span>
+                </div>
+                <div className="space-y-2">
+                  {failedJobs.map((job) => (
+                    <FailedJobCard
+                      key={job.jobId}
+                      job={job}
+                      referenceNowMs={referenceNowMs}
+                      retrying={retryingJobIds.has(job.jobId)}
+                      killing={killingJobIds.has(job.jobId)}
+                      onRetry={handleRetry}
+                      onKill={handleKill}
+                    />
+                  ))}
+                </div>
+                {failedJobsTotal > FAILED_JOBS_PAGE_SIZE ? (
+                  <div className="mt-3 flex items-center justify-between gap-2 text-[10px] text-slate-400">
+                    <p>{failedRangeStart}-{failedRangeEnd} of {failedJobsTotal}</p>
+                    <div className="flex items-center gap-1">
+                      <button
+                        type="button"
+                        onClick={() => setFailedOffset((current) => Math.max(current - FAILED_JOBS_PAGE_SIZE, 0))}
+                        disabled={data.failedJobsOffset === 0}
+                        className="rounded border border-slate-700 px-2 py-0.5 text-slate-400 transition-colors hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
+                      >
+                        Prev
+                      </button>
+                      <span className="text-slate-500">
+                        {failedCurrentPage}/{failedTotalPages}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => setFailedOffset((current) => current + FAILED_JOBS_PAGE_SIZE)}
+                        disabled={data.failedJobsOffset + FAILED_JOBS_PAGE_SIZE >= failedJobsTotal}
+                        className="rounded border border-slate-700 px-2 py-0.5 text-slate-400 transition-colors hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
+                      >
+                        Next
+                      </button>
+                    </div>
+                  </div>
+                ) : null}
+              </div>
+            ) : null}
+          </div>
         </div>
       )}
     </section>

@@ -637,5 +637,60 @@ export function createDashboardRouter(): any {
     }
   });
 
+  // ---- Avatar upload ----
+
+  const AVATAR_ALLOWED_TYPES: Record<string, string> = {
+    "image/jpeg": ".jpg",
+    "image/png": ".png",
+    "image/webp": ".webp"
+  };
+  const AVATAR_MAX_SIZE = 2 * 1024 * 1024;
+
+  router.post("/user/avatar", sessionAuth(), async (c: any) => {
+    const session = c.get("session") as DashboardSession;
+    const config = c.get("config");
+    const env = c.env;
+    const bucket = env.QUERY_IMAGES_BUCKET;
+
+    if (!bucket) {
+      apiError(503, "File storage is not configured.");
+    }
+
+    const formData = await c.req.formData();
+    const file = formData.get("file");
+
+    if (!file || !(file instanceof File)) {
+      apiError(400, "Missing file field in upload.");
+    }
+
+    if (file.size > AVATAR_MAX_SIZE) {
+      apiError(400, `Avatar too large: ${file.size} bytes (max ${AVATAR_MAX_SIZE}).`);
+    }
+
+    const mimeType = (file.type || "").split(";")[0].trim().toLowerCase();
+    const extension = AVATAR_ALLOWED_TYPES[mimeType];
+
+    if (!extension) {
+      apiError(400, `Unsupported image type: ${mimeType || "unknown"}. Use JPEG, PNG, or WebP.`);
+    }
+
+    const bytes = new Uint8Array(await file.arrayBuffer());
+    const hash = await sha256Hex(bytes);
+    const key = `user-avatars/${session.userId}/${hash}${extension}`;
+
+    await bucket.put(key, bytes, {
+      httpMetadata: {
+        contentType: mimeType,
+        cacheControl: "public, max-age=31536000, immutable"
+      }
+    });
+
+    const publicUrl = config.r2.publicUrl
+      ? `${config.r2.publicUrl}/${key}`
+      : key;
+
+    return c.json({ url: publicUrl });
+  });
+
   return router;
 }
