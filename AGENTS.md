@@ -180,7 +180,7 @@ Commit rules:
 - prefer clean history over high commit volume
 
 ### Pull Requests
-Every merge to `main` should go through a PR.
+Every merge to `main` should go through a PR. Always create PRs as **ready for review** (not draft) unless the user explicitly asks for a draft. This is important because our CI triggers automated Codex reviews on non-draft PRs.
 
 PR title rules:
 
