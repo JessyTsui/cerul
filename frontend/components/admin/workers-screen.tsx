@@ -403,14 +403,16 @@ export function AdminWorkersScreen() {
                 Loading worker nodes…
               </div>
             ) : workerNodesError && workerNodes.length === 0 ? (
-              <div className="surface-elevated rounded-[30px] px-5 py-8">
-                <p className="text-sm text-[var(--foreground-tertiary)]">
-                  No worker nodes registered. The heartbeat table may not exist yet, or no workers have started.
-                </p>
-                <p className="mt-2 text-xs text-[var(--foreground-tertiary)]">
-                  Workers will appear here once they start sending heartbeats.
-                </p>
-              </div>
+              <DashboardState
+                action={
+                  <button className="button-primary" onClick={() => void loadWorkerNodes()} type="button">
+                    Retry
+                  </button>
+                }
+                description={workerNodesError}
+                title="Worker nodes could not be loaded"
+                tone="error"
+              />
             ) : workerNodes.length === 0 ? (
               <div className="surface-elevated rounded-[30px] px-5 py-8 text-sm text-[var(--foreground-tertiary)]">
                 No worker nodes registered. Workers will appear here once they start sending heartbeats.

@@ -88,7 +88,8 @@ function getSourceProgress(analytics: AdminSourceAnalytics | null): {
     return { total: 0, completion: null };
   }
 
-  const total = analytics.jobsCompleted + analytics.jobsFailed + analytics.backlog;
+  const total =
+    analytics.jobsCompleted + analytics.jobsFailed + analytics.running + analytics.backlog;
   return {
     total,
     completion: total === 0 ? null : Math.round((analytics.jobsCompleted / total) * 100),
@@ -1041,6 +1042,12 @@ export function AdminSourcesScreen() {
                               done
                             </span>
                             <span>
+                              <span className="font-semibold text-[var(--brand-bright)]">
+                                {analytics?.running ?? 0}
+                              </span>{" "}
+                              running
+                            </span>
+                            <span>
                               <span className="font-semibold text-[var(--accent-bright)]">
                                 {analytics?.backlog ?? 0}
                               </span>{" "}
@@ -1085,6 +1092,10 @@ export function AdminSourcesScreen() {
                             <DeltaBadge current={analytics.jobsCompleted} previous={analytics.prevJobsCompleted} />
                           ) : null}
                           <span className="ml-1 font-normal text-[var(--foreground-tertiary)]">idx</span>
+                        </span>
+                        <span className="w-[92px] text-right font-semibold text-[var(--brand-bright)]">
+                          {analytics ? analytics.running : 0}
+                          <span className="ml-1 font-normal text-[var(--foreground-tertiary)]">run</span>
                         </span>
                         <span className="w-[92px] text-right font-semibold text-[var(--accent-bright)]">
                           {analytics ? analytics.backlog : 0}
@@ -1242,6 +1253,10 @@ export function AdminSourcesScreen() {
                                     <span className="font-semibold text-[var(--foreground)]">{analytics.jobsCompleted}</span>
                                     <DeltaBadge current={analytics.jobsCompleted} previous={analytics.prevJobsCompleted} />
                                     <span className="ml-1 text-[var(--foreground-tertiary)]">completed</span>
+                                  </div>
+                                  <div>
+                                    <span className="font-semibold text-[var(--brand-bright)]">{analytics.running}</span>
+                                    <span className="ml-1 text-[var(--foreground-tertiary)]">running</span>
                                   </div>
                                   <div>
                                     <span className="font-semibold text-[var(--accent-bright)]">{analytics.backlog}</span>

@@ -413,6 +413,7 @@ export type AdminSourceAnalytics = {
   jobsCreated: number;
   jobsCompleted: number;
   jobsFailed: number;
+  running: number;
   backlog: number;
   prevJobsCreated: number;
   prevJobsCompleted: number;
@@ -1450,6 +1451,7 @@ export const admin = {
             jobsCreated: isFiniteNumber(v.jobs_created) ? v.jobs_created : 0,
             jobsCompleted: isFiniteNumber(v.jobs_completed) ? v.jobs_completed : 0,
             jobsFailed: isFiniteNumber(v.jobs_failed) ? v.jobs_failed : 0,
+            running: isFiniteNumber(v.running) ? v.running : 0,
             backlog: isFiniteNumber(v.backlog) ? v.backlog : 0,
             prevJobsCreated: isFiniteNumber(v.prev_jobs_created) ? v.prev_jobs_created : 0,
             prevJobsCompleted: isFiniteNumber(v.prev_jobs_completed) ? v.prev_jobs_completed : 0,

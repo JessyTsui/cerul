@@ -185,8 +185,9 @@ SET last_heartbeat = NOW()
 WHERE worker_id = $1
 """
 
-DELETE_WORKER_HEARTBEAT_SQL = """
-DELETE FROM worker_heartbeats
+MARK_WORKER_STOPPED_SQL = """
+UPDATE worker_heartbeats
+SET last_heartbeat = NOW() - INTERVAL '5 minutes 1 second'
 WHERE worker_id = $1
 """
 
@@ -216,9 +217,9 @@ async def update_worker_heartbeat(pool: asyncpg.Pool, worker_id: str) -> None:
         await conn.execute(UPDATE_WORKER_HEARTBEAT_SQL, worker_id)
 
 
-async def remove_worker_registration(pool: asyncpg.Pool, worker_id: str) -> None:
+async def mark_worker_stopped(pool: asyncpg.Pool, worker_id: str) -> None:
     async with pool.acquire() as conn:
-        await conn.execute(DELETE_WORKER_HEARTBEAT_SQL, worker_id)
+        await conn.execute(MARK_WORKER_STOPPED_SQL, worker_id)
 
 
 async def heartbeat_loop(
@@ -1139,7 +1140,7 @@ async def main() -> None:
             pass
 
         try:
-            await remove_worker_registration(heartbeat_pool, args.worker_id)
+            await mark_worker_stopped(heartbeat_pool, args.worker_id)
         finally:
             await heartbeat_pool.close()
 

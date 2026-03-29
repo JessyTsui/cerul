@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   admin,
   normalizeAdminIndexedVideos,
+  normalizeAdminWorkerNodesResponse,
   normalizeAdminWorkerLive,
   normalizeAdminSummary,
   normalizeAdminTargetsResponse,
@@ -498,5 +499,140 @@ describe("normalizeAdminWorkerLive", () => {
 
     vi.unstubAllGlobals();
     global.fetch = originalFetch;
+  });
+});
+
+describe("normalizeAdminWorkerNodesResponse", () => {
+  it("normalizes worker node snapshots", () => {
+    const normalized = normalizeAdminWorkerNodesResponse({
+      generated_at: "2026-03-29T10:00:00Z",
+      nodes: [
+        {
+          worker_id: "worker-a",
+          hostname: "host-a",
+          pid: 1234,
+          slots: 3,
+          status: "stale",
+          started_at: "2026-03-29T09:00:00Z",
+          last_heartbeat: "2026-03-29T09:58:00Z",
+          active_jobs: 1,
+          completed_24h: 8,
+          failed_24h: 2,
+          avg_duration_ms_24h: 4200,
+          metadata: {
+            python_version: "3.12.2",
+          },
+        },
+      ],
+    });
+
+    expect(normalized.nodes[0]).toEqual(
+      expect.objectContaining({
+        workerId: "worker-a",
+        hostname: "host-a",
+        status: "stale",
+        completed24h: 8,
+      }),
+    );
+  });
+});
+
+describe("admin data clients", () => {
+  const originalFetch = global.fetch;
+
+  beforeEach(() => {
+    vi.stubGlobal("fetch", vi.fn());
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    global.fetch = originalFetch;
+  });
+
+  it("loads worker nodes from the dedicated workers endpoint", async () => {
+    vi.mocked(global.fetch).mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          generated_at: "2026-03-29T10:00:00Z",
+          nodes: [
+            {
+              worker_id: "worker-a",
+              hostname: "host-a",
+              pid: 1234,
+              slots: 2,
+              status: "online",
+              started_at: "2026-03-29T09:00:00Z",
+              last_heartbeat: "2026-03-29T09:59:45Z",
+              active_jobs: 1,
+              completed_24h: 5,
+              failed_24h: 0,
+              avg_duration_ms_24h: 3200,
+              metadata: {},
+            },
+          ],
+        }),
+        {
+          status: 200,
+          headers: {
+            "Content-Type": "application/json",
+          },
+        },
+      ),
+    );
+
+    const response = await admin.getWorkerNodes();
+
+    expect(response.nodes[0]?.workerId).toBe("worker-a");
+    expect(global.fetch).toHaveBeenCalledWith(
+      "/api/console/admin/workers",
+      expect.objectContaining({
+        credentials: "include",
+        method: "GET",
+      }),
+    );
+  });
+
+  it("preserves running and queued counts in sources analytics", async () => {
+    vi.mocked(global.fetch).mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          generated_at: "2026-03-29T10:00:00Z",
+          range_key: "7d",
+          current_start: "2026-03-23T00:00:00Z",
+          current_end: "2026-03-29T10:00:00Z",
+          sources: [
+            {
+              source_id: "source-1",
+              slug: "demo",
+              display_name: "Demo Source",
+              jobs_created: 9,
+              jobs_completed: 4,
+              jobs_failed: 1,
+              running: 2,
+              backlog: 2,
+              prev_jobs_created: 5,
+              prev_jobs_completed: 3,
+              prev_jobs_failed: 0,
+            },
+          ],
+        }),
+        {
+          status: 200,
+          headers: {
+            "Content-Type": "application/json",
+          },
+        },
+      ),
+    );
+
+    const response = await admin.getSourcesAnalytics("7d");
+
+    expect(response.sources[0]).toEqual(
+      expect.objectContaining({
+        running: 2,
+        backlog: 2,
+        jobsCompleted: 4,
+      }),
+    );
   });
 });
