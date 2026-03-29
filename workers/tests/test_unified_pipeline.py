@@ -998,4 +998,5 @@ def test_asyncpg_unified_repository_skips_completion_step_for_cancelled_job() ->
 
     assert len(connection.execute_calls) == 1
     assert "UPDATE processing_jobs" in connection.execute_calls[0][0]
+    assert "locked_by = NULL" not in connection.execute_calls[0][0]
     assert connection.closed is True

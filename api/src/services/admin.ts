@@ -950,10 +950,10 @@ export async function fetchWorkerNodes(
               ) AS avg_duration_ms_24h
       FROM worker_heartbeats AS wh
       LEFT JOIN processing_jobs AS pj
-          ON (
-              pj.locked_by = wh.worker_id
-              OR pj.locked_by LIKE wh.worker_id || '-slot-%'
-          )
+         ON (
+             pj.locked_by = wh.worker_id
+             OR pj.locked_by LIKE wh.worker_id || '-slot-%'
+         )
          AND (
              pj.status = 'running'
              OR pj.updated_at >= NOW() - INTERVAL '24 hours'
