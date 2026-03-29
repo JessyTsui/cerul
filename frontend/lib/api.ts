@@ -958,7 +958,7 @@ export type {
   AdminContentSummary,
   AdminFailedJob,
   AdminFailedStep,
-  AdminIngestionSummary,
+  AdminWorkersSummary,
   AdminMetricTarget,
   AdminMetricTargetInput,
   AdminMetricValue,

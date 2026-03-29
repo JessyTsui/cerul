@@ -123,21 +123,13 @@ export function AdminSidebar({ currentPath }: AdminSidebarProps) {
         <div className="surface-elevated flex h-full flex-col overflow-hidden rounded-[34px] px-4 py-5">
           <BrandMark />
 
-          <div className="mt-7 rounded-[22px] border border-[var(--border-brand)] bg-[var(--brand-subtle)] px-4 py-4">
-            <p className="text-xs font-medium uppercase tracking-[0.18em] text-[var(--brand-bright)]">
-              Control Room
-            </p>
-            <p className="mt-3 text-sm leading-6 text-[var(--foreground-secondary)]">
-              Internal visibility for demand, workers, content, and operator actions.
-            </p>
-            <Link
-              href={"/dashboard" as Route}
-              className="mt-4 flex items-center justify-between rounded-full bg-white/78 px-3 py-2.5 text-sm font-medium text-[var(--foreground)] transition hover:bg-white"
-            >
-              <span>Back to dashboard</span>
-              <IconHome className="h-4 w-4" />
-            </Link>
-          </div>
+          <Link
+            href={"/dashboard" as Route}
+            className="mt-7 flex items-center justify-between rounded-[18px] border border-[var(--border)] bg-white/56 px-4 py-3 text-sm text-[var(--foreground-secondary)] transition hover:border-[var(--border-strong)] hover:bg-white/78 hover:text-[var(--foreground)]"
+          >
+            <span>Back to dashboard</span>
+            <IconHome className="h-4 w-4" />
+          </Link>
 
           <div className="mt-7">
             <p className="px-3 text-xs font-medium uppercase tracking-[0.18em] text-[var(--foreground-tertiary)]">
@@ -169,9 +161,6 @@ export function AdminSidebar({ currentPath }: AdminSidebarProps) {
                     </span>
                     <div className="min-w-0 flex-1">
                       <p className="text-sm font-medium">{item.label}</p>
-                      <p className="text-xs text-[var(--foreground-tertiary)]">
-                        Page {item.meta}
-                      </p>
                     </div>
                   </Link>
                 );

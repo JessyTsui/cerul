@@ -829,7 +829,7 @@ export async function fetchAdminSummary(db: DatabaseClient, rangeKey: string): P
   if (Number((metrics.failed_jobs as any).current) > 0) {
     notices.push({
       tone: "error",
-      title: "Recent ingestion failures detected",
+      title: "Recent worker failures detected",
       description: `${Math.trunc(Number((metrics.failed_jobs as any).current))} job(s) failed in the selected window.`
     });
   }
@@ -854,6 +854,7 @@ export async function fetchAdminSummary(db: DatabaseClient, rangeKey: string): P
     request_series: series,
     content_series: series,
     ingestion_series: series,
+    workers_series: series,
     notices
   };
 }
@@ -1339,7 +1340,7 @@ export async function fetchContentSummary(db: DatabaseClient, rangeKey: string):
   };
 }
 
-export async function fetchIngestionSummary(db: DatabaseClient, rangeKey: string): Promise<Record<string, unknown>> {
+export async function fetchWorkersSummary(db: DatabaseClient, rangeKey: string): Promise<Record<string, unknown>> {
   const window = resolveTimeWindow(rangeKey);
   const targets = await fetchTargetMap(db, window.range_key);
   const metrics = (

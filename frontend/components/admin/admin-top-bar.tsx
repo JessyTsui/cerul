@@ -47,11 +47,6 @@ export function AdminTopBar({ currentPath, title }: AdminTopBarProps) {
             </span>
           </div>
 
-          <span className="hidden items-center gap-2 rounded-full border border-[rgba(31,141,74,0.18)] bg-white/78 px-4 py-2 text-sm font-medium text-[var(--foreground)] md:inline-flex">
-            <span className="h-2.5 w-2.5 rounded-full bg-[var(--success)]" />
-            Live telemetry
-          </span>
-
           <Link
             href={"/dashboard" as Route}
             className="inline-flex h-10 items-center rounded-full border border-[var(--border)] bg-white/72 px-4 text-sm font-medium text-[var(--foreground-secondary)] transition hover:border-[var(--border-strong)] hover:bg-white hover:text-[var(--foreground)]"

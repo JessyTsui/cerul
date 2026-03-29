@@ -159,6 +159,59 @@ describe("admin targets client", () => {
       }),
     );
   });
+
+  it("keeps the workers page on the ingestion summary endpoint for backward compatibility", async () => {
+    vi.mocked(global.fetch).mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          generated_at: "2026-03-14T10:00:00Z",
+          window: {
+            range_key: "7d",
+            current_start: "2026-03-08T00:00:00Z",
+            current_end: "2026-03-14T10:00:00Z",
+            previous_start: "2026-03-01T14:00:00Z",
+            previous_end: "2026-03-08T00:00:00Z",
+          },
+          metrics: {
+            jobs_created: { current: 8, previous: 6, delta: 2 },
+            jobs_completed: { current: 5, previous: 4, delta: 1 },
+            jobs_failed: { current: 1, previous: 0, delta: 1 },
+            completion_rate: { current: 0.83, previous: 0.8, delta: 0.03 },
+            failure_rate: { current: 0.17, previous: 0.2, delta: -0.03 },
+            pending_backlog: { current: 3, previous: 2, delta: 1 },
+            average_processing_ms: { current: 4200, previous: 4400, delta: -200 },
+          },
+          status_counts: {
+            pending: 2,
+            running: 1,
+            retrying: 0,
+            completed: 5,
+            failed: 1,
+          },
+          daily_series: [],
+          source_health: [],
+          recent_failed_jobs: [],
+          failed_steps: [],
+        }),
+        {
+          status: 200,
+          headers: {
+            "Content-Type": "application/json",
+          },
+        },
+      ),
+    );
+
+    await admin.getWorkers("7d");
+
+    expect(global.fetch).toHaveBeenCalledWith(
+      "/api/console/admin/ingestion/summary?range=7d",
+      expect.objectContaining({
+        credentials: "include",
+        method: "GET",
+      }),
+    );
+  });
 });
 
 describe("normalizeAdminWorkerLive", () => {

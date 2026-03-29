@@ -65,7 +65,7 @@ export type AdminSummary = {
   };
   requestSeries: AdminSummaryPoint[];
   contentSeries: AdminSummaryPoint[];
-  ingestionSeries: AdminSummaryPoint[];
+  workersSeries: AdminSummaryPoint[];
   notices: AdminNotice[];
 };
 
@@ -201,7 +201,7 @@ export type AdminFailedStep = {
   lastFailedAt: string | null;
 };
 
-export type AdminIngestionSummary = {
+export type AdminWorkersSummary = {
   generatedAt: string;
   window: AdminWindow;
   metrics: {
@@ -639,6 +639,9 @@ function buildRangeQuery(range: AdminRange): string {
 export function normalizeAdminSummary(payload: unknown): AdminSummary {
   const raw = ensureObject(payload, "Invalid admin summary response.");
   const metrics = ensureObject(raw.metrics, "Admin summary is missing metrics.");
+  const workerSeriesPayload = Array.isArray(raw.workers_series)
+    ? raw.workers_series
+    : raw.ingestion_series;
 
   return {
     generatedAt: typeof raw.generated_at === "string" ? raw.generated_at : "",
@@ -657,7 +660,7 @@ export function normalizeAdminSummary(payload: unknown): AdminSummary {
     },
     requestSeries: normalizeSummaryPoints(raw.request_series),
     contentSeries: normalizeSummaryPoints(raw.content_series),
-    ingestionSeries: normalizeSummaryPoints(raw.ingestion_series),
+    workersSeries: normalizeSummaryPoints(workerSeriesPayload),
     notices: Array.isArray(raw.notices) ? raw.notices.map((item) => normalizeNotice(item)) : [],
   };
 }
@@ -789,10 +792,10 @@ export function normalizeAdminContentSummary(payload: unknown): AdminContentSumm
   };
 }
 
-export function normalizeAdminIngestionSummary(payload: unknown): AdminIngestionSummary {
-  const raw = ensureObject(payload, "Invalid admin ingestion response.");
-  const metrics = ensureObject(raw.metrics, "Admin ingestion summary is missing metrics.");
-  const statusCounts = ensureObject(raw.status_counts, "Admin ingestion status counts are missing.");
+export function normalizeAdminWorkersSummary(payload: unknown): AdminWorkersSummary {
+  const raw = ensureObject(payload, "Invalid admin workers response.");
+  const metrics = ensureObject(raw.metrics, "Admin workers summary is missing metrics.");
+  const statusCounts = ensureObject(raw.status_counts, "Admin workers status counts are missing.");
 
   return {
     generatedAt: typeof raw.generated_at === "string" ? raw.generated_at : "",
@@ -1186,7 +1189,7 @@ export const admin = {
     return normalizeAdminContentSummary(payload);
   },
 
-  async getIngestion(range: AdminRange): Promise<AdminIngestionSummary> {
+  async getWorkers(range: AdminRange): Promise<AdminWorkersSummary> {
     const payload = await fetchWithAuth<unknown>(
       `/admin/ingestion/summary${buildRangeQuery(range)}`,
       {
@@ -1195,7 +1198,7 @@ export const admin = {
       },
     );
 
-    return normalizeAdminIngestionSummary(payload);
+    return normalizeAdminWorkersSummary(payload);
   },
 
   async getTargets(range: AdminRange): Promise<AdminTargetsResponse> {
