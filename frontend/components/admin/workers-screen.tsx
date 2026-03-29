@@ -204,7 +204,7 @@ export function AdminWorkersScreen() {
   const [workerNodesGeneratedAt, setWorkerNodesGeneratedAt] = useState<string>("");
   const { data, error, isLoading, refresh } = useAdminResource({
     range,
-    loader: admin.getIngestion,
+    loader: admin.getWorkers,
     errorMessage: "Failed to load worker metrics.",
   });
 

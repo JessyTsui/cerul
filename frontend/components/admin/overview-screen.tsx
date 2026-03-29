@@ -118,7 +118,7 @@ export function AdminOverviewScreen() {
 
           <AdminTrendChart
             title="Worker failures"
-            data={toAdminChartData(data.ingestionSeries, "jobsFailed")}
+            data={toAdminChartData(data.workersSeries, "jobsFailed")}
             metricLabel="Failed jobs"
           />
         </>

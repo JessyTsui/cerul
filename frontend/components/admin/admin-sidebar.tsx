@@ -169,9 +169,6 @@ export function AdminSidebar({ currentPath }: AdminSidebarProps) {
                     </span>
                     <div className="min-w-0 flex-1">
                       <p className="text-sm font-medium">{item.label}</p>
-                      <p className="text-xs text-[var(--foreground-tertiary)]">
-                        Page {item.meta}
-                      </p>
                     </div>
                   </Link>
                 );

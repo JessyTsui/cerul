@@ -950,14 +950,15 @@ export async function fetchWorkerNodes(
               ) AS avg_duration_ms_24h
       FROM worker_heartbeats AS wh
       LEFT JOIN processing_jobs AS pj
-          ON (
-              pj.locked_by = wh.worker_id
-              OR pj.locked_by LIKE wh.worker_id || '-slot-%'
-          )
+         ON (
+             pj.locked_by = wh.worker_id
+             OR pj.locked_by LIKE wh.worker_id || '-slot-%'
+         )
          AND (
              pj.status = 'running'
              OR pj.updated_at >= NOW() - INTERVAL '24 hours'
          )
+      WHERE wh.last_heartbeat >= NOW() - INTERVAL '24 hours'
       GROUP BY
           wh.worker_id,
           wh.hostname,
@@ -1043,7 +1044,12 @@ export async function fetchSourcesAnalytics(db: DatabaseClient, rangeKey = "7d")
                 AND pj.updated_at >= $1 AND pj.updated_at < $2
           ) AS jobs_failed,
           COUNT(pj.id) FILTER (
+              WHERE pj.status = 'running'
+                AND ${notCancelledJobCondition("pj")}
+          ) AS running,
+          COUNT(pj.id) FILTER (
               WHERE pj.status IN ('pending', 'retrying')
+                AND ${notCancelledJobCondition("pj")}
           ) AS backlog,
           COUNT(pj.id) FILTER (
               WHERE pj.created_at >= $3 AND pj.created_at < $4
@@ -1079,6 +1085,7 @@ export async function fetchSourcesAnalytics(db: DatabaseClient, rangeKey = "7d")
       jobs_created: asInt(row.jobs_created),
       jobs_completed: asInt(row.jobs_completed),
       jobs_failed: asInt(row.jobs_failed),
+      running: asInt(row.running),
       backlog: asInt(row.backlog),
       prev_jobs_created: asInt(row.prev_jobs_created),
       prev_jobs_completed: asInt(row.prev_jobs_completed),

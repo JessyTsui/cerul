@@ -7,8 +7,8 @@ from workers.common.pipeline import PipelineContext
 from workers.worker import (
     JobWorker,
     build_worker_ids,
+    mark_worker_stopped,
     register_worker,
-    remove_worker_registration,
     update_worker_heartbeat,
 )
 
@@ -330,13 +330,14 @@ def test_update_worker_heartbeat_touches_last_seen() -> None:
     assert conn.execute_calls[0][1] == ("worker-a",)
 
 
-def test_remove_worker_registration_deletes_worker_heartbeat_row() -> None:
+def test_mark_worker_stopped_marks_worker_offline() -> None:
     conn = RecordingConnection()
     pool = RecordingPool(conn)
 
-    run_async(remove_worker_registration(pool, "worker-a"))
+    run_async(mark_worker_stopped(pool, "worker-a"))
 
-    assert "DELETE FROM worker_heartbeats" in conn.execute_calls[0][0]
+    assert "UPDATE worker_heartbeats" in conn.execute_calls[0][0]
+    assert "INTERVAL '5 minutes 1 second'" in conn.execute_calls[0][0]
     assert conn.execute_calls[0][1] == ("worker-a",)
 
 
