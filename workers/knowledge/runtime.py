@@ -582,7 +582,7 @@ class YtDlpCaptionProvider:
         output_template = output_dir / f"{source_video_id}.%(ext)s"
         command = [
             self._command,
-            *(["--extractor-args", "youtube:player_client=android"] if self._cookies_file is None else []),
+            "--remote-components", "ejs:npm",
             "--skip-download",
             "--write-subs",
             "--write-auto-subs",
@@ -596,7 +596,7 @@ class YtDlpCaptionProvider:
         ]
         network_args: list[str] = []
         if self._proxy_url is not None:
-            network_args.extend(["--proxy", self._proxy_url])
+            network_args.extend(["--no-check-certificates", "--proxy", self._proxy_url])
         if self._cookies_file is not None:
             network_args.extend(["--cookies", self._cookies_file])
         if network_args:
@@ -737,8 +737,8 @@ class YtDlpVideoDownloader:
         format_selector = self._build_format_selector()
         command = [
             self._command,
+            "--remote-components", "ejs:npm",
             "--no-playlist",
-            *(["--extractor-args", "youtube:player_client=android"] if self._cookies_file is None else []),
             "--format",
             format_selector,
             "--output",
@@ -747,7 +747,7 @@ class YtDlpVideoDownloader:
         ]
         network_args: list[str] = []
         if self._proxy_url is not None:
-            network_args.extend(["--proxy", self._proxy_url])
+            network_args.extend(["--no-check-certificates", "--proxy", self._proxy_url])
         if self._cookies_file is not None:
             network_args.extend(["--cookies", self._cookies_file])
         if network_args:
@@ -761,9 +761,16 @@ class YtDlpVideoDownloader:
             ) from exc
 
         if completed.returncode != 0:
-            raise RuntimeError(
-                (completed.stderr or completed.stdout).strip() or "yt-dlp video download failed."
-            )
+            error_output = (completed.stderr or completed.stdout).strip()
+            # yt-dlp may emit WARNINGs to stderr even on success; only fail on
+            # actual ERROR lines or when no video file was produced (checked below).
+            error_lines = [
+                line for line in error_output.splitlines()
+                if line.startswith("ERROR:")
+            ]
+            if error_lines:
+                raise RuntimeError(error_lines[0])
+            self._logger.warning("yt-dlp exited with code %d but no ERROR: %s", completed.returncode, error_output[:200])
 
         downloaded_files = _find_downloaded_video_files(output_dir, str(target_name))
         if not downloaded_files:
