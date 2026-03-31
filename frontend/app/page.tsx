@@ -47,7 +47,7 @@ const jsonLd = {
       url: siteOrigin,
       logo: `${siteOrigin}/logo.svg`,
       sameAs: [
-        "https://github.com/JessyTsui/cerul",
+        "https://github.com/cerul-ai/cerul",
         "https://x.com/cerul_hq",
       ],
     },
@@ -64,8 +64,8 @@ const jsonLd = {
       description: homeDescription,
       url: siteOrigin,
       isAccessibleForFree: true,
-      license: "https://github.com/JessyTsui/cerul/blob/main/LICENSE",
-      codeRepository: "https://github.com/JessyTsui/cerul",
+      license: "https://github.com/cerul-ai/cerul/blob/main/LICENSE",
+      codeRepository: "https://github.com/cerul-ai/cerul",
     },
     {
       "@type": "WebAPI",
