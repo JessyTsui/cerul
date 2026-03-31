@@ -111,7 +111,7 @@ export function DashboardUsageScreen() {
             {[
               { label: "Requests", value: formatNumber(data.requestCount) },
               { label: "Credits used", value: formatNumber(data.creditsUsed) },
-              { label: "Credits remaining", value: formatNumber(data.creditsRemaining) },
+              { label: "Spendable balance", value: formatNumber(data.walletBalance) },
               { label: "Active days", value: formatNumber(activeDays.length) },
             ].map((item) => (
               <article
@@ -128,11 +128,29 @@ export function DashboardUsageScreen() {
         </article>
 
         <CreditUsageBar
-          label="Current billing period"
+          label="Included credits this period"
           limit={data.creditsLimit}
-          remaining={data.creditsRemaining}
+          remaining={data.creditBreakdown.includedRemaining}
           used={data.creditsUsed}
         />
+      </section>
+
+      <section className="grid gap-5 md:grid-cols-3">
+        {[
+          { label: "Included remaining", value: data.creditBreakdown.includedRemaining },
+          { label: "Top-up remaining", value: data.creditBreakdown.topupRemaining },
+          { label: "Bonus remaining", value: data.creditBreakdown.bonusRemaining },
+        ].map((item) => (
+          <article
+            key={item.label}
+            className="surface-elevated rounded-[24px] px-5 py-5"
+          >
+            <p className="text-sm text-[var(--foreground-secondary)]">{item.label}</p>
+            <p className="mt-2 text-3xl font-semibold tracking-[-0.04em] text-[var(--foreground)]">
+              {formatNumber(item.value)}
+            </p>
+          </article>
+        ))}
       </section>
 
       <UsageChart

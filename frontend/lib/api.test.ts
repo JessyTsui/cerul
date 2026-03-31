@@ -191,15 +191,24 @@ describe("dashboard API client", () => {
 
     await expect(usage.getMonthly()).resolves.toEqual({
       tier: "pro",
+      planCode: "pro",
       periodStart: "2026-03-01",
       periodEnd: "2026-03-07",
       creditsLimit: 10000,
       creditsUsed: 2450,
       creditsRemaining: 7550,
+      walletBalance: 7550,
+      creditBreakdown: {
+        includedRemaining: 0,
+        topupRemaining: 0,
+        bonusRemaining: 0,
+      },
+      expiringCredits: [],
       requestCount: 812,
       apiKeysActive: 3,
       rateLimitPerSec: 12,
       hasStripeCustomer: true,
+      billingHold: false,
       dailyBreakdown: [
         {
           date: "2026-03-01",
@@ -246,6 +255,7 @@ describe("dashboard API client", () => {
     await expect(usage.getMonthly()).resolves.toEqual(
       expect.objectContaining({
         hasStripeCustomer: false,
+        walletBalance: 880,
         dailyBreakdown: [
           {
             date: "2026-03-01",
@@ -274,6 +284,113 @@ describe("dashboard API client", () => {
 
     await expect(billing.createCheckout()).resolves.toEqual({
       url: "https://billing.example/checkout",
+    });
+  });
+
+  it("sends a product code when creating a checkout session", async () => {
+    vi.mocked(global.fetch).mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          checkout_url: "https://billing.example/checkout",
+        }),
+        {
+          status: 200,
+          headers: {
+            "Content-Type": "application/json",
+          },
+        },
+      ),
+    );
+
+    await billing.createCheckout({ productCode: "topup_5000" });
+
+    expect(global.fetch).toHaveBeenCalledWith(
+      "/api/console/dashboard/billing/checkout",
+      expect.objectContaining({
+        method: "POST",
+        body: JSON.stringify({ product_code: "topup_5000" }),
+      }),
+    );
+  });
+
+  it("normalizes billing catalog payloads", async () => {
+    vi.mocked(global.fetch).mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          plan_code: "monthly",
+          wallet_balance: 5300,
+          credit_breakdown: {
+            included_remaining: 300,
+            topup_remaining: 5000,
+            bonus_remaining: 0,
+          },
+          referral: {
+            code: "CRL1A2B3C",
+            bonus_credits: 500,
+            reward_delay_days: 7,
+            redeemed_code: null,
+            status: null,
+          },
+          products: [
+            {
+              code: "topup_5000",
+              name: "Top-up 5,000",
+              description: "Prepaid credits",
+              kind: "topup",
+              plan_code: "monthly",
+              credits: 5000,
+              amount_cents: 3600,
+              currency: "usd",
+              price_display: "$36",
+              cadence: "one time",
+              allow_promotion_codes: true,
+              stripe_price_id: "price_123",
+              is_configured: true,
+            },
+          ],
+        }),
+        {
+          status: 200,
+          headers: {
+            "Content-Type": "application/json",
+          },
+        },
+      ),
+    );
+
+    await expect(billing.getCatalog()).resolves.toEqual({
+      planCode: "monthly",
+      walletBalance: 5300,
+      creditBreakdown: {
+        includedRemaining: 300,
+        topupRemaining: 5000,
+        bonusRemaining: 0,
+      },
+      expiringCredits: [],
+      referral: {
+        code: "CRL1A2B3C",
+        bonusCredits: 500,
+        rewardDelayDays: 7,
+        redeemedCode: null,
+        status: null,
+      },
+      products: [
+        {
+          code: "topup_5000",
+          name: "Top-up 5,000",
+          description: "Prepaid credits",
+          kind: "topup",
+          planCode: "monthly",
+          credits: 5000,
+          amountCents: 3600,
+          currency: "usd",
+          priceDisplay: "$36",
+          cadence: "one time",
+          allowPromotionCodes: true,
+          stripePriceId: "price_123",
+          isConfigured: true,
+        },
+      ],
     });
   });
 

@@ -4,6 +4,7 @@ import { getConfig } from "../config";
 import type { AuthContext, Bindings, SessionContext } from "../types";
 import { createDatabaseClient } from "../db/client";
 import type { DatabaseClient } from "../db/client";
+import { calculateCreditsRemaining, fetchUsageSummary } from "../services/billing";
 import { hmacSha256Hex, sha256Hex, timingSafeEqual } from "../utils/crypto";
 import { getRateLimiter } from "../utils/rate-limit";
 import { apiError } from "../utils/http";
@@ -29,18 +30,8 @@ type AuthRow = {
   is_active: boolean;
   tier: string;
   rate_limit_per_sec: number;
-  credits_limit: number;
-  credits_used: number;
+  billing_hold: boolean;
 };
-
-function currentBillingPeriod(referenceDate?: Date): [string, string] {
-  const today = referenceDate ?? new Date();
-  const year = today.getUTCFullYear();
-  const month = today.getUTCMonth();
-  const periodStart = new Date(Date.UTC(year, month, 1));
-  const periodEnd = new Date(Date.UTC(year, month + 1, 0));
-  return [periodStart.toISOString().slice(0, 10), periodEnd.toISOString().slice(0, 10)];
-}
 
 function firstNonEmpty(...values: Array<string | null | undefined>): string | null {
   for (const value of values) {
@@ -89,18 +80,17 @@ export function parseApiKeyFromAuthorization(authorization: string | null): stri
   return apiKey;
 }
 
-function buildAuthContext(row: AuthRow): AuthContext {
+function buildAuthContext(row: AuthRow, creditsRemaining: number): AuthContext {
   return {
     userId: String(row.user_id),
     apiKeyId: String(row.api_key_id),
     tier: String(row.tier),
-    creditsRemaining: Math.max(Number(row.credits_limit) - Number(row.credits_used ?? 0), 0),
+    creditsRemaining: Math.max(creditsRemaining, 0),
     rateLimitPerSec: Number(row.rate_limit_per_sec ?? 0)
   };
 }
 
 async function fetchAuthRow(db: DatabaseClient, keyHash: string): Promise<AuthRow | null> {
-  const [periodStart, periodEnd] = currentBillingPeriod();
   return db.fetchrow<AuthRow>(
     `
       SELECT
@@ -109,19 +99,12 @@ async function fetchAuthRow(db: DatabaseClient, keyHash: string): Promise<AuthRo
           ak.is_active,
           up.tier,
           up.rate_limit_per_sec,
-          COALESCE(um.credits_limit, up.monthly_credit_limit) AS credits_limit,
-          COALESCE(um.credits_used, 0) AS credits_used
+          up.billing_hold
       FROM api_keys AS ak
       JOIN user_profiles AS up ON up.id = ak.user_id
-      LEFT JOIN usage_monthly AS um
-          ON um.user_id = up.id
-          AND um.period_start = $2
-          AND um.period_end = $3
       WHERE ak.key_hash = $1
     `,
-    keyHash,
-    periodStart,
-    periodEnd
+    keyHash
   );
 }
 
@@ -165,9 +148,14 @@ export async function requireApiKeyContext(c: Context): Promise<AuthContext> {
     apiError(403, "API key is inactive");
   }
 
-  const auth = buildAuthContext(authRow);
+  const usageSummary = await fetchUsageSummary(db, String(authRow.user_id));
+  if (usageSummary.billing_hold === true) {
+    apiError(403, "Billing account requires review before more requests can be served.");
+  }
+
+  const auth = buildAuthContext(authRow, calculateCreditsRemaining(usageSummary));
   if (auth.creditsRemaining <= 0) {
-    apiError(403, "Monthly credit limit exhausted");
+    apiError(403, "No spendable credits remain.");
   }
 
   await enforceRateLimit(auth);

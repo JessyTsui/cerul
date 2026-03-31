@@ -82,7 +82,7 @@ const responseFields = [
   { name: "results[].unit_type", type: "string", description: "\"summary\", \"speech\", or \"visual\"." },
   { name: "answer", type: "string | null", description: "AI-generated summary. Only present when include_answer is true." },
   { name: "credits_used", type: "integer", description: "Credits consumed by this request." },
-  { name: "credits_remaining", type: "integer", description: "Remaining credits in current billing period." },
+  { name: "credits_remaining", type: "integer", description: "Remaining spendable credits after this request." },
   { name: "request_id", type: "string", description: "Unique request identifier for debugging." },
 ];
 

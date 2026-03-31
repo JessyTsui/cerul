@@ -284,11 +284,18 @@ curl "https://api.cerul.ai/v1/usage" \
 ```json
 {
   "tier": "free",
+  "plan_code": "free",
   "period_start": "2026-03-01",
   "period_end": "2026-03-31",
   "credits_limit": 1000,
   "credits_used": 128,
   "credits_remaining": 872,
+  "wallet_balance": 872,
+  "credit_breakdown": {
+    "included_remaining": 872,
+    "topup_remaining": 0,
+    "bonus_remaining": 0
+  },
   "rate_limit_per_sec": 1,
   "api_keys_active": 1
 }

@@ -2,6 +2,7 @@ import Stripe from "stripe";
 
 import type { AppConfig } from "../types";
 import type { DatabaseClient } from "../db/client";
+import { getBillingProduct, normalizePlanCode } from "./billing-catalog";
 import { monthlyCreditLimitForTier } from "./billing";
 
 const ACTIVE_SUBSCRIPTION_STATUSES = new Set(["active", "trialing", "past_due"]);
@@ -20,6 +21,13 @@ export class StripeWebhookVerificationError extends StripeServiceError {
   }
 }
 
+export type CheckoutSessionInput = {
+  userId: string;
+  email: string;
+  stripeCustomerId?: string | null;
+  productCode?: string | null;
+};
+
 function requireSetting(name: string, value: string | null): string {
   if (!value) {
     throw new StripeServiceError(`${name} is not configured.`);
@@ -27,7 +35,7 @@ function requireSetting(name: string, value: string | null): string {
   return value;
 }
 
-function stripeClient(config: AppConfig): any {
+function stripeClient(config: AppConfig): Stripe {
   return new Stripe(requireSetting("STRIPE_SECRET_KEY", config.stripe.secretKey), {
     apiVersion: "2025-08-27.basil"
   });
@@ -43,28 +51,57 @@ function webBaseUrl(config: AppConfig): string {
   return config.public.webBaseUrl.replace(/\/+$/, "");
 }
 
-export function createCheckoutSession(config: AppConfig, userId: string, email: string, stripeCustomerId?: string | null): Promise<string> | string {
+function sessionMetadata(input: CheckoutSessionInput, productCode: string): Record<string, string> {
+  return {
+    user_id: input.userId,
+    product_code: productCode
+  };
+}
+
+export function createCheckoutSession(config: AppConfig, input: CheckoutSessionInput): Promise<string> | string {
+  const product = getBillingProduct(config, input.productCode ?? "monthly");
+  if (!product) {
+    throw new StripeServiceError(`Unknown billing product: ${input.productCode ?? "monthly"}`);
+  }
+  if (!product.stripePriceId) {
+    throw new StripeServiceError(`Stripe price is not configured for ${product.code}.`);
+  }
+
   const client = stripeClient(config);
-  const payload: Record<string, unknown> = {
-    mode: "subscription",
+  const metadata = sessionMetadata(input, product.code);
+  const payload: Stripe.Checkout.SessionCreateParams = {
+    mode: product.kind === "subscription" ? "subscription" : "payment",
     line_items: [
       {
-        price: requireSetting("STRIPE_PRO_PRICE_ID", config.stripe.proPriceId),
+        price: requireSetting(`stripe price for ${product.code}`, product.stripePriceId),
         quantity: 1
       }
     ],
-    client_reference_id: userId,
-    metadata: { user_id: userId },
-    success_url: `${webBaseUrl(config)}/dashboard?checkout=success`,
-    cancel_url: `${webBaseUrl(config)}/pricing?checkout=cancelled`
+    allow_promotion_codes: product.allowPromotionCodes,
+    client_reference_id: input.userId,
+    metadata,
+    success_url: `${webBaseUrl(config)}/dashboard/settings?checkout=success&product=${product.code}`,
+    cancel_url: `${webBaseUrl(config)}/pricing?checkout=cancelled&product=${product.code}`
   };
-  if (stripeCustomerId) {
-    payload.customer = stripeCustomerId;
+
+  if (product.kind === "subscription") {
+    payload.subscription_data = {
+      metadata
+    };
   } else {
-    payload.customer_email = email;
+    payload.payment_intent_data = {
+      metadata
+    };
   }
-  return client.checkout.sessions.create(payload).then((session: any) => {
-    if (!session?.url) {
+
+  if (input.stripeCustomerId) {
+    payload.customer = input.stripeCustomerId;
+  } else {
+    payload.customer_email = input.email;
+  }
+
+  return client.checkout.sessions.create(payload).then((session) => {
+    if (!session.url) {
       throw new StripeServiceError("Stripe checkout session did not return a URL.");
     }
     return String(session.url);
@@ -78,8 +115,8 @@ export function createPortalSession(config: AppConfig, stripeCustomerId: string)
   return client.billingPortal.sessions.create({
     customer: stripeCustomerId,
     return_url: `${webBaseUrl(config)}/dashboard/settings`
-  }).then((session: any) => {
-    if (!session?.url) {
+  }).then((session) => {
+    if (!session.url) {
       throw new StripeServiceError("Stripe billing portal did not return a URL.");
     }
     return String(session.url);
@@ -98,7 +135,7 @@ export function constructWebhookEvent(config: AppConfig, payload: string, signat
       payload,
       signatureHeader,
       requireSetting("STRIPE_WEBHOOK_SECRET", config.stripe.webhookSecret)
-    ) as Record<string, unknown>;
+    ) as unknown as Record<string, unknown>;
   } catch (error: any) {
     if (String(error?.message ?? "").toLowerCase().includes("signature")) {
       throw new StripeWebhookVerificationError("Invalid Stripe signature.");
@@ -109,7 +146,7 @@ export function constructWebhookEvent(config: AppConfig, payload: string, signat
 
 export function subscriptionTier(subscription: Record<string, unknown>): { tier: string; monthlyCreditLimit: number } {
   const status = String(subscription.status ?? "").toLowerCase();
-  const tier = ACTIVE_SUBSCRIPTION_STATUSES.has(status) ? "pro" : "free";
+  const tier = ACTIVE_SUBSCRIPTION_STATUSES.has(status) ? "monthly" : "free";
   return {
     tier,
     monthlyCreditLimit: monthlyCreditLimitForTier(tier)
@@ -122,7 +159,7 @@ export async function activateCheckoutSubscription(
   stripeCustomerId?: string | null,
   subscriptionId?: string | null
 ): Promise<Record<string, unknown>> {
-  const tier = "pro";
+  const tier = "monthly";
   const monthlyCreditLimit = monthlyCreditLimitForTier(tier);
   const commandStatus = await db.execute(
     `
@@ -130,7 +167,8 @@ export async function activateCheckoutSubscription(
       SET tier = $1,
           monthly_credit_limit = $2,
           stripe_customer_id = COALESCE($3, stripe_customer_id),
-          stripe_subscription_id = COALESCE($4, stripe_subscription_id)
+          stripe_subscription_id = COALESCE($4, stripe_subscription_id),
+          updated_at = NOW()
       WHERE id = $5
     `,
     tier,
@@ -144,6 +182,7 @@ export async function activateCheckoutSubscription(
   }
   return {
     tier,
+    plan_code: normalizePlanCode(tier),
     monthly_credit_limit: monthlyCreditLimit
   };
 }
@@ -161,7 +200,8 @@ export async function syncSubscriptionStatus(
       SET tier = $1,
           monthly_credit_limit = $2,
           stripe_customer_id = $3,
-          stripe_subscription_id = COALESCE($4, stripe_subscription_id)
+          stripe_subscription_id = COALESCE($4, stripe_subscription_id),
+          updated_at = NOW()
       WHERE stripe_customer_id = $3
     `,
     tier,
@@ -175,6 +215,7 @@ export async function syncSubscriptionStatus(
   }
   return {
     tier,
+    plan_code: normalizePlanCode(tier),
     monthly_credit_limit: monthlyCreditLimit,
     updated_rows: updatedRows
   };

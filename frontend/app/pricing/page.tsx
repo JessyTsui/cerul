@@ -3,7 +3,7 @@ import Link from "next/link";
 import { SiteFooter } from "@/components/site-footer";
 import { SiteHeader } from "@/components/site-header";
 import { FadeIn, BlurFade } from "@/components/animations";
-import { pricingFaqs, pricingTiers } from "@/lib/site";
+import { pricingFaqs, pricingTiers, topupPackages } from "@/lib/site";
 
 export const metadata: Metadata = {
   title: "Pricing",
@@ -14,14 +14,15 @@ export const metadata: Metadata = {
 };
 
 const featuresComparison = [
-  { name: "Search requests", free: "1K / month", payg: "Unlimited", monthly: "5K / month", enterprise: "Custom" },
-  { name: "Rate limits", free: "Standard", payg: "Standard", monthly: "Higher", enterprise: "Custom" },
-  { name: "Search API access", free: true, payg: true, monthly: true, enterprise: true },
-  { name: "Usage insights", free: "Basic", payg: "Basic", monthly: "Advanced", enterprise: "Full" },
-  { name: "Search logs", free: false, payg: true, monthly: true, enterprise: true },
-  { name: "Priority support", free: false, payg: false, monthly: "Email", enterprise: "Dedicated" },
-  { name: "Private indexing", free: false, payg: false, monthly: false, enterprise: true },
-  { name: "SLA guarantee", free: false, payg: false, monthly: false, enterprise: true },
+  { name: "Included credits", free: "1K / month", monthly: "5K / month", enterprise: "Custom" },
+  { name: "Top-up packs", free: "Available", monthly: "Available", enterprise: "Custom" },
+  { name: "Rate limits", free: "Standard", monthly: "Higher", enterprise: "Custom" },
+  { name: "Search API access", free: true, monthly: true, enterprise: true },
+  { name: "Usage insights", free: "Basic", monthly: "Advanced", enterprise: "Full" },
+  { name: "Promo codes", free: true, monthly: true, enterprise: "Custom" },
+  { name: "Referral rewards", free: true, monthly: true, enterprise: "Custom" },
+  { name: "Private indexing", free: false, monthly: false, enterprise: true },
+  { name: "SLA guarantee", free: false, monthly: false, enterprise: true },
 ];
 
 export default function PricingPage() {
@@ -45,24 +46,24 @@ export default function PricingPage() {
             </BlurFade>
             <BlurFade delay={200}>
               <p className="mx-auto mt-6 max-w-2xl text-lg text-[var(--foreground-secondary)]">
-                1,000 free requests per month. Scale with pay-as-you-go at $8/1K requests,
-                or subscribe monthly for higher rate limits.
+                1,000 free credits per month. Upgrade to Monthly for 5,000 included credits,
+                then add prepaid top-up packs when traffic spikes.
               </p>
             </BlurFade>
           </section>
 
           {/* Pricing Cards */}
-          <section className="grid gap-6 lg:grid-cols-4">
+          <section className="grid gap-6 lg:grid-cols-3">
             {pricingTiers.map((tier, index) => (
               <FadeIn key={tier.name} delay={index * 100}>
                 <div
                   className={`relative flex h-full flex-col rounded-3xl border p-8 transition-all duration-300 hover:shadow-lg ${
-                    index === 2
+                    index === 1
                       ? "border-[var(--border-brand)] bg-gradient-to-b from-[var(--surface)] to-[var(--background-elevated)] shadow-[0_0_40px_-10px_rgba(136,165,242,0.15)] lg:scale-105"
                       : "border-[var(--border)] bg-[var(--surface)]"
                   }`}
                 >
-                  {index === 2 && (
+                  {index === 1 && (
                     <div className="absolute -top-4 left-1/2 -translate-x-1/2 rounded-full bg-gradient-to-r from-[var(--brand)] to-[var(--brand-bright)] px-4 py-1.5 text-xs font-semibold text-white shadow-lg">
                       Most Popular
                     </div>
@@ -113,7 +114,7 @@ export default function PricingPage() {
                     <a
                       href={tier.ctaHref}
                       className={`w-full text-center ${
-                        index === 2
+                        index === 1
                           ? "button-gradient"
                           : "button-secondary"
                       }`}
@@ -137,6 +138,46 @@ export default function PricingPage() {
             ))}
           </section>
 
+          <section className="mt-12">
+            <FadeIn>
+              <div className="mb-6">
+                <span className="eyebrow">Prepaid top-ups</span>
+                <h2 className="mt-4 text-2xl font-bold text-[var(--foreground)]">
+                  Keep a separate wallet for burst traffic
+                </h2>
+              </div>
+            </FadeIn>
+            <div className="grid gap-6 lg:grid-cols-3">
+              {topupPackages.map((pack, index) => (
+                <FadeIn key={pack.name} delay={index * 100}>
+                  <div className="rounded-3xl border border-[var(--border)] bg-[var(--surface)] p-8">
+                    <p className="text-sm font-medium uppercase tracking-wider text-[var(--brand-bright)]">
+                      {pack.name}
+                    </p>
+                    <div className="mt-4 flex items-baseline gap-2">
+                      <span className="text-4xl font-bold tracking-tight text-[var(--foreground)]">
+                        {pack.price}
+                      </span>
+                      <span className="text-sm text-[var(--foreground-tertiary)]">
+                        {pack.cadence}
+                      </span>
+                    </div>
+                    <p className="mt-4 text-sm leading-relaxed text-[var(--foreground-secondary)]">
+                      {pack.description}
+                    </p>
+                    <ul className="mt-6 space-y-3">
+                      {pack.features.map((feature) => (
+                        <li key={feature} className="text-sm text-[var(--foreground-secondary)]">
+                          {feature}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                </FadeIn>
+              ))}
+            </div>
+          </section>
+
           {/* Comparison Table */}
           <section className="mt-20">
             <FadeIn>
@@ -156,9 +197,6 @@ export default function PricingPage() {
                         </th>
                         <th className="px-6 py-4 text-center text-sm font-semibold text-[var(--foreground)]">
                           Free
-                        </th>
-                        <th className="px-6 py-4 text-center text-sm font-semibold text-[var(--foreground)]">
-                          Pay as you go
                         </th>
                         <th className="px-6 py-4 text-center text-sm font-semibold text-[var(--brand-bright)]">
                           Monthly
@@ -193,7 +231,6 @@ export default function PricingPage() {
                           >
                             <td className="px-6 py-4 text-sm text-[var(--foreground)]">{feature.name}</td>
                             <td className="px-6 py-4 text-center">{renderCell(feature.free)}</td>
-                            <td className="px-6 py-4 text-center">{renderCell(feature.payg)}</td>
                             <td className="px-6 py-4 text-center bg-[var(--brand-subtle)]/30">{renderCell(feature.monthly, true)}</td>
                             <td className="px-6 py-4 text-center">{renderCell(feature.enterprise)}</td>
                           </tr>

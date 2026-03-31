@@ -152,8 +152,9 @@ describe("dashboard helpers", () => {
 
   it("maps known plan labels", () => {
     expect(getTierLabel("free")).toBe("Free");
-    expect(getTierLabel("builder")).toBe("Builder");
-    expect(getTierLabel("pro")).toBe("Pro");
+    expect(getTierLabel("builder")).toBe("Monthly");
+    expect(getTierLabel("pro")).toBe("Monthly");
+    expect(getTierLabel("monthly")).toBe("Monthly");
     expect(getTierLabel("enterprise")).toBe("Enterprise");
   });
 

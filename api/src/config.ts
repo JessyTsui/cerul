@@ -111,7 +111,10 @@ export function getConfig(env: Bindings): AppConfig {
     stripe: {
       secretKey: firstNonEmpty(env.STRIPE_SECRET_KEY),
       webhookSecret: firstNonEmpty(env.STRIPE_WEBHOOK_SECRET),
-      proPriceId: firstNonEmpty(env.STRIPE_PRO_PRICE_ID)
+      monthlyPriceId: firstNonEmpty(env.STRIPE_MONTHLY_PRICE_ID),
+      topup1000PriceId: firstNonEmpty(env.STRIPE_TOPUP_1000_PRICE_ID),
+      topup5000PriceId: firstNonEmpty(env.STRIPE_TOPUP_5000_PRICE_ID),
+      topup20000PriceId: firstNonEmpty(env.STRIPE_TOPUP_20000_PRICE_ID)
     },
     r2: {
       bucketName: firstNonEmpty(env.R2_BUCKET_NAME, "cerul-cdn") ?? "cerul-cdn",

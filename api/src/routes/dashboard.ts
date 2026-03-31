@@ -2,7 +2,15 @@ import { Hono } from "hono";
 
 import type { DatabaseClient } from "../db/client";
 import { adminAuth, sessionAuth } from "../middleware/auth";
-import { isPaidTier, keyLimitForTier, monthlyCreditLimitForTier } from "../services/billing";
+import {
+  calculateCreditsRemaining,
+  fetchBillingCatalogState,
+  fetchUsageSummary as fetchUserUsageSummary,
+  isPaidTier,
+  keyLimitForTier,
+  redeemReferralCode
+} from "../services/billing";
+import { listBillingProducts } from "../services/billing-catalog";
 import { createCheckoutSession, createPortalSession, StripeServiceError } from "../services/stripe";
 import { apiError, emptyResponse } from "../utils/http";
 import { sha256Hex, randomHex } from "../utils/crypto";
@@ -144,7 +152,9 @@ async function provisionUserProfileFromAuthUser(db: DatabaseClient, userId: stri
           tier,
           monthly_credit_limit,
           rate_limit_per_sec,
-          stripe_customer_id
+          stripe_customer_id,
+          stripe_subscription_id,
+          billing_hold
     `,
     userId,
     email,
@@ -162,7 +172,9 @@ async function fetchUserProfile(db: DatabaseClient, userId: string): Promise<Rec
           tier,
           monthly_credit_limit,
           rate_limit_per_sec,
-          stripe_customer_id
+          stripe_customer_id,
+          stripe_subscription_id,
+          billing_hold
       FROM user_profiles
       WHERE id = $1
     `,
@@ -240,7 +252,7 @@ async function softDeleteApiKey(db: DatabaseClient, keyId: string, userId: strin
   return row != null;
 }
 
-async function fetchUsageSummary(
+async function fetchUsageAggregate(
   db: DatabaseClient,
   userId: string,
   periodStart: string,
@@ -508,7 +520,8 @@ export function createDashboardRouter(): any {
     }
 
     const [periodStart, periodEnd] = getCurrentBillingPeriod();
-    const summary = await fetchUsageSummary(db, session.userId, periodStart, periodEnd);
+    const summary = await fetchUserUsageSummary(db, session.userId);
+    const aggregate = await fetchUsageAggregate(db, session.userId, periodStart, periodEnd);
     const dailyBreakdown = await fetchDailyUsageBreakdown(
       db,
       session.userId,
@@ -516,9 +529,10 @@ export function createDashboardRouter(): any {
       periodEnd
     );
     const apiKeysActive = await countActiveApiKeys(db, session.userId);
-    const tier = String(profile.tier ?? "free").toLowerCase();
-    const creditsLimit = Number(profile.monthly_credit_limit ?? monthlyCreditLimitForTier(tier));
+    const tier = String(summary.plan_code ?? profile.tier ?? "free").toLowerCase();
+    const creditsLimit = Number(summary.credits_limit ?? 0);
     const creditsUsed = Number(summary.credits_used ?? 0);
+    const creditsRemaining = calculateCreditsRemaining(summary);
 
     return c.json({
       tier,
@@ -526,11 +540,19 @@ export function createDashboardRouter(): any {
       period_end: periodEnd,
       credits_limit: creditsLimit,
       credits_used: creditsUsed,
-      credits_remaining: Math.max(creditsLimit - creditsUsed, 0),
-      request_count: Number(summary.request_count ?? 0),
+      credits_remaining: creditsRemaining,
+      wallet_balance: Number(summary.wallet_balance ?? creditsRemaining),
+      credit_breakdown: summary.credit_breakdown ?? {
+        included_remaining: 0,
+        topup_remaining: 0,
+        bonus_remaining: 0
+      },
+      expiring_credits: Array.isArray(summary.expiring_credits) ? summary.expiring_credits : [],
+      request_count: Number(aggregate.request_count ?? 0),
       api_keys_active: apiKeysActive,
       rate_limit_per_sec: Number(profile.rate_limit_per_sec ?? 0),
       has_stripe_customer: Boolean(profile.stripe_customer_id),
+      billing_hold: Boolean(summary.billing_hold),
       daily_breakdown: dailyBreakdown
     });
   });
@@ -587,9 +609,19 @@ export function createDashboardRouter(): any {
       apiError(404, "User profile not found.");
     }
 
+    const rawPayload = c.req.header("content-type")?.includes("application/json")
+      ? ensureJsonObject(await c.req.json().catch(() => ({})), "Request body must be a JSON object.")
+      : {};
+    const productCode = typeof rawPayload.product_code === "string" && rawPayload.product_code.trim()
+      ? rawPayload.product_code.trim().toLowerCase()
+      : "monthly";
+
     const currentTier = String(profile.tier ?? "free").toLowerCase();
-    if (isPaidTier(currentTier)) {
-      apiError(409, "Subscription already exists; use the billing portal instead.");
+    if (productCode === "monthly" && isPaidTier(currentTier)) {
+      apiError(409, "A subscription already exists; use the billing portal instead.");
+    }
+    if (Boolean(profile.billing_hold)) {
+      apiError(403, "Billing account requires review before a new checkout can be created.");
     }
 
     const email = session.email ?? (profile.email == null ? null : String(profile.email));
@@ -600,11 +632,14 @@ export function createDashboardRouter(): any {
     try {
       const checkoutUrl = await createCheckoutSession(
         config,
-        session.userId,
-        email,
-        profile.stripe_customer_id == null ? null : String(profile.stripe_customer_id)
+        {
+          userId: session.userId,
+          email,
+          stripeCustomerId: profile.stripe_customer_id == null ? null : String(profile.stripe_customer_id),
+          productCode
+        }
       );
-      return c.json({ checkout_url: checkoutUrl });
+      return c.json({ checkout_url: checkoutUrl, product_code: productCode });
     } catch (error) {
       if (error instanceof StripeServiceError) {
         apiError(503, error.message);
@@ -634,6 +669,40 @@ export function createDashboardRouter(): any {
         apiError(503, error.message);
       }
       throw error;
+    }
+  });
+
+  router.get("/billing/catalog", sessionAuth(), async (c: any) => {
+    const db = c.get("db") as DatabaseClient;
+    const session = c.get("session") as DashboardSession;
+    const config = c.get("config");
+    const state = await fetchBillingCatalogState(db, session.userId);
+    return c.json({
+      ...state,
+      products: listBillingProducts(config)
+    });
+  });
+
+  router.post("/billing/referrals/redeem", sessionAuth(), async (c: any) => {
+    const db = c.get("db") as DatabaseClient;
+    const session = c.get("session") as DashboardSession;
+    const payload = ensureJsonObject(await c.req.json(), "Request body must be a JSON object.");
+    const code = typeof payload.code === "string" ? payload.code.trim() : "";
+    if (!code) {
+      apiError(422, "Referral code must not be empty.");
+    }
+
+    try {
+      const result = await redeemReferralCode(db, session.userId, code);
+      const state = await fetchBillingCatalogState(db, session.userId);
+      return c.json({
+        redeemed: true,
+        code: result.code,
+        status: result.status,
+        referral: state.referral
+      });
+    } catch (error) {
+      apiError(409, error instanceof Error ? error.message : "Unable to redeem referral code.");
     }
   });
 

@@ -2,7 +2,7 @@ import { Hono } from "hono";
 
 import type { DatabaseClient } from "../db/client";
 import { apiKeyAuth } from "../middleware/auth";
-import { calculateCreditsRemaining, deductCredits, fetchUsageSummary, InsufficientCreditsError, refundCredits } from "../services/billing";
+import { BillingHoldError, calculateCreditsRemaining, deductCredits, fetchUsageSummary, InsufficientCreditsError, refundCredits } from "../services/billing";
 import { resolveImageToBytes, uploadQueryImageToR2 } from "../services/query-image";
 import { UnifiedSearchService } from "../services/search";
 import type { SearchRequest, UnifiedFilters } from "../types";
@@ -299,6 +299,9 @@ export function createSearchRouter(): any {
         request_id: requestId
       });
     } catch (error) {
+      if (error instanceof BillingHoldError) {
+        apiError(403, "Billing account requires review before more requests can be served.");
+      }
       if (error instanceof InsufficientCreditsError) {
         apiError(403, "Insufficient credits for this request.");
       }

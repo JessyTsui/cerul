@@ -24,7 +24,10 @@ export interface Bindings {
   RERANK_MODEL?: string;
   STRIPE_SECRET_KEY?: string;
   STRIPE_WEBHOOK_SECRET?: string;
-  STRIPE_PRO_PRICE_ID?: string;
+  STRIPE_MONTHLY_PRICE_ID?: string;
+  STRIPE_TOPUP_1000_PRICE_ID?: string;
+  STRIPE_TOPUP_5000_PRICE_ID?: string;
+  STRIPE_TOPUP_20000_PRICE_ID?: string;
   R2_BUCKET_NAME?: string;
   R2_PUBLIC_URL?: string;
   QUERY_IMAGES_BUCKET?: R2Bucket;
@@ -69,7 +72,10 @@ export interface AppConfig {
   stripe: {
     secretKey: string | null;
     webhookSecret: string | null;
-    proPriceId: string | null;
+    monthlyPriceId: string | null;
+    topup1000PriceId: string | null;
+    topup5000PriceId: string | null;
+    topup20000PriceId: string | null;
   };
   r2: {
     bucketName: string;
@@ -149,13 +155,26 @@ export interface SearchResponse {
 
 export interface UsageResponse {
   tier: string;
+  plan_code?: string;
   period_start: string;
   period_end: string;
   credits_limit: number;
   credits_used: number;
   credits_remaining: number;
+  wallet_balance?: number;
+  credit_breakdown?: {
+    included_remaining: number;
+    topup_remaining: number;
+    bonus_remaining: number;
+  };
+  expiring_credits?: Array<{
+    grant_type: string;
+    credits: number;
+    expires_at: string;
+  }>;
   rate_limit_per_sec: number;
   api_keys_active: number;
+  billing_hold?: boolean;
 }
 
 export interface IndexRequest {

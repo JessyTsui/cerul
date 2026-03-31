@@ -147,12 +147,8 @@ export function formatBillingPeriod(
 export function getTierLabel(tier: string): string {
   const normalizedTier = tier.toLowerCase();
 
-  if (normalizedTier === "pro") {
-    return "Pro";
-  }
-
-  if (normalizedTier === "builder") {
-    return "Builder";
+  if (normalizedTier === "monthly" || normalizedTier === "builder" || normalizedTier === "pro") {
+    return "Monthly";
   }
 
   if (normalizedTier === "enterprise") {
@@ -170,6 +166,10 @@ export function resolveDashboardBillingAction(
 
   if (normalizedTier === "free") {
     return "checkout";
+  }
+
+  if (normalizedTier === "enterprise") {
+    return null;
   }
 
   return hasStripeCustomer ? "portal" : null;

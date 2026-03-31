@@ -92,7 +92,7 @@ export default function DocsPage() {
                   </h2>
                   <p className="mt-4 max-w-3xl text-[15px] leading-8 text-[var(--foreground-secondary)]">
                     Sign up at cerul.ai and create an API key from the dashboard.
-                    The free tier gives you 1,000 requests per month — no credit card required.
+                    The free tier gives you 1,000 credits per month — no credit card required.
                   </p>
                   <div className="mt-6 flex flex-wrap gap-3">
                     <Link href="/login?mode=signup" className="button-primary">
@@ -234,7 +234,7 @@ export default function DocsPage() {
                         Check your usage
                       </h2>
                       <p className="mt-4 max-w-3xl text-[15px] leading-8 text-[var(--foreground-secondary)]">
-                        Monitor your request count and remaining quota before scaling traffic.
+                        Monitor your credit balance, wallet breakdown, and rate limits before scaling traffic.
                       </p>
                       <p className="mt-4 text-sm text-[var(--foreground-secondary)]">
                         <Link href="/docs/usage-api" className="font-medium text-[var(--brand-bright)] transition hover:text-[var(--foreground)]">
@@ -254,6 +254,7 @@ export default function DocsPage() {
 #   "tier": "free",
 #   "credits_used": 128,
 #   "credits_remaining": 872,
+#   "wallet_balance": 872,
 #   "rate_limit_per_sec": 1,
 #   "api_keys_active": 1
 # }`}

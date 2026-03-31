@@ -46,17 +46,34 @@ type DailyUsageWire = {
   request_count?: number;
 };
 
+type CreditBreakdownWire = {
+  included_remaining?: number;
+  topup_remaining?: number;
+  bonus_remaining?: number;
+};
+
+type ExpiringCreditWire = {
+  grant_type?: string;
+  credits?: number;
+  expires_at?: string;
+};
+
 type MonthlyUsageWire = {
   tier: string;
+  plan_code?: string;
   period_start: string;
   period_end: string;
   credits_limit: number;
   credits_used: number;
   credits_remaining: number;
+  wallet_balance?: number;
+  credit_breakdown?: CreditBreakdownWire;
+  expiring_credits?: ExpiringCreditWire[];
   request_count?: number;
   api_keys_active?: number;
   rate_limit_per_sec?: number | null;
   has_stripe_customer?: boolean;
+  billing_hold?: boolean;
   daily_breakdown?: DailyUsageWire[];
 };
 
@@ -68,6 +85,44 @@ type BillingLinkWire = {
   url?: string;
   checkout_url?: string;
   portal_url?: string;
+  product_code?: string;
+};
+
+type BillingCatalogProductWire = {
+  code?: string;
+  name?: string;
+  description?: string;
+  kind?: "subscription" | "topup";
+  planCode?: string;
+  plan_code?: string;
+  credits?: number;
+  amountCents?: number;
+  amount_cents?: number;
+  currency?: string;
+  priceDisplay?: string;
+  price_display?: string;
+  cadence?: string;
+  allowPromotionCodes?: boolean;
+  allow_promotion_codes?: boolean;
+  stripePriceId?: string | null;
+  stripe_price_id?: string | null;
+  isConfigured?: boolean;
+  is_configured?: boolean;
+};
+
+type BillingCatalogWire = {
+  plan_code?: string;
+  wallet_balance?: number;
+  credit_breakdown?: CreditBreakdownWire;
+  expiring_credits?: ExpiringCreditWire[];
+  referral?: {
+    code?: string;
+    bonus_credits?: number;
+    reward_delay_days?: number;
+    redeemed_code?: string | null;
+    status?: string | null;
+  };
+  products?: BillingCatalogProductWire[];
 };
 
 type JobStatusWire = "pending" | "running" | "retrying" | "completed" | "failed";
@@ -168,20 +223,76 @@ export type DashboardUsageDay = {
 
 export type DashboardMonthlyUsage = {
   tier: string;
+  planCode: string;
   periodStart: string;
   periodEnd: string;
   creditsLimit: number;
   creditsUsed: number;
   creditsRemaining: number;
+  walletBalance: number;
+  creditBreakdown: {
+    includedRemaining: number;
+    topupRemaining: number;
+    bonusRemaining: number;
+  };
+  expiringCredits: Array<{
+    grantType: string;
+    credits: number;
+    expiresAt: string;
+  }>;
   requestCount: number;
   apiKeysActive: number;
   rateLimitPerSec: number | null;
   hasStripeCustomer: boolean;
+  billingHold: boolean;
   dailyBreakdown: DashboardUsageDay[];
 };
 
 export type BillingRedirect = {
   url: string;
+};
+
+export type BillingProduct = {
+  code: string;
+  name: string;
+  description: string;
+  kind: "subscription" | "topup";
+  planCode: string;
+  credits: number;
+  amountCents: number;
+  currency: string;
+  priceDisplay: string;
+  cadence: string;
+  allowPromotionCodes: boolean;
+  stripePriceId: string | null;
+  isConfigured: boolean;
+};
+
+export type BillingCatalog = {
+  planCode: string;
+  walletBalance: number;
+  creditBreakdown: {
+    includedRemaining: number;
+    topupRemaining: number;
+    bonusRemaining: number;
+  };
+  expiringCredits: Array<{
+    grantType: string;
+    credits: number;
+    expiresAt: string;
+  }>;
+  referral: {
+    code: string;
+    bonusCredits: number;
+    rewardDelayDays: number;
+    redeemedCode: string | null;
+    status: string | null;
+  };
+  products: BillingProduct[];
+};
+
+export type BillingCheckoutRequest = {
+  productCode?: string;
 };
 
 export type JobStatus = JobStatusWire;
@@ -388,6 +499,15 @@ function isDailyUsageWire(value: unknown): value is DailyUsageWire {
   );
 }
 
+function isExpiringCreditWire(value: unknown): value is ExpiringCreditWire {
+  return (
+    isPlainObject(value) &&
+    typeof value.grant_type === "string" &&
+    isFiniteNumber(value.credits) &&
+    typeof value.expires_at === "string"
+  );
+}
+
 function isJobStatus(value: unknown): value is JobStatus {
   return (
     value === "pending" ||
@@ -579,11 +699,42 @@ function normalizeUsage(payload: unknown): DashboardMonthlyUsage {
 
   return {
     tier: usagePayload.tier,
+    planCode:
+      typeof usagePayload.plan_code === "string"
+        ? usagePayload.plan_code
+        : usagePayload.tier,
     periodStart: usagePayload.period_start,
     periodEnd: usagePayload.period_end,
     creditsLimit: usagePayload.credits_limit,
     creditsUsed: usagePayload.credits_used,
     creditsRemaining: usagePayload.credits_remaining,
+    walletBalance:
+      typeof usagePayload.wallet_balance === "number"
+        ? usagePayload.wallet_balance
+        : usagePayload.credits_remaining,
+    creditBreakdown: {
+      includedRemaining:
+        typeof usagePayload.credit_breakdown?.included_remaining === "number"
+          ? usagePayload.credit_breakdown.included_remaining
+          : 0,
+      topupRemaining:
+        typeof usagePayload.credit_breakdown?.topup_remaining === "number"
+          ? usagePayload.credit_breakdown.topup_remaining
+          : 0,
+      bonusRemaining:
+        typeof usagePayload.credit_breakdown?.bonus_remaining === "number"
+          ? usagePayload.credit_breakdown.bonus_remaining
+          : 0,
+    },
+    expiringCredits: Array.isArray(usagePayload.expiring_credits)
+      ? usagePayload.expiring_credits
+          .filter((entry): entry is ExpiringCreditWire => isExpiringCreditWire(entry))
+          .map((entry) => ({
+            grantType: entry.grant_type ?? "unknown",
+            credits: entry.credits ?? 0,
+            expiresAt: entry.expires_at ?? "",
+          }))
+      : [],
     requestCount: usagePayload.request_count ?? 0,
     apiKeysActive: usagePayload.api_keys_active ?? 0,
     rateLimitPerSec:
@@ -591,7 +742,126 @@ function normalizeUsage(payload: unknown): DashboardMonthlyUsage {
         ? usagePayload.rate_limit_per_sec
         : null,
     hasStripeCustomer: usagePayload.has_stripe_customer === true,
+    billingHold: usagePayload.billing_hold === true,
     dailyBreakdown,
+  };
+}
+
+function normalizeBillingProduct(payload: unknown): BillingProduct | null {
+  if (!isPlainObject(payload) || typeof payload.code !== "string" || typeof payload.name !== "string") {
+    return null;
+  }
+
+  const kind = payload.kind === "subscription" ? "subscription" : payload.kind === "topup" ? "topup" : null;
+  if (!kind) {
+    return null;
+  }
+
+  return {
+    code: payload.code,
+    name: payload.name,
+    description: typeof payload.description === "string" ? payload.description : "",
+    kind,
+    planCode:
+      typeof payload.plan_code === "string"
+        ? payload.plan_code
+        : typeof payload.planCode === "string"
+          ? payload.planCode
+          : "free",
+    credits:
+      typeof payload.credits === "number"
+        ? payload.credits
+        : 0,
+    amountCents:
+      typeof payload.amount_cents === "number"
+        ? payload.amount_cents
+        : typeof payload.amountCents === "number"
+          ? payload.amountCents
+          : 0,
+    currency: typeof payload.currency === "string" ? payload.currency : "usd",
+    priceDisplay:
+      typeof payload.price_display === "string"
+        ? payload.price_display
+        : typeof payload.priceDisplay === "string"
+          ? payload.priceDisplay
+          : "",
+    cadence: typeof payload.cadence === "string" ? payload.cadence : "",
+    allowPromotionCodes:
+      payload.allow_promotion_codes === true || payload.allowPromotionCodes === true,
+    stripePriceId:
+      typeof payload.stripe_price_id === "string"
+        ? payload.stripe_price_id
+        : typeof payload.stripePriceId === "string"
+          ? payload.stripePriceId
+          : null,
+    isConfigured:
+      payload.is_configured === true || payload.isConfigured === true,
+  };
+}
+
+function normalizeBillingCatalog(payload: unknown): BillingCatalog {
+  if (!isPlainObject(payload)) {
+    throw new ApiClientError("Invalid billing catalog response.", {
+      status: 500,
+      code: "invalid_payload",
+      details: payload,
+    });
+  }
+
+  const products = Array.isArray(payload.products)
+    ? payload.products
+        .map((entry) => normalizeBillingProduct(entry))
+        .filter((entry): entry is BillingProduct => entry !== null)
+    : [];
+  const breakdown = isPlainObject(payload.credit_breakdown) ? payload.credit_breakdown : {};
+  const referral = isPlainObject(payload.referral) ? payload.referral : {};
+
+  return {
+    planCode: typeof payload.plan_code === "string" ? payload.plan_code : "free",
+    walletBalance: typeof payload.wallet_balance === "number" ? payload.wallet_balance : 0,
+    creditBreakdown: {
+      includedRemaining:
+        typeof breakdown.included_remaining === "number"
+          ? breakdown.included_remaining
+          : 0,
+      topupRemaining:
+        typeof breakdown.topup_remaining === "number"
+          ? breakdown.topup_remaining
+          : 0,
+      bonusRemaining:
+        typeof breakdown.bonus_remaining === "number"
+          ? breakdown.bonus_remaining
+          : 0,
+    },
+    expiringCredits: Array.isArray(payload.expiring_credits)
+      ? payload.expiring_credits
+          .filter((entry): entry is ExpiringCreditWire => isExpiringCreditWire(entry))
+          .map((entry) => ({
+            grantType: entry.grant_type ?? "unknown",
+            credits: entry.credits ?? 0,
+            expiresAt: entry.expires_at ?? "",
+          }))
+      : [],
+    referral: {
+      code: typeof referral.code === "string" ? referral.code : "",
+      bonusCredits:
+        typeof referral.bonus_credits === "number"
+          ? referral.bonus_credits
+          : 0,
+      rewardDelayDays:
+        typeof referral.reward_delay_days === "number"
+          ? referral.reward_delay_days
+          : 0,
+      redeemedCode:
+        typeof referral.redeemed_code === "string"
+          ? referral.redeemed_code
+          : null,
+      status:
+        typeof referral.status === "string"
+          ? referral.status
+          : null,
+    },
+    products,
   };
 }
 
@@ -930,11 +1200,27 @@ export const jobs = {
 };
 
 export const billing = {
-  async createCheckout(): Promise<BillingRedirect> {
+  async getCatalog(): Promise<BillingCatalog> {
+    const payload = await fetchWithAuth<BillingCatalogWire>(
+      "/dashboard/billing/catalog",
+      {
+        method: "GET",
+        cache: "no-store",
+      },
+    );
+
+    return normalizeBillingCatalog(payload);
+  },
+
+  async createCheckout(input: BillingCheckoutRequest = {}): Promise<BillingRedirect> {
     const payload = await fetchWithAuth<BillingLinkWire>(
       "/dashboard/billing/checkout",
       {
         method: "POST",
+        body:
+          typeof input.productCode === "string" && input.productCode.trim()
+            ? { product_code: input.productCode }
+            : {},
       },
     );
 
@@ -950,6 +1236,20 @@ export const billing = {
     );
 
     return normalizeBillingLink(payload);
+  },
+
+  async redeemReferral(code: string): Promise<BillingCatalog["referral"]> {
+    const payload = await fetchWithAuth<{ referral?: BillingCatalogWire["referral"] }>(
+      "/dashboard/billing/referrals/redeem",
+      {
+        method: "POST",
+        body: { code },
+      },
+    );
+
+    return normalizeBillingCatalog({
+      referral: payload.referral ?? {},
+    }).referral;
   },
 };
 

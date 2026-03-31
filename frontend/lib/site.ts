@@ -147,29 +147,14 @@ export const pricingTiers = [
     price: "$0",
     cadence: "to get started",
     description:
-      "1,000 free requests per month to try the API — no credit card required.",
+      "1,000 free credits per month to try the API with no card on file.",
     ctaLabel: "Start free",
     ctaHref: "/login?mode=signup",
     accent: "sky",
     features: [
-      "1,000 requests / month",
+      "1,000 credits / month",
       "Full public search API access",
       "Community support",
-    ],
-  },
-  {
-    name: "Pay as you go",
-    price: "$8",
-    cadence: "per 1,000 requests",
-    description:
-      "Flexible usage-based pricing. Pay only for the requests your agents make.",
-    ctaLabel: "Get started",
-    ctaHref: "/login?mode=signup",
-    accent: "orange",
-    features: [
-      "Unlimited requests",
-      "Usage insights and search logs",
-      "Email support",
     ],
   },
   {
@@ -177,12 +162,13 @@ export const pricingTiers = [
     price: "$30",
     cadence: "per month",
     description:
-      "5,000 requests included with higher rate limits for production workloads.",
+      "5,000 included credits every month with higher rate limits for production workloads.",
     ctaLabel: "Subscribe",
     ctaHref: "/login?mode=signup",
     accent: "blue",
     features: [
-      "5,000 requests / month",
+      "5,000 included credits / month",
+      "Top up anytime with prepaid credit packs",
       "Higher rate limits",
       "Priority email support",
     ],
@@ -205,21 +191,50 @@ export const pricingTiers = [
   },
 ] as const;
 
+export const topupPackages = [
+  {
+    name: "Top-up 1,000",
+    price: "$8",
+    cadence: "one time",
+    description: "Prepaid credits for bursty traffic or trial workloads.",
+    features: ["1,000 credits", "Promo codes supported", "12-month expiry"],
+  },
+  {
+    name: "Top-up 5,000",
+    price: "$36",
+    cadence: "one time",
+    description: "Better effective rate for recurring non-subscription usage.",
+    features: ["5,000 credits", "$7.20 / 1K effective rate", "12-month expiry"],
+  },
+  {
+    name: "Top-up 20,000",
+    price: "$120",
+    cadence: "one time",
+    description: "Best self-serve rate for sustained agent traffic.",
+    features: ["20,000 credits", "$6 / 1K effective rate", "12-month expiry"],
+  },
+] as const;
+
 export const pricingFaqs = [
   {
-    question: "How does per-request pricing work?",
+    question: "How do credits map to API usage?",
     answer:
-      "Every search API call counts as one request. Pay-as-you-go costs $8 per 1,000 requests, billed based on actual usage.",
+      "A standard search costs 1 credit. A search with include_answer=true costs 2 credits. Credits are the only billing unit shown in the product and API docs.",
   },
   {
-    question: "What happens if I exceed 5,000 requests on Monthly?",
+    question: "What happens when I burn through the included monthly credits?",
     answer:
-      "Additional requests beyond the included 5,000 are billed at the pay-as-you-go rate of $8 per 1,000 requests.",
+      "Cerul does not auto-bill overages in v1. Once included credits run low, you can buy prepaid top-up packs and the system will spend those after bonus credits and before blocking requests.",
   },
   {
-    question: "Why choose Monthly over Pay as you go?",
+    question: "Why buy top-ups if Monthly already includes credits?",
     answer:
-      "The Monthly plan gives you a lower effective rate ($6 per 1,000 requests) and higher rate limits, which matters for production agent workloads.",
+      "Top-ups are useful for spikes, launches, and teams that want prepaid control. The larger packs also lower the effective per-credit rate without forcing a subscription.",
+  },
+  {
+    question: "How do referral and promo credits work?",
+    answer:
+      "Stripe promotion codes apply discounts at checkout. Cerul referral codes are separate: once a referred account completes its first paid order and keeps it for 7 days, both sides receive 500 bonus credits.",
   },
   {
     question: "When does enterprise make sense?",

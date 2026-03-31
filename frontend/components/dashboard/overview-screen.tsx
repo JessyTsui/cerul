@@ -267,9 +267,9 @@ export function DashboardOverviewScreen() {
                 </p>
               </div>
               <div className="rounded-[16px] border border-[var(--border)] bg-white/68 px-4 py-3">
-                <p className="text-sm text-[var(--foreground-secondary)]">Credits remaining</p>
+                <p className="text-sm text-[var(--foreground-secondary)]">Spendable balance</p>
                 <p className="mt-1 text-2xl font-semibold text-[var(--foreground)]">
-                  {formatNumber(data.creditsRemaining)}
+                  {formatNumber(data.walletBalance)}
                 </p>
               </div>
               <div className="rounded-[16px] border border-[var(--border)] bg-white/68 px-4 py-3">
@@ -285,4 +285,3 @@ export function DashboardOverviewScreen() {
     </DashboardLayout>
   );
 }
-
