@@ -43,7 +43,7 @@ DEFAULT_KNOWLEDGE_EMBEDDING_DIMENSION = 3072
 DEFAULT_KNOWLEDGE_STEP_TIMEOUTS: dict[str, float] = {
     "FetchKnowledgeMetadataStep": 45.0,
     "FetchKnowledgeCaptionsStep": 60.0,
-    "DownloadKnowledgeVideoStep": 480.0,
+    "DownloadKnowledgeVideoStep": 1200.0,
     "TranscribeKnowledgeVideoStep": 900.0,
     "DetectKnowledgeScenesStep": 90.0,
     "AnalyzeKnowledgeFramesStep": 600.0,

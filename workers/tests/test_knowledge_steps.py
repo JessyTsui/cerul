@@ -652,7 +652,10 @@ def test_ytdlp_caption_provider_reads_proxy_from_env(
     )
 
     assert segments is not None
-    assert captured["command"][1:3] == ["--proxy", "http://proxy.example:10001"]
+    assert "--no-check-certificates" in captured["command"]
+    assert "--proxy" in captured["command"]
+    proxy_idx = captured["command"].index("--proxy")
+    assert captured["command"][proxy_idx + 1] == "http://proxy.example:10001"
 
 
 def test_ytdlp_video_downloader_reads_proxy_from_env(
@@ -688,7 +691,10 @@ def test_ytdlp_video_downloader_reads_proxy_from_env(
     )
 
     assert Path(str(downloaded_path)).exists()
-    assert captured["command"][1:3] == ["--proxy", "http://proxy.example:10001"]
+    assert "--no-check-certificates" in captured["command"]
+    assert "--proxy" in captured["command"]
+    proxy_idx = captured["command"].index("--proxy")
+    assert captured["command"][proxy_idx + 1] == "http://proxy.example:10001"
 
 
 def test_ytdlp_caption_provider_reads_cookies_file_from_env(
@@ -841,12 +847,12 @@ def test_ytdlp_video_downloader_applies_proxy_before_cookies(
         )
     )
 
-    assert captured["command"][1:5] == [
-        "--proxy",
-        "http://proxy.example:10001",
-        "--cookies",
-        str(cookies_path),
-    ]
+    assert "--no-check-certificates" in captured["command"]
+    proxy_idx = captured["command"].index("--proxy")
+    assert captured["command"][proxy_idx + 1] == "http://proxy.example:10001"
+    cookies_idx = captured["command"].index("--cookies")
+    assert captured["command"][cookies_idx + 1] == str(cookies_path)
+    assert proxy_idx < cookies_idx
 
 
 def test_transcribe_knowledge_video_step_normalizes_segments() -> None:
