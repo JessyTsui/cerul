@@ -63,7 +63,6 @@ export function AuthShell({
                 {children}
               </div>
             </div>
-
           </div>
         </section>
       </div>

@@ -42,7 +42,7 @@ export function DashboardTopNav({ currentPath }: DashboardTopNavProps) {
             </Link>
           ) : null}
           <a
-            href="https://github.com/JessyTsui/cerul"
+            href="https://github.com/cerul-ai/cerul"
             target="_blank"
             rel="noreferrer"
             aria-label="Open Cerul on GitHub"

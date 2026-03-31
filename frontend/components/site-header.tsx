@@ -45,7 +45,7 @@ export function SiteHeader({ currentPath }: SiteHeaderProps) {
         {/* Actions */}
         <div className="flex items-center gap-2 lg:gap-3">
           <a
-            href="https://github.com/JessyTsui/cerul"
+            href="https://github.com/cerul-ai/cerul"
             target="_blank"
             rel="noreferrer"
             className="focus-ring hidden h-10 items-center gap-2 rounded-full border border-[var(--border)] bg-white/70 px-4 text-sm font-medium text-[var(--foreground-secondary)] transition hover:border-[var(--border-strong)] hover:bg-white hover:text-[var(--foreground)] lg:inline-flex"

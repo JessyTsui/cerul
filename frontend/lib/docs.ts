@@ -313,7 +313,7 @@ export const docsUtilityLinks = [
   },
   {
     title: "GitHub",
-    href: "https://github.com/JessyTsui/cerul",
+    href: "https://github.com/cerul-ai/cerul",
     description: "Source code and examples.",
   },
   {

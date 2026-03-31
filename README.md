@@ -12,7 +12,7 @@
     <a href="https://cerul.ai/docs#quickstart"><strong>Quickstart</strong></a> &middot;
     <a href="https://cerul.ai/docs#api-reference"><strong>API Reference</strong></a> &middot;
     <a href="https://cerul.ai/pricing"><strong>Pricing</strong></a> &middot;
-    <a href="https://github.com/JessyTsui/cerul"><strong>GitHub</strong></a>
+    <a href="https://github.com/cerul-ai/cerul"><strong>GitHub</strong></a>
   </p>
 
   <p>
@@ -215,7 +215,7 @@ Licensed under [Apache 2.0](./LICENSE).
 <div align="center">
   <br />
 
-  [![Star History Chart](https://api.star-history.com/svg?repos=JessyTsui/cerul&type=Date)](https://star-history.com/#JessyTsui/cerul&Date)
+  [![Star History Chart](https://api.star-history.com/svg?repos=cerul-ai/cerul&type=Date)](https://star-history.com/#cerul-ai/cerul&Date)
 
   <br />
   <sub>Built by <a href="https://github.com/JessyTsui">@JessyTsui</a></sub>

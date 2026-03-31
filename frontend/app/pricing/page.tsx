@@ -221,7 +221,7 @@ export default function PricingPage() {
                     hosted API to skip infrastructure and start searching immediately.
                   </p>
                   <a
-                    href="https://github.com/JessyTsui/cerul"
+                    href="https://github.com/cerul-ai/cerul"
                     target="_blank"
                     rel="noopener noreferrer"
                     className="button-secondary mt-6 inline-flex items-center gap-2"
