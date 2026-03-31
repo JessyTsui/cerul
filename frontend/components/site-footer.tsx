@@ -19,15 +19,15 @@ export function SiteFooter() {
         { label: "Documentation", href: "/docs" },
         { label: "API Reference", href: "/docs/api-reference" },
         { label: "Quickstart", href: "/docs" },
-        { label: "GitHub", href: "https://github.com/JessyTsui/cerul" },
+        { label: "GitHub", href: "https://github.com/cerul-ai/cerul" },
       ],
     },
     {
       title: "Company",
       links: [
         { label: "Contact", href: "mailto:support@cerul.ai" },
-        { label: "Terms", href: "#" },
-        { label: "Privacy", href: "#" },
+        { label: "Terms", href: "/terms" },
+        { label: "Privacy", href: "/privacy" },
       ],
     },
   ];
@@ -45,7 +45,7 @@ export function SiteFooter() {
             </p>
             <div className="flex items-center gap-4">
               <a
-                href="https://github.com/JessyTsui/cerul"
+                href="https://github.com/cerul-ai/cerul"
                 target="_blank"
                 rel="noreferrer"
                 className="flex h-10 w-10 items-center justify-center rounded-full border border-[var(--border)] bg-[var(--surface)] text-[var(--foreground-secondary)] transition hover:border-[var(--border-brand)] hover:text-[var(--brand-bright)]"
