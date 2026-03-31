@@ -25,7 +25,7 @@ export function ResendVerificationForm({
   const [error, setError] = useState<string | null>(initialError);
   const [success, setSuccess] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [cooldown, setCooldown] = useState(0);
+  const [cooldown, setCooldown] = useState(COOLDOWN_SECONDS);
 
   useEffect(() => {
     if (cooldown <= 0) return;

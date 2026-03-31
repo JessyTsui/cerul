@@ -136,6 +136,17 @@ function createAuth() {
           }),
         });
       },
+      onVerifyEmail: async ({ user }) => {
+        void sendEmail({
+          to: user.email,
+          subject: "Welcome to Cerul",
+          html: welcomeTemplate({
+            name: user.name ?? "",
+          }),
+        }).catch((error) => {
+          console.error("[auth] Failed to send welcome email:", error);
+        });
+      },
     },
     ...(hasSocialProviders ? { socialProviders } : {}),
     account: {
@@ -153,16 +164,6 @@ function createAuth() {
               id: user.id,
               email: user.email,
               name: user.name,
-            });
-
-            void sendEmail({
-              to: user.email,
-              subject: "Welcome to Cerul",
-              html: welcomeTemplate({
-                name: user.name ?? "",
-              }),
-            }).catch((error) => {
-              console.error("[auth] Failed to send welcome email:", error);
             });
           },
         },
