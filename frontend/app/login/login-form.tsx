@@ -42,11 +42,6 @@ export function LoginForm({
   const [error, setError] = useState<string | null>(initialError);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  function switchMode() {
-    setMode((m) => (m === "login" ? "signup" : "login"));
-    setError(null);
-  }
-
   async function handleLoginSubmit(normalizedEmail: string) {
     const result = await authClient.signIn.email({
       email: normalizedEmail,

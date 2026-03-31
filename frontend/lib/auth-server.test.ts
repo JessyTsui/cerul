@@ -148,10 +148,11 @@ describe("getAuthRouteHandlers", () => {
     });
     expect(state.lastAuthConfig?.emailVerification).toMatchObject({
       sendVerificationEmail: expect.any(Function),
+      afterEmailVerification: expect.any(Function),
     });
   });
 
-  it("upserts the user profile and sends a welcome email after user creation", async () => {
+  it("upserts the user profile and only welcomes already-verified users at creation time", async () => {
     const { getAuth } = await import("./auth-server");
     const { upsertUserProfile } = await import("./auth-db");
 
@@ -169,6 +170,7 @@ describe("getAuthRouteHandlers", () => {
       id: "user_123",
       email: "owner@example.com",
       name: "Owner Example",
+      emailVerified: false,
     });
     await Promise.resolve();
 
@@ -177,6 +179,41 @@ describe("getAuthRouteHandlers", () => {
       email: "owner@example.com",
       name: "Owner Example",
     });
+    expect(state.sentEmails).toEqual([]);
+
+    await createHook.user?.create?.after?.({
+      id: "user_456",
+      email: "social@example.com",
+      name: "Social Example",
+      emailVerified: true,
+    });
+    await Promise.resolve();
+
+    expect(state.sentEmails).toContainEqual({
+      to: "social@example.com",
+      subject: "Welcome to Cerul",
+      html: "<p>welcome</p>",
+    });
+  });
+
+  it("sends a welcome email after email verification succeeds", async () => {
+    const { getAuth } = await import("./auth-server");
+
+    getAuth();
+
+    const emailVerification = state.lastAuthConfig?.emailVerification as {
+      afterEmailVerification?: (user: {
+        email: string;
+        name: string;
+      }) => Promise<void>;
+    };
+
+    await emailVerification.afterEmailVerification?.({
+      email: "owner@example.com",
+      name: "Owner Example",
+    });
+    await Promise.resolve();
+
     expect(state.sentEmails).toContainEqual({
       to: "owner@example.com",
       subject: "Welcome to Cerul",

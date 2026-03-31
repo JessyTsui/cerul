@@ -78,6 +78,21 @@ function getAuthSecret(): string {
   return DEFAULT_DEV_AUTH_SECRET;
 }
 
+function queueWelcomeEmail(user: {
+  email: string;
+  name?: string | null;
+}) {
+  void sendEmail({
+    to: user.email,
+    subject: "Welcome to Cerul",
+    html: welcomeTemplate({
+      name: user.name ?? "",
+    }),
+  }).catch((error) => {
+    console.error("[auth] Failed to send welcome email:", error);
+  });
+}
+
 function createAuth() {
   const baseURL = getAuthBaseUrl();
   const socialProviders = getConfiguredSocialProviders();
@@ -136,16 +151,8 @@ function createAuth() {
           }),
         });
       },
-      onVerifyEmail: async ({ user }) => {
-        void sendEmail({
-          to: user.email,
-          subject: "Welcome to Cerul",
-          html: welcomeTemplate({
-            name: user.name ?? "",
-          }),
-        }).catch((error) => {
-          console.error("[auth] Failed to send welcome email:", error);
-        });
+      afterEmailVerification: async (user) => {
+        queueWelcomeEmail(user);
       },
     },
     ...(hasSocialProviders ? { socialProviders } : {}),
@@ -165,6 +172,12 @@ function createAuth() {
               email: user.email,
               name: user.name,
             });
+
+            // Social signups can arrive already verified, so they should
+            // receive the welcome email on first account creation.
+            if (user.emailVerified) {
+              queueWelcomeEmail(user);
+            }
           },
         },
         update: {

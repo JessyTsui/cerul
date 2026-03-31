@@ -102,13 +102,24 @@ export function AuthSocialSection({
     setPendingProvider(providerId);
 
     try {
-      await authClient.signIn.social({
+      const result = await authClient.signIn.social({
         provider: providerId,
         ...buildSocialAuthRedirectOptions(
           mode === "login" ? "/login" : "/signup",
           nextPath,
         ),
       });
+
+      if (result.error) {
+        startTransition(() => {
+          onErrorChange(
+            getAuthErrorMessage(
+              result.error,
+              `Unable to continue with ${PROVIDER_LABELS[providerId]}.`,
+            ),
+          );
+        });
+      }
     } catch (error) {
       startTransition(() => {
         onErrorChange(

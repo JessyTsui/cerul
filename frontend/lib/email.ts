@@ -37,8 +37,5 @@ export async function sendEmail(input: SendEmailInput): Promise<void> {
     to: input.to,
     subject: input.subject,
     html: input.html,
-    // Disable click tracking so auth links (verify email, reset password)
-    // go directly to our domain and cookies are set correctly.
-    click_tracking: false,
   });
 }
