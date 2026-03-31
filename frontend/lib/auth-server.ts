@@ -1,5 +1,6 @@
 import { betterAuth } from "better-auth";
 import { toNextJsHandler } from "better-auth/next-js";
+import { oneTap } from "better-auth/plugins";
 import { headers } from "next/headers";
 import { cache } from "react";
 import {
@@ -9,6 +10,7 @@ import {
   resetAuthDatabaseState,
   upsertUserProfile,
 } from "./auth-db";
+import { getConfiguredSocialProviders } from "./auth-providers";
 
 const DEFAULT_DEV_AUTH_SECRET =
   "cerul-local-better-auth-secret-for-development-only";
@@ -71,6 +73,9 @@ function getAuthSecret(): string {
 
 function createAuth() {
   const baseURL = getAuthBaseUrl();
+  const socialProviders = getConfiguredSocialProviders();
+  const hasGoogleProvider = "google" in socialProviders;
+  const hasSocialProviders = Object.keys(socialProviders).length > 0;
 
   return betterAuth({
     baseURL,
@@ -84,6 +89,14 @@ function createAuth() {
       enabled: true,
       autoSignIn: true,
     },
+    ...(hasSocialProviders ? { socialProviders } : {}),
+    account: {
+      accountLinking: {
+        enabled: true,
+        trustedProviders: ["google", "github"],
+      },
+    },
+    plugins: hasGoogleProvider ? [oneTap()] : [],
     databaseHooks: {
       user: {
         create: {

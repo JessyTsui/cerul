@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
   buildAuthPageHref,
+  buildSocialAuthRedirectOptions,
   DEFAULT_AUTH_REDIRECT_PATH,
+  getAuthCallbackErrorMessage,
   getAuthErrorMessage,
   normalizeAuthRedirectPath,
 } from "./auth-shared";
@@ -63,5 +65,29 @@ describe("buildAuthPageHref", () => {
 
   it("preserves safe internal redirect targets", () => {
     expect(buildAuthPageHref("/login", "/admin")).toBe("/login?next=%2Fadmin");
+  });
+});
+
+describe("buildSocialAuthRedirectOptions", () => {
+  it("keeps the same next path for new and returning social users", () => {
+    expect(buildSocialAuthRedirectOptions("/login", "/admin")).toEqual({
+      callbackURL: "/admin",
+      newUserCallbackURL: "/admin",
+      errorCallbackURL: "/login?next=%2Fadmin",
+    });
+  });
+});
+
+describe("getAuthCallbackErrorMessage", () => {
+  it("maps known Better Auth callback errors to friendly messages", () => {
+    expect(getAuthCallbackErrorMessage("email_doesn't_match")).toBe(
+      "That social account uses a different email address than your existing Cerul account.",
+    );
+  });
+
+  it("falls back to the callback error description when available", () => {
+    expect(
+      getAuthCallbackErrorMessage("unknown_error", "Try another provider."),
+    ).toBe("Try another provider.");
   });
 });

@@ -1,6 +1,7 @@
 "use client";
 
 import { createAuthClient } from "better-auth/react";
+import { oneTapClient } from "better-auth/client/plugins";
 
 function resolveAuthClientBaseUrl(): string | undefined {
   const configuredBaseUrl = process.env.NEXT_PUBLIC_SITE_URL?.trim();
@@ -22,10 +23,44 @@ function resolveAuthClientBaseUrl(): string | undefined {
 }
 
 const resolvedBaseUrl = resolveAuthClientBaseUrl();
-
-export const authClient = createAuthClient({
+const baseAuthClientOptions = {
   ...(resolvedBaseUrl ? { baseURL: resolvedBaseUrl } : {}),
   fetchOptions: {
-    credentials: "include",
+    credentials: "include" as const,
   },
-});
+};
+
+function createOneTapAuthClient(clientId: string) {
+  return createAuthClient({
+    ...baseAuthClientOptions,
+    plugins: [
+      oneTapClient({
+        clientId,
+      }),
+    ],
+  });
+}
+
+type OneTapAuthClient = ReturnType<typeof createOneTapAuthClient>;
+
+const oneTapAuthClients = new Map<string, OneTapAuthClient>();
+
+export const authClient = createAuthClient(baseAuthClientOptions);
+
+export function getOneTapAuthClient(clientId: string) {
+  const normalizedClientId = clientId.trim();
+
+  if (!normalizedClientId) {
+    throw new Error("Google One Tap client ID is required.");
+  }
+
+  const cachedClient = oneTapAuthClients.get(normalizedClientId);
+  if (cachedClient) {
+    return cachedClient;
+  }
+
+  const client = createOneTapAuthClient(normalizedClientId);
+
+  oneTapAuthClients.set(normalizedClientId, client);
+  return client;
+}

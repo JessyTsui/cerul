@@ -5,14 +5,24 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { startTransition, useState } from "react";
 import { AuthModeSwitcher } from "@/components/auth/auth-mode-switcher";
+import { AuthSocialSection } from "@/components/auth/auth-social-section";
 import { authClient } from "@/lib/auth";
+import type { AuthSocialProviderId } from "@/lib/auth-providers";
 import { buildAuthPageHref, getAuthErrorMessage } from "@/lib/auth-shared";
 
 type SignupFormProps = {
   nextPath: string;
+  enabledProviders: AuthSocialProviderId[];
+  googleOneTapClientId: string | null;
+  initialError?: string | null;
 };
 
-export function SignupForm({ nextPath }: SignupFormProps) {
+export function SignupForm({
+  nextPath,
+  enabledProviders,
+  googleOneTapClientId,
+  initialError = null,
+}: SignupFormProps) {
   const router = useRouter();
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
@@ -20,7 +30,7 @@ export function SignupForm({ nextPath }: SignupFormProps) {
   const [confirmPassword, setConfirmPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(initialError);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
@@ -75,6 +85,14 @@ export function SignupForm({ nextPath }: SignupFormProps) {
       <AuthModeSwitcher activeMode="signup" nextPath={nextPath} />
 
       <div className="space-y-4 pt-2">
+        <AuthSocialSection
+          mode="signup"
+          nextPath={nextPath}
+          enabledProviders={enabledProviders}
+          googleOneTapClientId={googleOneTapClientId}
+          onErrorChange={setError}
+        />
+
         <div className="grid gap-4">
           <div className="grid gap-2">
             <label className="text-sm font-medium text-[var(--foreground-secondary)]" htmlFor="signup-name">

@@ -5,20 +5,30 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { startTransition, useState } from "react";
 import { AuthModeSwitcher } from "@/components/auth/auth-mode-switcher";
+import { AuthSocialSection } from "@/components/auth/auth-social-section";
 import { authClient } from "@/lib/auth";
+import type { AuthSocialProviderId } from "@/lib/auth-providers";
 import { buildAuthPageHref, getAuthErrorMessage } from "@/lib/auth-shared";
 
 type LoginFormProps = {
   nextPath: string;
+  enabledProviders: AuthSocialProviderId[];
+  googleOneTapClientId: string | null;
+  initialError?: string | null;
 };
 
-export function LoginForm({ nextPath }: LoginFormProps) {
+export function LoginForm({
+  nextPath,
+  enabledProviders,
+  googleOneTapClientId,
+  initialError = null,
+}: LoginFormProps) {
   const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [rememberMe, setRememberMe] = useState(true);
   const [showPassword, setShowPassword] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(initialError);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
@@ -56,6 +66,14 @@ export function LoginForm({ nextPath }: LoginFormProps) {
       <AuthModeSwitcher activeMode="login" nextPath={nextPath} />
 
       <div className="space-y-4 pt-2">
+        <AuthSocialSection
+          mode="login"
+          nextPath={nextPath}
+          enabledProviders={enabledProviders}
+          googleOneTapClientId={googleOneTapClientId}
+          onErrorChange={setError}
+        />
+
         <div className="space-y-2">
           <label className="text-sm font-medium text-[var(--foreground-secondary)]" htmlFor="login-email">
             Work email

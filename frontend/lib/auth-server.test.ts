@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const state = vi.hoisted(() => ({
   authInstanceCount: 0,
+  lastAuthConfig: null as Record<string, unknown> | null,
   databaseGeneration: 0,
 }));
 
@@ -24,12 +25,16 @@ vi.mock("./auth-db", () => ({
 }));
 
 vi.mock("better-auth", () => ({
-  betterAuth: vi.fn(() => ({
-    instanceId: ++state.authInstanceCount,
-    api: {
-      getSession: vi.fn(),
-    },
-  })),
+  betterAuth: vi.fn((config: Record<string, unknown>) => {
+    state.lastAuthConfig = config;
+
+    return {
+      instanceId: ++state.authInstanceCount,
+      api: {
+        getSession: vi.fn(),
+      },
+    };
+  }),
 }));
 
 vi.mock("better-auth/next-js", () => ({
@@ -48,10 +53,19 @@ vi.mock("better-auth/next-js", () => ({
   })),
 }));
 
+vi.mock("better-auth/plugins", () => ({
+  oneTap: vi.fn(() => ({ id: "one-tap" })),
+}));
+
 describe("getAuthRouteHandlers", () => {
   beforeEach(() => {
     state.authInstanceCount = 0;
+    state.lastAuthConfig = null;
     state.databaseGeneration = 0;
+    delete process.env.GITHUB_CLIENT_ID;
+    delete process.env.GITHUB_CLIENT_SECRET;
+    delete process.env.GOOGLE_CLIENT_ID;
+    delete process.env.GOOGLE_CLIENT_SECRET;
     vi.resetModules();
   });
 
@@ -70,5 +84,36 @@ describe("getAuthRouteHandlers", () => {
 
     expect(response.status).toBe(200);
     expect(await response.text()).toBe('{"email":"owner@example.com"}');
+  });
+
+  it("configures social providers, account linking, and one tap when OAuth env vars are set", async () => {
+    process.env.GITHUB_CLIENT_ID = "github-client-id";
+    process.env.GITHUB_CLIENT_SECRET = "github-client-secret";
+    process.env.GOOGLE_CLIENT_ID = "google-client-id";
+    process.env.GOOGLE_CLIENT_SECRET = "google-client-secret";
+
+    const { getAuth } = await import("./auth-server");
+
+    getAuth();
+
+    expect(state.lastAuthConfig).toMatchObject({
+      socialProviders: {
+        github: {
+          clientId: "github-client-id",
+          clientSecret: "github-client-secret",
+        },
+        google: {
+          clientId: "google-client-id",
+          clientSecret: "google-client-secret",
+        },
+      },
+      account: {
+        accountLinking: {
+          enabled: true,
+          trustedProviders: ["google", "github"],
+        },
+      },
+      plugins: [{ id: "one-tap" }],
+    });
   });
 });

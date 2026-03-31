@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { startTransition, useEffect, useState } from "react";
 import { authClient } from "@/lib/auth";
-import { getAuthErrorMessage } from "@/lib/auth-shared";
+import { buildAuthPageHref, getAuthErrorMessage } from "@/lib/auth-shared";
 import { isConsolePath } from "@/lib/console-api";
 
 type SiteHeaderAuthActionsProps = {
@@ -116,10 +116,16 @@ export function SiteHeaderAuthActions({
   if (sessionState !== "authenticated") {
     return (
       <>
-        <Link href="/login" className="button-secondary focus-ring">
+        <Link
+          href={buildAuthPageHref("/login", currentPath) as Route}
+          className="button-secondary focus-ring"
+        >
           Sign in
         </Link>
-        <Link href="/signup" className="button-primary focus-ring min-w-[112px]">
+        <Link
+          href={buildAuthPageHref("/signup", currentPath) as Route}
+          className="button-primary focus-ring min-w-[112px]"
+        >
           Sign up
         </Link>
       </>
