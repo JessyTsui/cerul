@@ -3,6 +3,7 @@ import Link from "next/link";
 import { SiteFooter } from "@/components/site-footer";
 import { SiteHeader } from "@/components/site-header";
 import { Features } from "@/components/features";
+import { GoogleOneTap } from "@/components/google-one-tap";
 import {
   FadeIn,
   BlurFade,
@@ -11,6 +12,8 @@ import {
 } from "@/components/animations";
 import { getSiteOrigin } from "@/lib/site-url";
 import { homeOpenGraphImages, homeTwitterImages } from "@/lib/social-metadata";
+import { getServerSession } from "@/lib/auth-server";
+import { getAuthUiConfig } from "@/lib/auth-providers";
 
 const homeDescription =
   "Cerul is the real-time video search engine for AI agents — search by meaning across visual scenes, speech, and on-screen content.";
@@ -126,13 +129,18 @@ const stats = [
   { value: 3, suffix: "x", label: "Faster search" },
 ];
 
-export default function HomePage() {
+export default async function HomePage() {
+  const session = await getServerSession();
+  const { googleOneTapClientId } = getAuthUiConfig();
+  const showOneTap = !session && googleOneTapClientId;
+
   return (
     <>
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
       />
+      {showOneTap && <GoogleOneTap clientId={googleOneTapClientId} />}
       <div className="soft-theme">
         <div className="relative z-10 mx-auto flex min-h-screen max-w-[1400px] flex-col px-4 pb-10 pt-4 sm:px-6 lg:px-8">
           <SiteHeader currentPath="/" />
@@ -197,7 +205,7 @@ export default function HomePage() {
                     </p>
 
                     <div className="mt-6 flex flex-wrap items-center gap-4">
-                      <Link href="/signup" className="button-gradient">
+                      <Link href="/login?mode=signup" className="button-gradient">
                         Get API key
                       </Link>
                       <Link href="/docs" className="button-secondary">
@@ -310,7 +318,7 @@ export default function HomePage() {
                       Start building today with our free tier. No credit card required.
                     </p>
                     <div className="mt-8 flex flex-wrap items-center justify-center gap-4">
-                      <Link href="/signup" className="button-gradient">
+                      <Link href="/login?mode=signup" className="button-gradient">
                         Get started
                       </Link>
                       <Link href="/docs" className="button-secondary">

@@ -474,7 +474,7 @@ console.log(data);`}
           <DocsToc
             items={tocItems}
             actions={[
-              { label: "Get API key", href: "/signup" },
+              { label: "Get API key", href: "/login?mode=signup" },
               { label: "All endpoints", href: "/docs/api-reference" },
             ]}
           />

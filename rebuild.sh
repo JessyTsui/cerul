@@ -8,7 +8,7 @@ API_DIR="${ROOT_DIR}/api"
 WORKERS_DIR="${ROOT_DIR}/workers"
 WORKERS_VENV="${WORKERS_DIR}/.venv"
 FAST_MODE="false"
-SKIP_MIGRATIONS="false"
+SKIP_MIGRATIONS="true"
 ENV_FILE="${CERUL_ENV_FILE:-${ROOT_DIR}/.env}"
 
 FRONTEND_PORT="${FRONTEND_PORT:-}"
@@ -20,7 +20,7 @@ Usage: ./rebuild.sh [--fast]
 
 Options:
   --fast, -f   Skip dependency reinstall and only clear generated caches before restarting
-  --skip-migrate  Skip database migrations before starting the app
+  --migrate      Run database migrations before starting (skipped by default)
   --env-file PATH  Load runtime variables from a specific env file
   --help, -h   Show this help
 EOF
@@ -32,8 +32,8 @@ while [[ $# -gt 0 ]]; do
       FAST_MODE="true"
       shift
       ;;
-    --skip-migrate)
-      SKIP_MIGRATIONS="true"
+    --migrate)
+      SKIP_MIGRATIONS="false"
       shift
       ;;
     --env-file)
@@ -128,7 +128,6 @@ kill_port() {
 }
 
 clean_frontend() {
-  echo "[clean] Removing frontend generated files..."
   rm -rf "${FRONTEND_DIR}/.next"
   rm -rf "${FRONTEND_DIR}/coverage"
   rm -rf "${FRONTEND_DIR}/dist"
@@ -142,7 +141,6 @@ clean_frontend() {
 }
 
 clean_api() {
-  echo "[clean] Removing API generated files..."
   rm -rf "${API_DIR}/.wrangler"
 
   if [ "${FAST_MODE}" = "false" ]; then
@@ -151,7 +149,6 @@ clean_api() {
 }
 
 clean_workers() {
-  echo "[clean] Removing worker generated files..."
   find "${WORKERS_DIR}" -type d -name "__pycache__" -prune -exec rm -rf {} +
   find "${WORKERS_DIR}" -type f -name "*.pyc" -delete
   rm -rf "${WORKERS_DIR}/.pytest_cache"
@@ -186,7 +183,6 @@ install_workers() {
 
 run_migrations() {
   if [ "${SKIP_MIGRATIONS}" = "true" ]; then
-    echo "[rebuild] Skipping database migrations by request."
     return 0
   fi
 
@@ -230,6 +226,7 @@ echo "[rebuild] env file: ${ENV_FILE}"
 
 kill_port "${FRONTEND_PORT}"
 kill_port "${API_PORT}"
+echo "[clean] Clearing generated files..."
 clean_frontend
 clean_api
 clean_workers

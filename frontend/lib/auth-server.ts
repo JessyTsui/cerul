@@ -1,5 +1,6 @@
 import { betterAuth } from "better-auth";
 import { toNextJsHandler } from "better-auth/next-js";
+import { oneTap } from "better-auth/plugins";
 import { headers } from "next/headers";
 import { cache } from "react";
 import {
@@ -9,6 +10,14 @@ import {
   resetAuthDatabaseState,
   upsertUserProfile,
 } from "./auth-db";
+import { getConfiguredSocialProviders } from "./auth-providers";
+import { sendEmail } from "./email";
+import {
+  emailVerificationTemplate,
+  passwordChangedTemplate,
+  passwordResetTemplate,
+  welcomeTemplate,
+} from "./email-templates";
 
 const DEFAULT_DEV_AUTH_SECRET =
   "cerul-local-better-auth-secret-for-development-only";
@@ -69,13 +78,36 @@ function getAuthSecret(): string {
   return DEFAULT_DEV_AUTH_SECRET;
 }
 
+function queueWelcomeEmail(user: {
+  email: string;
+  name?: string | null;
+}) {
+  void sendEmail({
+    to: user.email,
+    subject: "Welcome to Cerul",
+    html: welcomeTemplate({
+      name: user.name ?? "",
+    }),
+  }).catch((error) => {
+    console.error("[auth] Failed to send welcome email:", error);
+  });
+}
+
 function createAuth() {
   const baseURL = getAuthBaseUrl();
+  const socialProviders = getConfiguredSocialProviders();
+  const hasGoogleProvider = "google" in socialProviders;
+  const hasSocialProviders = Object.keys(socialProviders).length > 0;
+
+  const isDev = process.env.NODE_ENV !== "production";
 
   return betterAuth({
     baseURL,
     secret: getAuthSecret(),
     trustedOrigins: expandTrustedOrigins(baseURL),
+    advanced: {
+      useSecureCookies: !isDev,
+    },
     database: {
       db: getAuthDatabase(),
       type: "postgres",
@@ -83,7 +115,54 @@ function createAuth() {
     emailAndPassword: {
       enabled: true,
       autoSignIn: true,
+      requireEmailVerification: true,
+      resetPasswordTokenExpiresIn: 60 * 60,
+      sendResetPassword: async ({ user, url }) => {
+        await sendEmail({
+          to: user.email,
+          subject: "Reset your Cerul password",
+          html: passwordResetTemplate({
+            name: user.name ?? "",
+            url,
+          }),
+        });
+      },
+      onPasswordReset: async ({ user }) => {
+        await sendEmail({
+          to: user.email,
+          subject: "Your Cerul password was changed",
+          html: passwordChangedTemplate({
+            name: user.name ?? "",
+          }),
+        });
+      },
     },
+    emailVerification: {
+      expiresIn: 60 * 60 * 24,
+      sendOnSignUp: true,
+      autoSignInAfterVerification: true,
+      sendVerificationEmail: async ({ user, url }) => {
+        await sendEmail({
+          to: user.email,
+          subject: "Verify your Cerul email",
+          html: emailVerificationTemplate({
+            name: user.name ?? "",
+            url,
+          }),
+        });
+      },
+      afterEmailVerification: async (user) => {
+        queueWelcomeEmail(user);
+      },
+    },
+    ...(hasSocialProviders ? { socialProviders } : {}),
+    account: {
+      accountLinking: {
+        enabled: true,
+        trustedProviders: ["google", "github"],
+      },
+    },
+    plugins: hasGoogleProvider ? [oneTap()] : [],
     databaseHooks: {
       user: {
         create: {
@@ -93,6 +172,12 @@ function createAuth() {
               email: user.email,
               name: user.name,
             });
+
+            // Social signups can arrive already verified, so they should
+            // receive the welcome email on first account creation.
+            if (user.emailVerified) {
+              queueWelcomeEmail(user);
+            }
           },
         },
         update: {

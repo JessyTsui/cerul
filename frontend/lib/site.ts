@@ -149,7 +149,7 @@ export const pricingTiers = [
     description:
       "1,000 free requests per month to try the API — no credit card required.",
     ctaLabel: "Start free",
-    ctaHref: "/signup",
+    ctaHref: "/login?mode=signup",
     accent: "sky",
     features: [
       "1,000 requests / month",
@@ -164,7 +164,7 @@ export const pricingTiers = [
     description:
       "Flexible usage-based pricing. Pay only for the requests your agents make.",
     ctaLabel: "Get started",
-    ctaHref: "/signup",
+    ctaHref: "/login?mode=signup",
     accent: "orange",
     features: [
       "Unlimited requests",
@@ -179,7 +179,7 @@ export const pricingTiers = [
     description:
       "5,000 requests included with higher rate limits for production workloads.",
     ctaLabel: "Subscribe",
-    ctaHref: "/signup",
+    ctaHref: "/login?mode=signup",
     accent: "blue",
     features: [
       "5,000 requests / month",

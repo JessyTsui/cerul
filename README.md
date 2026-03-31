@@ -184,6 +184,8 @@ Deploy the frontend on Vercel:
 1. Import the repository and set Root Directory to `frontend`
 2. Keep the included `frontend/vercel.json`
 3. Optionally set `NEXT_PUBLIC_SITE_URL` for custom domain metadata
+4. Set `BETTER_AUTH_SECRET` plus any OAuth provider credentials you want to enable
+5. If Google login is enabled, add each frontend origin to Google Authorized JavaScript origins so Google One Tap can run on `/login` and `/signup`
 
 Deploy the API from `api/` with `wrangler deploy`.
 

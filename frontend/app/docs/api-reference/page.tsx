@@ -346,7 +346,7 @@ export default function ApiReferencePage() {
             items={tocItems}
             subtitle="Jump between the introduction and each stable public route."
             actions={[
-              { label: "Get API key", href: "/signup" },
+              { label: "Get API key", href: "/login?mode=signup" },
               { label: "Read quickstart", href: "/docs" },
             ]}
           />

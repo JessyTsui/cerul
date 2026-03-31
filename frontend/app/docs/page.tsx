@@ -95,7 +95,7 @@ export default function DocsPage() {
                     The free tier gives you 1,000 requests per month — no credit card required.
                   </p>
                   <div className="mt-6 flex flex-wrap gap-3">
-                    <Link href="/signup" className="button-primary">
+                    <Link href="/login?mode=signup" className="button-primary">
                       Get free API key
                     </Link>
                     <Link href="/pricing" className="button-secondary">
@@ -300,7 +300,7 @@ export default function DocsPage() {
           <DocsToc
             items={tocItems}
             actions={[
-              { label: "Get API key", href: "/signup" },
+              { label: "Get API key", href: "/login?mode=signup" },
               { label: "API reference", href: "/docs/api-reference" },
             ]}
           />

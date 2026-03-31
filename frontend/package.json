@@ -20,7 +20,9 @@
     "pg": "^8.20.0",
     "react": "19.2.4",
     "react-dom": "19.2.4",
-    "react-easy-crop": "^5.5.7"
+    "react-easy-crop": "^5.5.7",
+    "resend": "^6.10.0",
+    "undici": "^7.24.6"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4.2.2",

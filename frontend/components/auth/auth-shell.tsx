@@ -63,13 +63,6 @@ export function AuthShell({
                 {children}
               </div>
             </div>
-
-            <p className="mt-8 px-4 text-center text-xs leading-6 text-[var(--foreground-tertiary)]">
-              By signing in you agree to the Cerul{" "}
-              <a href="/terms" className="underline hover:text-[var(--foreground-secondary)]">Terms of Service</a>
-              {" "}and{" "}
-              <a href="/privacy" className="underline hover:text-[var(--foreground-secondary)]">Privacy Policy</a>.
-            </p>
           </div>
         </section>
       </div>

@@ -109,7 +109,7 @@ export function DocsHeader({ currentPath }: DocsHeaderProps) {
               >
                 Support
               </a>
-              <Link href="/signup" className="button-secondary min-h-10 px-4 py-2 text-sm">
+              <Link href="/login?mode=signup" className="button-secondary min-h-10 px-4 py-2 text-sm">
                 Get API key
               </Link>
             </div>

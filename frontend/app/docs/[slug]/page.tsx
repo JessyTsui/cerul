@@ -161,7 +161,7 @@ export default async function DocDetailPage({ params }: DocPageProps) {
             items={tocItems}
             subtitle="Jump to the part of the guide you need."
             actions={[
-              { label: "Get API key", href: "/signup" },
+              { label: "Get API key", href: "/login?mode=signup" },
               { label: "Quickstart", href: "/docs" },
             ]}
           />

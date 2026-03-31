@@ -71,7 +71,7 @@ DB_USER="${DB_INFO[2]:-}"
 DB_NAME="${DB_INFO[3]:-}"
 
 if [[ "${DB_HOST}" != "127.0.0.1" && "${DB_HOST}" != "localhost" ]]; then
-  echo "[infra] DATABASE_URL points to ${DB_HOST}; skipping local docker startup."
+  # Remote DB — no local docker needed.
   exit 0
 fi
 

@@ -1,45 +1,27 @@
-import type { Metadata, Route } from "next";
 import { redirect } from "next/navigation";
-import { AuthShell } from "@/components/auth/auth-shell";
-import { normalizeAuthRedirectPath } from "@/lib/auth-shared";
-import { getServerSession } from "@/lib/auth-server";
-import { SignupForm } from "./signup-form";
-
-export const metadata: Metadata = {
-  title: "Sign Up",
-  robots: {
-    index: false,
-    follow: false,
-  },
-  alternates: {
-    canonical: "/signup",
-  },
-};
 
 type SignupPageProps = {
   searchParams: Promise<{
     next?: string | string[];
+    error?: string | string[];
+    error_description?: string | string[];
   }>;
 };
 
 export default async function SignupPage({ searchParams }: SignupPageProps) {
   const resolvedSearchParams = await searchParams;
-  const nextValue = Array.isArray(resolvedSearchParams.next)
-    ? resolvedSearchParams.next[0]
-    : resolvedSearchParams.next;
-  const nextPath = normalizeAuthRedirectPath(nextValue);
-  const session = await getServerSession();
+  const params = new URLSearchParams();
 
-  if (session?.user?.id) {
-    redirect(nextPath as Route);
+  params.set("mode", "signup");
+
+  for (const key of ["next", "error", "error_description"] as const) {
+    const rawValue = resolvedSearchParams[key];
+    const value = Array.isArray(rawValue) ? rawValue[0] : rawValue;
+
+    if (value) {
+      params.set(key, value);
+    }
   }
 
-  return (
-    <AuthShell
-      heroTitle="Give your agent eyes on every video."
-      heroDescription="Cerul indexes video by meaning — so your agent can find the exact scene it needs across thousands of hours."
-    >
-      <SignupForm nextPath={nextPath} />
-    </AuthShell>
-  );
+  redirect(`/login?${params.toString()}`);
 }
