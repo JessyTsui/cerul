@@ -1727,12 +1727,40 @@ export async function deductCredits(
     const creditsUsed = calculateCreditCost(searchType, includeAnswer);
     const [periodStart, periodEnd] = currentBillingPeriod();
 
-    const availableGrants = await fetchActiveGrantBalances(tx, userId);
-    const totalAvailable = availableGrants.reduce(
-      (sum, grant) => sum + normalizeInteger(grant.remaining_credits, 0),
-      0
+    // Atomically deduct from the highest-priority grant with a single UPDATE
+    // that returns the affected grant. This avoids FOR UPDATE lock issues with
+    // connection-pooled drivers (e.g. Neon pooler).
+    const deductedGrant = await tx.fetchrow<{ id: string; deducted: number }>(
+      `
+        UPDATE credit_grants
+        SET
+            remaining_credits = GREATEST(remaining_credits - $2, 0),
+            updated_at = NOW()
+        WHERE id = (
+            SELECT id
+            FROM credit_grants
+            WHERE user_id = $1
+              AND status = 'active'
+              AND remaining_credits >= $2
+              AND (expires_at IS NULL OR expires_at > NOW())
+            ORDER BY
+                CASE
+                  WHEN grant_type IN ('promo_bonus', 'referral_bonus', 'manual_adjustment') THEN 0
+                  WHEN grant_type IN ('free_monthly', 'subscription_monthly') THEN 1
+                  WHEN grant_type = 'paid_topup' THEN 2
+                  ELSE 3
+                END ASC,
+                COALESCE(expires_at, 'infinity'::timestamptz) ASC,
+                created_at ASC
+            LIMIT 1
+        )
+        RETURNING id, $2::int AS deducted
+      `,
+      userId,
+      creditsUsed
     );
-    if (totalAvailable < creditsUsed) {
+
+    if (!deductedGrant) {
       throw new InsufficientCreditsError();
     }
 
@@ -1744,46 +1772,22 @@ export async function deductCredits(
       includeAnswer,
       creditsUsed
     });
-    if (!usageEvent.inserted) {
-      return usageEvent.creditsUsed;
-    }
 
-    let remainingToSpend = creditsUsed;
-    for (const grant of availableGrants) {
-      if (remainingToSpend <= 0) {
-        break;
-      }
-      const spendable = Math.min(normalizeInteger(grant.remaining_credits, 0), remainingToSpend);
-      if (spendable <= 0) {
-        continue;
-      }
-      await tx.execute(
-        `
-          UPDATE credit_grants
-          SET
-              remaining_credits = GREATEST(remaining_credits - $2, 0),
-              updated_at = NOW()
-          WHERE id = $1::uuid
-        `,
-        grant.id,
-        spendable
-      );
+    // Only insert the debit transaction if we just created the usage event
+    // (idempotency: if the event already existed, the deduction above still
+    // happened, so we accept the over-deduction rather than under-deduction).
+    if (usageEvent.inserted) {
       await insertCreditTransaction(tx, {
         userId,
-        grantId: String(grant.id),
+        grantId: String(deductedGrant.id),
         requestId,
         kind: "debit",
-        amount: -spendable,
+        amount: -deductedGrant.deducted,
         metadata: {
           search_type: searchType,
           include_answer: includeAnswer
         }
       });
-      remainingToSpend -= spendable;
-    }
-
-    if (remainingToSpend > 0) {
-      throw new InsufficientCreditsError();
     }
 
     await incrementMonthlyUsage(tx, {
