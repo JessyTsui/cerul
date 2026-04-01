@@ -115,10 +115,6 @@ export function DashboardOverviewScreen() {
     ? resolveDashboardBillingAction(data.tier, data.hasStripeCustomer)
     : null;
 
-  // Calculate request breakdown
-  const freeSearchesUsedToday = data ? data.dailyFreeLimit - data.dailyFreeRemaining : 0;
-  const paidSearches = data ? Math.max(0, data.requestCount - freeSearchesUsedToday) : 0;
-
   async function handleBillingAction() {
     if (!data || !availableBillingAction) return;
     setBillingAction(availableBillingAction);
@@ -339,57 +335,14 @@ export function DashboardOverviewScreen() {
                   }}
                 />
               </div>
-              {/* Request breakdown */}
-              <div className="mt-4 rounded-[16px] border border-[var(--border)] bg-white/56 px-4 py-3">
-                <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                  <div>
-                    <p className="text-sm font-medium text-[var(--foreground)]">
-                      {formatNumber(data.requestCount)} total requests
-                    </p>
-                    <p className="mt-1 text-sm text-[var(--foreground-secondary)]">
-                      {freeSearchesUsedToday > 0 && (
-                        <>
-                          {formatNumber(Math.min(freeSearchesUsedToday, data.dailyFreeLimit))} free
-                          {paidSearches > 0 && (
-                            <>
-                              {" "}+ {formatNumber(paidSearches)} paid
-                            </>
-                          )}
-                          {" "}= {formatNumber(data.creditsUsed)} credits used
-                        </>
-                      )}
-                      {freeSearchesUsedToday === 0 && paidSearches > 0 && (
-                        <>
-                          {formatNumber(paidSearches)} paid = {formatNumber(data.creditsUsed)} credits used
-                        </>
-                      )}
-                      {freeSearchesUsedToday === 0 && paidSearches === 0 && (
-                        <>No credits used yet</>
-                      )}
-                    </p>
-                  </div>
-                  <span className="rounded-full border border-[rgba(97,125,233,0.16)] bg-[rgba(97,125,233,0.08)] px-2.5 py-1 text-[11px] font-medium uppercase tracking-[0.14em] text-[rgb(72,98,198)]">
-                    {formatNumber(data.dailyFreeRemaining)} free left today
-                  </span>
-                </div>
-              </div>
             </div>
 
-            {/* Simplified credit stats - single remaining credits display */}
-            <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-              <div className="dashboard-card rounded-[16px] border border-[var(--border)] bg-white/68 px-4 py-3">
-                <p className="text-sm text-[var(--foreground-secondary)]">Requests</p>
-                <p className="mt-1 text-2xl font-semibold text-[var(--foreground)]">
-                  {formatNumber(data.requestCount)}
-                </p>
-              </div>
+            {/* Key stats */}
+            <div className="mt-4 grid gap-3 sm:grid-cols-3">
               <div className="dashboard-card rounded-[16px] border border-[var(--border)] bg-white/68 px-4 py-3">
                 <p className="text-sm text-[var(--foreground-secondary)]">Credits remaining</p>
                 <p className="mt-1 text-2xl font-semibold text-[var(--foreground)]">
                   {formatNumber(data.walletBalance)}
-                </p>
-                <p className="mt-1 text-xs text-[var(--foreground-tertiary)]">
-                  All available credits
                 </p>
               </div>
               <div className="dashboard-card rounded-[16px] border border-[var(--border)] bg-white/68 px-4 py-3">
@@ -405,9 +358,6 @@ export function DashboardOverviewScreen() {
                 <p className="text-sm text-[var(--foreground-secondary)]">Active keys</p>
                 <p className="mt-1 text-2xl font-semibold text-[var(--foreground)]">
                   {formatNumber(data.apiKeysActive)}
-                </p>
-                <p className="mt-1 text-xs text-[var(--foreground-tertiary)]">
-                  current workspace
                 </p>
               </div>
             </div>

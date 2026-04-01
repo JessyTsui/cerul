@@ -101,19 +101,11 @@ export function DashboardUsageScreen() {
   const chartData = buildUsageChartData(data);
   const includedCreditsUsed = getIncludedCreditsUsed(data);
   const activeDays = chartData.filter((p) => p.requestCount > 0 || p.creditsUsed > 0);
-  const averageDailyRequests = chartData.length === 0
-    ? 0
-    : Math.round(data.requestCount / chartData.length);
-  const creditsPerRequest = data.requestCount === 0
-    ? 0
-    : Number((data.creditsUsed / data.requestCount).toFixed(2));
   const busiestDays = [...activeDays]
     .sort((a, b) => b.requestCount !== a.requestCount ? b.requestCount - a.requestCount : b.creditsUsed - a.creditsUsed)
     .slice(0, 5);
   const recentRows = [...chartData].slice(-14).reverse();
   const totalRequestValue = Math.max(1, ...busiestDays.map((d) => d.requestCount));
-
-  const freeSearchesUsedToday = data.dailyFreeLimit - data.dailyFreeRemaining;
 
   return (
     <DashboardLayout
@@ -174,18 +166,15 @@ export function DashboardUsageScreen() {
         </div>
 
         {/* Inline stats row */}
-        <div className="grid grid-cols-2 gap-px border-t border-[var(--border)] bg-[var(--border)] xl:grid-cols-4">
-          {[
-            { label: "Requests", value: formatNumber(data.requestCount) },
-            { label: "Credits used", value: formatNumber(data.creditsUsed) },
-            { label: "Active days", value: `${formatNumber(activeDays.length)} / ${formatNumber(chartData.length)}` },
-            { label: "Avg / day", value: formatNumber(averageDailyRequests) },
-          ].map((item) => (
-            <div key={item.label} className="bg-[var(--background-elevated)] px-5 py-4">
-              <p className="text-xs text-[var(--foreground-tertiary)]">{item.label}</p>
-              <p className="mt-1 text-xl font-semibold tabular-nums text-[var(--foreground)]">{item.value}</p>
-            </div>
-          ))}
+        <div className="grid grid-cols-2 gap-px border-t border-[var(--border)] bg-[var(--border)]">
+          <div className="bg-[var(--background-elevated)] px-5 py-4">
+            <p className="text-xs text-[var(--foreground-tertiary)]">Credits used</p>
+            <p className="mt-1 text-xl font-semibold tabular-nums text-[var(--foreground)]">{formatNumber(data.creditsUsed)}</p>
+          </div>
+          <div className="bg-[var(--background-elevated)] px-5 py-4">
+            <p className="text-xs text-[var(--foreground-tertiary)]">Billing period</p>
+            <p className="mt-1 text-xl font-semibold tabular-nums text-[var(--foreground)]">{formatBillingPeriod(data.periodStart, data.periodEnd)}</p>
+          </div>
         </div>
 
         {/* Credit usage bar */}
