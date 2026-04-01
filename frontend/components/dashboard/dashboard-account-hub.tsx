@@ -42,7 +42,7 @@ export function DashboardAccountHub() {
 
   const initials = getInitials(viewer.displayName, viewer.email);
   const planLabel = data ? getTierLabel(data.tier) : "Free";
-  const creditsDisplay = data ? formatNumber(data.walletBalance) : "—";
+  const creditsDisplay = data ? formatNumber(data.walletBalance + data.dailyFreeRemaining) : "—";
 
   useEffect(() => {
     if (!open) {

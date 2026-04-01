@@ -77,7 +77,7 @@ export function DashboardTopAccountControls() {
   const avatarTimeoutRef = useRef<number | null>(null);
 
   const initials = getInitials(viewer.displayName, viewer.email);
-  const remainingCredits = data ? formatNumber(data.walletBalance) : "—";
+  const remainingCredits = data ? formatNumber(data.walletBalance + data.dailyFreeRemaining) : "—";
   const planLabel = data ? getTierLabel(data.tier) : "Free";
 
   // Clear timeouts on unmount
@@ -206,7 +206,7 @@ export function DashboardTopAccountControls() {
                   <span className="text-sm text-[var(--foreground)]">Total remaining</span>
                 </div>
                 <span className="text-sm font-semibold text-[var(--foreground)]">
-                  {formatNumber(data.walletBalance)}
+                  {formatNumber(data.walletBalance + data.dailyFreeRemaining)}
                 </span>
               </div>
 
@@ -265,23 +265,14 @@ export function DashboardTopAccountControls() {
               <IconArrowRight className="h-4 w-4" />
             </Link>
 
-            {/* Refresh button and timestamp */}
-            <div className="mt-3 flex items-center justify-between border-t border-[var(--border)] pt-3">
-              <span className="text-xs text-[var(--foreground-tertiary)]">
-                {lastUpdatedAt ? `Updated ${lastUpdatedAt.toLocaleTimeString()}` : "Loading..."}
-              </span>
-              <button
-                type="button"
-                onClick={() => {
-                  void refresh();
-                }}
-                className="flex items-center gap-1 rounded-[10px] px-2 py-1 text-xs text-[var(--foreground-secondary)] transition hover:bg-[var(--background-elevated)] hover:text-[var(--foreground)]"
-                title="Refresh balance"
-              >
-                <IconRefresh className="h-3.5 w-3.5" />
-                Refresh
-              </button>
-            </div>
+            {/* Timestamp */}
+            {lastUpdatedAt && (
+              <div className="mt-3 border-t border-[var(--border)] pt-3">
+                <span className="text-xs text-[var(--foreground-tertiary)]">
+                  Updated {lastUpdatedAt.toLocaleTimeString()}
+                </span>
+              </div>
+            )}
           </div>
         )}
       </div>

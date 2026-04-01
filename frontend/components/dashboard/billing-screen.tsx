@@ -186,7 +186,7 @@ export function DashboardBillingScreen() {
       currentPath="/dashboard/billing"
       title="Billing"
       description={`${getTierLabel(data.tier)} plan`}
-      actions={<button className="button-secondary" onClick={() => void refresh()} type="button">Refresh</button>}
+      actions={null}
     >
       {error && <DashboardNotice title="Showing last successful snapshot." description={error} tone="error" />}
       {billingError && <DashboardNotice title="Billing action failed" description={billingError} tone="error" />}
@@ -203,7 +203,7 @@ export function DashboardBillingScreen() {
             <div>
               <p className="text-sm text-[var(--foreground-secondary)]">{getTierLabel(data.tier)} plan</p>
               <p className="text-2xl font-semibold tracking-[-0.04em] text-[var(--foreground)]">
-                {formatNumber(data.walletBalance)} <span className="text-base font-normal text-[var(--foreground-tertiary)]">credits remaining</span>
+                {formatNumber(data.walletBalance + data.dailyFreeRemaining)} <span className="text-base font-normal text-[var(--foreground-tertiary)]">credits available</span>
               </p>
             </div>
           </div>

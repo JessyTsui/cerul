@@ -73,11 +73,7 @@ export function DashboardUsageScreen() {
       currentPath="/dashboard/usage"
       title="Usage"
       description={`${getTierLabel(data.tier)} · ${formatBillingPeriod(data.periodStart, data.periodEnd)}`}
-      actions={
-        <button className="button-secondary" onClick={() => void refresh()} type="button">
-          Refresh
-        </button>
-      }
+      actions={null}
     >
       {error && (
         <DashboardNotice title="Showing last successful snapshot." description={error} tone="error" />

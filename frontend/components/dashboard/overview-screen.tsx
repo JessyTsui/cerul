@@ -153,20 +153,7 @@ export function DashboardOverviewScreen() {
       currentPath="/dashboard"
       title="Overview"
       description={data ? `${getTierLabel(data.tier)} plan` : undefined}
-      actions={
-        data ? (
-          <button
-            className="button-secondary"
-            disabled={isLoading || keysLoading}
-            onClick={() => {
-              void Promise.all([refresh(), loadKeys({ preserveData: true })]);
-            }}
-            type="button"
-          >
-            Refresh
-          </button>
-        ) : null
-      }
+      actions={null}
     >
       <CreateKeyDialog
         isOpen={isDialogOpen}
@@ -213,21 +200,15 @@ export function DashboardOverviewScreen() {
                 <IconBolt className="h-6 w-6 text-[var(--brand-bright)]" />
               </span>
               <div className="min-w-0 flex-1">
-                <p className="text-xs text-[var(--foreground-tertiary)]">Credits remaining</p>
+                <p className="text-xs text-[var(--foreground-tertiary)]">Credits available</p>
                 <p className="mt-0.5 text-3xl font-semibold tracking-[-0.04em] text-[var(--foreground)]">
-                  {formatNumber(data.walletBalance)}
+                  {formatNumber(data.walletBalance + data.dailyFreeRemaining)}
                 </p>
               </div>
               <div className="hidden items-center gap-5 border-l border-[var(--border)] pl-5 sm:flex">
                 <div>
                   <p className="text-xs text-[var(--foreground-tertiary)]">Used this period</p>
                   <p className="mt-0.5 text-lg font-semibold tabular-nums text-[var(--foreground)]">{formatNumber(data.creditsUsed)}</p>
-                </div>
-                <div>
-                  <p className="text-xs text-[var(--foreground-tertiary)]">Free today</p>
-                  <p className="mt-0.5 text-lg font-semibold tabular-nums text-[var(--foreground)]">
-                    {formatNumber(data.dailyFreeRemaining)}<span className="text-sm font-normal text-[var(--foreground-tertiary)]"> / {formatNumber(data.dailyFreeLimit)}</span>
-                  </p>
                 </div>
               </div>
             </div>
