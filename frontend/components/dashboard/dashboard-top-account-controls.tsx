@@ -190,7 +190,7 @@ export function DashboardTopAccountControls() {
               <span className="text-base font-semibold text-[var(--foreground)]">{planLabel}</span>
               <Link
                 href="/dashboard/billing"
-                className="rounded-full bg-[var(--foreground)] px-3 py-1 text-xs font-medium text-white transition hover:bg-[var(--foreground-secondary)]"
+                className="button-primary rounded-full px-3 py-1 text-xs font-medium"
                 onClick={() => setCreditDropdownOpen(false)}
               >
                 Upgrade
