@@ -1,6 +1,6 @@
 "use client";
 
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import { billing, getApiErrorMessage, type BillingCatalog } from "@/lib/api";
 import { useConsoleViewer } from "@/components/console/console-viewer-context";
@@ -8,7 +8,7 @@ import { formatNumber } from "@/lib/dashboard";
 import { buildReferralPath, buildReferralUrl } from "@/lib/referral";
 import { AccountProfilePanel } from "./account-profile-panel";
 import { DashboardLayout } from "./dashboard-layout";
-import { DashboardSkeleton, DashboardState } from "./dashboard-state";
+import { DashboardNotice, DashboardSkeleton, DashboardState } from "./dashboard-state";
 import { useMonthlyUsage } from "./use-monthly-usage";
 
 type BootstrapAdminStatus = "loading" | "available" | "already_admin" | "disabled" | "managed_by_emails" | "admin_exists" | "unavailable";
@@ -41,6 +41,7 @@ function formatRelativeDate(iso: string): string {
 
 export function DashboardSettingsScreen() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const viewer = useConsoleViewer();
   const { data, error, isLoading, refresh } = useMonthlyUsage();
   const [catalog, setCatalog] = useState<BillingCatalog | null>(null);
@@ -49,18 +50,84 @@ export function DashboardSettingsScreen() {
   const [referralSuccess, setReferralSuccess] = useState<string | null>(null);
   const [isRedeemingReferral, setIsRedeemingReferral] = useState(false);
   const [copiedLink, setCopiedLink] = useState(false);
+  const [copyLinkError, setCopyLinkError] = useState<string | null>(null);
   const [editingCode, setEditingCode] = useState(false);
   const [newCode, setNewCode] = useState("");
   const [codeError, setCodeError] = useState<string | null>(null);
   const [isSavingCode, setIsSavingCode] = useState(false);
+  const [checkoutNotice, setCheckoutNotice] = useState<string | null>(null);
   const [bootstrapSecret, setBootstrapSecret] = useState("");
   const [bootstrapError, setBootstrapError] = useState<string | null>(null);
   const [isPromotingAdmin, setIsPromotingAdmin] = useState(false);
+  const [pageOrigin, setPageOrigin] = useState<string | null>(null);
   const [bootstrapStatus, setBootstrapStatus] = useState<BootstrapAdminStatus>(
     () => (viewer.isAdmin ? "already_admin" : "loading"),
   );
 
   useEffect(() => { void billing.getCatalog().then(setCatalog).catch(() => {}); }, []);
+
+  useEffect(() => {
+    setPageOrigin(window.location.origin);
+  }, []);
+
+  useEffect(() => {
+    const checkoutState = searchParams.get("checkout");
+    const checkoutSessionId = searchParams.get("session_id");
+
+    if (checkoutState !== "success") {
+      return;
+    }
+
+    const clearCheckoutParams = () => {
+      const nextUrl = new URL(window.location.href);
+      nextUrl.searchParams.delete("checkout");
+      nextUrl.searchParams.delete("session_id");
+      nextUrl.searchParams.delete("type");
+      const nextQuery = nextUrl.searchParams.toString();
+      window.history.replaceState({}, "", `${nextUrl.pathname}${nextQuery ? `?${nextQuery}` : ""}`);
+    };
+
+    if (!checkoutSessionId) {
+      setCheckoutNotice("Payment completed. Refresh the page if your balance does not update right away.");
+      clearCheckoutParams();
+      return;
+    }
+
+    let cancelled = false;
+
+    void billing.reconcileCheckout(checkoutSessionId)
+      .then(async (result) => {
+        if (cancelled) {
+          return;
+        }
+
+        await Promise.all([
+          billing.getCatalog().then(setCatalog).catch(() => {}),
+          refresh(),
+        ]);
+
+        if (!cancelled) {
+          setCheckoutNotice(
+            result.mode === "payment"
+              ? `Credits added${result.creditsGranted > 0 ? `: ${formatNumber(result.creditsGranted)}.` : "."}`
+              : "Billing synced successfully.",
+          );
+        }
+        clearCheckoutParams();
+      })
+      .catch((nextError) => {
+        if (cancelled) {
+          return;
+        }
+        setCheckoutNotice(
+          getApiErrorMessage(nextError, "Payment completed, but this page may need a manual refresh."),
+        );
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [refresh, searchParams]);
 
   useEffect(() => {
     if (viewer.isAdmin) { setBootstrapStatus("already_admin"); return; }
@@ -106,8 +173,17 @@ export function DashboardSettingsScreen() {
   function handleCopyLink() {
     const code = catalog?.referral.code;
     if (!code) return;
-    const link = buildReferralUrl(window.location.origin, code);
-    void navigator.clipboard.writeText(link).then(() => { setCopiedLink(true); setTimeout(() => setCopiedLink(false), 2000); });
+    const origin = pageOrigin ?? window.location.origin;
+    const link = buildReferralUrl(origin, code);
+    setCopyLinkError(null);
+    void navigator.clipboard.writeText(link)
+      .then(() => {
+        setCopiedLink(true);
+        window.setTimeout(() => setCopiedLink(false), 2000);
+      })
+      .catch(() => {
+        setCopyLinkError("Copy failed. Select and copy the link manually.");
+      });
   }
 
   async function handleBootstrapAdmin() {
@@ -125,6 +201,9 @@ export function DashboardSettingsScreen() {
 
   const referral = catalog?.referral;
   const referralPath = referral?.code ? buildReferralPath(referral.code) : null;
+  const referralLink = referral?.code && pageOrigin
+    ? buildReferralUrl(pageOrigin, referral.code)
+    : null;
 
   return (
     <DashboardLayout currentPath="/dashboard/settings" title="Settings" actions={null}>
@@ -135,6 +214,10 @@ export function DashboardSettingsScreen() {
           action={<button className="button-primary" onClick={() => void refresh()} type="button">Retry</button>} />
       ) : data ? (
         <div className="space-y-6">
+          {checkoutNotice ? (
+            <DashboardNotice title="Billing update" description={checkoutNotice} tone="success" />
+          ) : null}
+
           {/* ── Profile ───────────────────────────────── */}
           <section>
             <h2 className="mb-3 text-sm font-semibold text-[var(--foreground)]">Profile</h2>
@@ -150,13 +233,16 @@ export function DashboardSettingsScreen() {
                 <p className="text-xs text-[var(--foreground-tertiary)]">Your invite link</p>
                 <div className="mt-1.5 flex items-center gap-2">
                   <div className="min-w-0 flex-1 rounded-[10px] border border-[var(--border)] bg-white/80 px-3 py-2 font-mono text-sm text-[var(--foreground)]">
-                    {referralPath ?? "—"}
+                    {referralLink ?? referralPath ?? "—"}
                   </div>
                   <button type="button" onClick={handleCopyLink} className="flex h-9 shrink-0 items-center gap-1.5 rounded-[10px] border border-[var(--border)] bg-white/70 px-3 text-xs text-[var(--foreground-secondary)] transition hover:bg-white hover:text-[var(--foreground)]">
                     <IconCopy className="h-3.5 w-3.5" />
                     {copiedLink ? "Copied!" : "Copy"}
                   </button>
                 </div>
+                {copyLinkError ? (
+                  <p className="mt-2 text-xs text-[var(--error)]">{copyLinkError}</p>
+                ) : null}
 
                 {/* Editable code */}
                 <div className="mt-3 flex items-center gap-2">

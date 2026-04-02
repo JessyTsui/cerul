@@ -592,6 +592,10 @@ function generateReferralCode(): string {
 
 const REFERRAL_CODE_PATTERN = /^[A-Za-z0-9_-]+$/;
 
+function isUniqueViolation(error: unknown): boolean {
+  return Boolean((error as { code?: string } | null | undefined)?.code === "23505");
+}
+
 export async function ensureReferralCode(db: DatabaseClient, userId: string): Promise<ReferralCodeRecord> {
   const existing = await db.fetchrow<ReferralCodeRecord>(
     `
@@ -611,23 +615,47 @@ export async function ensureReferralCode(db: DatabaseClient, userId: string): Pr
 
   for (let attempt = 0; attempt < 5; attempt += 1) {
     const code = generateReferralCode();
-    const inserted = await db.fetchrow<ReferralCodeRecord>(
-      `
-        INSERT INTO referral_codes (user_id, code, is_active)
-        VALUES ($1, $2, TRUE)
-        ON CONFLICT (code) DO NOTHING
-        RETURNING id, code, is_active
-      `,
-      userId,
-      code
-    );
-    if (inserted) {
-      return {
-        id: String(inserted.id),
-        code: String(inserted.code),
-        is_active: Boolean(inserted.is_active)
-      };
+    try {
+      const inserted = await db.fetchrow<ReferralCodeRecord>(
+        `
+          INSERT INTO referral_codes (user_id, code, is_active)
+          VALUES ($1, $2, TRUE)
+          ON CONFLICT (user_id)
+          DO UPDATE SET updated_at = referral_codes.updated_at
+          RETURNING id, code, is_active
+        `,
+        userId,
+        code
+      );
+      if (inserted) {
+        return {
+          id: String(inserted.id),
+          code: String(inserted.code),
+          is_active: Boolean(inserted.is_active)
+        };
+      }
+    } catch (error) {
+      if (isUniqueViolation(error)) {
+        continue;
+      }
+      throw error;
     }
+  }
+
+  const recovered = await db.fetchrow<ReferralCodeRecord>(
+    `
+      SELECT id, code, is_active
+      FROM referral_codes
+      WHERE user_id = $1
+    `,
+    userId
+  );
+  if (recovered) {
+    return {
+      id: String(recovered.id),
+      code: String(recovered.code),
+      is_active: Boolean(recovered.is_active)
+    };
   }
 
   throw new Error(`Unable to generate referral code for ${userId}`);
@@ -656,16 +684,24 @@ export async function updateReferralCode(
     throw new Error("This code is already taken.");
   }
 
-  const updated = await db.fetchrow<ReferralCodeRecord>(
-    `
-      UPDATE referral_codes
-      SET code = $2, updated_at = NOW()
-      WHERE user_id = $1
-      RETURNING id, code, is_active
-    `,
-    userId,
-    normalized
-  );
+  let updated: ReferralCodeRecord | null = null;
+  try {
+    updated = await db.fetchrow<ReferralCodeRecord>(
+      `
+        UPDATE referral_codes
+        SET code = $2, updated_at = NOW()
+        WHERE user_id = $1
+        RETURNING id, code, is_active
+      `,
+      userId,
+      normalized
+    );
+  } catch (error) {
+    if (isUniqueViolation(error)) {
+      throw new Error("This code is already taken.");
+    }
+    throw error;
+  }
   if (!updated) {
     throw new Error("Referral code not found for this user.");
   }
