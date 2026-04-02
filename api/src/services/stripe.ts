@@ -154,6 +154,46 @@ export function createPortalSession(config: AppConfig, stripeCustomerId: string)
   });
 }
 
+export async function listPaymentMethods(config: AppConfig, stripeCustomerId: string): Promise<Array<{
+  id: string;
+  brand: string;
+  last4: string;
+  expMonth: number;
+  expYear: number;
+  isDefault: boolean;
+}>> {
+  const client = stripeClient(config);
+  const [methods, customer] = await Promise.all([
+    client.paymentMethods.list({ customer: stripeCustomerId, type: "card", limit: 10 }),
+    client.customers.retrieve(stripeCustomerId),
+  ]);
+  const defaultPmId = (customer as Stripe.Customer).invoice_settings?.default_payment_method;
+  return methods.data.map((pm) => ({
+    id: pm.id,
+    brand: pm.card?.brand ?? "unknown",
+    last4: pm.card?.last4 ?? "****",
+    expMonth: pm.card?.exp_month ?? 0,
+    expYear: pm.card?.exp_year ?? 0,
+    isDefault: pm.id === defaultPmId,
+  }));
+}
+
+export function createSetupSession(config: AppConfig, stripeCustomerId: string): Promise<string> {
+  const client = stripeClient(config);
+  return client.checkout.sessions.create({
+    customer: stripeCustomerId,
+    mode: "setup",
+    payment_method_types: ["card"],
+    success_url: `${webBaseUrl(config)}/dashboard/billing?tab=payment`,
+    cancel_url: `${webBaseUrl(config)}/dashboard/billing?tab=payment`,
+  }).then((session) => {
+    if (!session.url) throw new StripeServiceError("Stripe setup session did not return a URL.");
+    return String(session.url);
+  }).catch((error: any) => {
+    throw new StripeServiceError(error?.message || "Stripe setup session creation failed.");
+  });
+}
+
 export function retrieveCheckoutSession(config: AppConfig, checkoutSessionId: string): Promise<Stripe.Checkout.Session> {
   const client = stripeClient(config);
   return client.checkout.sessions.retrieve(checkoutSessionId).catch((error: any) => {

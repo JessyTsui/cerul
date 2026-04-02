@@ -243,6 +243,15 @@ export type DashboardMonthlyUsage = {
   dailyBreakdown: DashboardUsageDay[];
 };
 
+export type PaymentMethod = {
+  id: string;
+  brand: string;
+  last4: string;
+  expMonth: number;
+  expYear: number;
+  isDefault: boolean;
+};
+
 export type QueryLogResult = {
   rank: number;
   title: string;
@@ -1292,6 +1301,30 @@ export const billing = {
     return normalizeBillingCatalog({
       referral: payload.referral ?? {},
     }).referral;
+  },
+
+  async listPaymentMethods(): Promise<PaymentMethod[]> {
+    const raw = await fetchWithAuth<Record<string, unknown>>(
+      "/dashboard/billing/payment-methods",
+      { method: "GET", cache: "no-store" },
+    );
+    const methods = Array.isArray(raw.methods) ? raw.methods : [];
+    return methods.map((m: Record<string, unknown>) => ({
+      id: String(m.id ?? ""),
+      brand: String(m.brand ?? "unknown"),
+      last4: String(m.last4 ?? "****"),
+      expMonth: Number(m.expMonth ?? m.exp_month ?? 0),
+      expYear: Number(m.expYear ?? m.exp_year ?? 0),
+      isDefault: m.isDefault === true || m.is_default === true,
+    }));
+  },
+
+  async setupPaymentMethod(): Promise<BillingRedirect> {
+    const payload = await fetchWithAuth<BillingLinkWire>(
+      "/dashboard/billing/setup-payment",
+      { method: "POST" },
+    );
+    return normalizeBillingLink(payload);
   },
 };
 

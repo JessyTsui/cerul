@@ -15,6 +15,8 @@ import { getProProduct } from "../services/billing-catalog";
 import {
   createCheckoutSession,
   createPortalSession,
+  createSetupSession,
+  listPaymentMethods,
   retrieveCheckoutSession,
   retrieveInvoice,
   retrieveSubscription,
@@ -1093,6 +1095,46 @@ export function createDashboardRouter(): any {
       });
     } catch (error) {
       apiError(409, error instanceof Error ? error.message : "Unable to redeem referral code.");
+    }
+  });
+
+  // ---- Payment methods ----
+
+  router.get("/billing/payment-methods", sessionAuth(), async (c: any) => {
+    const db = c.get("db") as DatabaseClient;
+    const config = c.get("config");
+    const session = c.get("session") as DashboardSession;
+    const profile = await fetchUserProfile(db, session.userId);
+    if (!profile?.stripe_customer_id) {
+      return c.json({ methods: [] });
+    }
+    try {
+      const methods = await listPaymentMethods(config, String(profile.stripe_customer_id));
+      return c.json({ methods });
+    } catch (error) {
+      if (error instanceof StripeServiceError) {
+        apiError(502, error.message);
+      }
+      throw error;
+    }
+  });
+
+  router.post("/billing/setup-payment", sessionAuth(), async (c: any) => {
+    const db = c.get("db") as DatabaseClient;
+    const config = c.get("config");
+    const session = c.get("session") as DashboardSession;
+    const profile = await fetchUserProfile(db, session.userId);
+    if (!profile?.stripe_customer_id) {
+      apiError(400, "No billing account. Complete a checkout first.");
+    }
+    try {
+      const url = await createSetupSession(config, String(profile.stripe_customer_id));
+      return c.json({ url });
+    } catch (error) {
+      if (error instanceof StripeServiceError) {
+        apiError(502, error.message);
+      }
+      throw error;
     }
   });
 
