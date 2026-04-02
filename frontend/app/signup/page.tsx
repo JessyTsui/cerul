@@ -5,6 +5,7 @@ type SignupPageProps = {
     next?: string | string[];
     error?: string | string[];
     error_description?: string | string[];
+    ref?: string | string[];
   }>;
 };
 
@@ -14,7 +15,7 @@ export default async function SignupPage({ searchParams }: SignupPageProps) {
 
   params.set("mode", "signup");
 
-  for (const key of ["next", "error", "error_description"] as const) {
+  for (const key of ["next", "error", "error_description", "ref"] as const) {
     const rawValue = resolvedSearchParams[key];
     const value = Array.isArray(rawValue) ? rawValue[0] : rawValue;
 

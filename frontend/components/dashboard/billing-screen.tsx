@@ -6,6 +6,7 @@ import {
   billing,
   getApiErrorMessage,
   type AutoRechargeSettings,
+  type DashboardMonthlyUsage,
   type PaymentMethod,
 } from "@/lib/api";
 import {
@@ -87,7 +88,7 @@ function PlanTab({
   onCheckout,
   onPortal,
 }: {
-  data: any;
+  data: DashboardMonthlyUsage;
   billingAction: string | null;
   onCheckout: () => void;
   onPortal: () => void;
@@ -101,12 +102,12 @@ function PlanTab({
       {/* Current plan summary */}
       <div className="rounded-[18px] border border-[var(--border)] bg-white/60 px-5 py-4">
         <p className="text-xs text-[var(--foreground-tertiary)]">Current plan</p>
-        <div className="mt-1 flex items-center gap-3">
-          <p className="text-lg font-semibold text-[var(--foreground)]">{getTierLabel(data.tier)}</p>
-          <span className="rounded-full border border-[var(--border-brand)] bg-[var(--brand-subtle)] px-2 py-0.5 text-[11px] font-medium text-[var(--brand-bright)]">
-            {formatNumber(data.creditsUsed)} / {formatNumber(data.creditsLimit || "∞")}
-          </span>
-        </div>
+          <div className="mt-1 flex items-center gap-3">
+            <p className="text-lg font-semibold text-[var(--foreground)]">{getTierLabel(data.tier)}</p>
+            <span className="rounded-full border border-[var(--border-brand)] bg-[var(--brand-subtle)] px-2 py-0.5 text-[11px] font-medium text-[var(--brand-bright)]">
+              {formatNumber(data.creditsUsed)} / {data.creditsLimit > 0 ? formatNumber(data.creditsLimit) : "∞"}
+            </span>
+          </div>
         {data.tier.toLowerCase() === "pro" && (
           <p className="mt-1 text-sm text-[var(--foreground-secondary)]">5,000 included credits per month · $29.90/mo</p>
         )}
@@ -203,7 +204,7 @@ function CreditsTab({
   autoRechargeSuccess,
   onSaveAutoRecharge,
 }: {
-  data: any;
+  data: DashboardMonthlyUsage;
   topupQuantity: number;
   setTopupQuantity: (v: number) => void;
   isCreatingTopup: boolean;
@@ -227,8 +228,11 @@ function CreditsTab({
           <div className="flex items-center gap-3">
             <IconBolt className="h-5 w-5 text-[var(--brand-bright)]" />
             <div>
-              <p className="text-xs text-[var(--foreground-tertiary)]">Available credits</p>
-              <p className="text-xl font-semibold text-[var(--foreground)]">{formatNumber(data.walletBalance + data.dailyFreeRemaining)}</p>
+              <p className="text-xs text-[var(--foreground-tertiary)]">Spendable credits</p>
+              <p className="text-xl font-semibold text-[var(--foreground)]">{formatNumber(data.walletBalance)}</p>
+              <p className="text-xs text-[var(--foreground-tertiary)]">
+                Free today: {formatNumber(data.dailyFreeRemaining)} / {formatNumber(data.dailyFreeLimit)}
+              </p>
             </div>
           </div>
           <p className="text-xs text-[var(--foreground-tertiary)]">$0.008 / credit · never expire</p>
@@ -314,7 +318,7 @@ function CreditsTab({
       {data.expiringCredits.length > 0 && (
         <div className="rounded-[18px] border border-[var(--border)] bg-white/60 px-5 py-3">
           <p className="text-xs font-medium text-[var(--foreground-tertiary)]">Expiring soon</p>
-          {data.expiringCredits.map((entry: any) => (
+          {data.expiringCredits.map((entry) => (
             <p key={`${entry.grantType}-${entry.expiresAt}`} className="mt-1 text-sm text-[var(--foreground-secondary)]">
               {formatNumber(entry.credits)} {entry.grantType.replaceAll("_", " ")} — {entry.expiresAt.slice(0, 10)}
             </p>
@@ -325,22 +329,51 @@ function CreditsTab({
   );
 }
 
-function PaymentTab({ data }: { data: any }) {
+function PaymentTab({ data }: { data: DashboardMonthlyUsage }) {
   const [methods, setMethods] = useState<PaymentMethod[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isAddingCard, setIsAddingCard] = useState(false);
 
   useEffect(() => {
-    if (!data.hasStripeCustomer) {
-      setIsLoading(false);
-      return;
+    let cancelled = false;
+
+    async function loadMethods() {
+      if (!data.hasStripeCustomer) {
+        if (!cancelled) {
+          setMethods([]);
+          setError(null);
+          setIsLoading(false);
+        }
+        return;
+      }
+
+      if (!cancelled) {
+        setIsLoading(true);
+        setError(null);
+      }
+
+      try {
+        const nextMethods = await billing.listPaymentMethods();
+        if (!cancelled) {
+          setMethods(nextMethods);
+        }
+      } catch (e) {
+        if (!cancelled) {
+          setError(getApiErrorMessage(e, "Failed to load payment methods."));
+        }
+      } finally {
+        if (!cancelled) {
+          setIsLoading(false);
+        }
+      }
     }
-    setIsLoading(true);
-    void billing.listPaymentMethods()
-      .then(setMethods)
-      .catch((e) => setError(getApiErrorMessage(e, "Failed to load payment methods.")))
-      .finally(() => setIsLoading(false));
+
+    void loadMethods();
+
+    return () => {
+      cancelled = true;
+    };
   }, [data.hasStripeCustomer]);
 
   async function handleAddCard() {

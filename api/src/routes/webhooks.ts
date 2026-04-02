@@ -108,11 +108,24 @@ function extractInvoicePeriod(invoice: Record<string, unknown>): { periodStart: 
   return { periodStart, periodEnd };
 }
 
+function isCheckoutComplete(checkoutSession: Record<string, unknown>): boolean {
+  return asString(checkoutSession.status) === "complete";
+}
+
+function isPaymentCheckoutPaid(checkoutSession: Record<string, unknown>): boolean {
+  return asString(checkoutSession.payment_status) === "paid";
+}
+
+function isSubscriptionCheckoutReady(checkoutSession: Record<string, unknown>): boolean {
+  const paymentStatus = asString(checkoutSession.payment_status);
+  return paymentStatus === "paid" || paymentStatus === "no_payment_required";
+}
+
 async function processStripeEvent(db: DatabaseClient, config: any, event: Record<string, unknown>): Promise<void> {
   const eventType = String(event.type ?? "");
   const eventObject = asRecord(asRecord(event.data).object);
 
-  if (eventType === "checkout.session.completed") {
+  if (eventType === "checkout.session.completed" || eventType === "checkout.session.async_payment_succeeded") {
     const metadata = asRecord(eventObject.metadata);
     const userId = asString(metadata.user_id) ?? asString(eventObject.client_reference_id);
     if (!userId) {
@@ -121,6 +134,9 @@ async function processStripeEvent(db: DatabaseClient, config: any, event: Record
 
     const mode = asString(eventObject.mode) ?? "";
     if (mode === "subscription") {
+      if (!isCheckoutComplete(eventObject) || !isSubscriptionCheckoutReady(eventObject)) {
+        return;
+      }
       await activateCheckoutSubscription(
         db,
         userId,
@@ -131,6 +147,9 @@ async function processStripeEvent(db: DatabaseClient, config: any, event: Record
     }
 
     if (mode === "payment") {
+      if (!isPaymentCheckoutPaid(eventObject)) {
+        return;
+      }
       const quantity = Number(metadata.quantity) || 1000;
       const notification = await fulfillTopupCheckout(db, {
         userId,

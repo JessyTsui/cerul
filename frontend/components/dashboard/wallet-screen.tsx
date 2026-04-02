@@ -1,12 +1,11 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import {
   billing,
   getApiErrorMessage,
   type AutoRechargeSettings,
-  type BillingCatalog,
 } from "@/lib/api";
 import {
   formatNumber,
@@ -30,35 +29,9 @@ function formatUsd(value: number): string {
   }).format(value);
 }
 
-function IconBolt({ className }: { className?: string }) {
-  return (
-    <svg className={className} fill="none" viewBox="0 0 24 24">
-      <path d="M13.5 2.75 6.75 13.5h4.5l-.75 7.75 6.75-10.75h-4.5l.75-7.75Z" fill="currentColor" />
-    </svg>
-  );
-}
-
-function IconCreditCard({ className }: { className?: string }) {
-  return (
-    <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-      <path d="M2.25 8.25h19.5M2.25 9h19.5m-1.5 10.5V7.5a2.25 2.25 0 0 0-2.25-2.25H4.5A2.25 2.25 0 0 0 2.25 7.5v12a2.25 2.25 0 0 0 2.25 2.25h15a2.25 2.25 0 0 0 2.25-2.25Z" strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} />
-    </svg>
-  );
-}
-
-function IconGift({ className }: { className?: string }) {
-  return (
-    <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-      <path d="M21 11.25v8.25a1.5 1.5 0 0 1-1.5 1.5H4.5A1.5 1.5 0 0 1 3 19.5V11.25m18 0A1.5 1.5 0 0 0 21 9.75V8.25A2.25 2.25 0 0 0 18.75 6H18a3 3 0 0 0-3-3c-.86 0-1.637.366-2.182.952A3.001 3.001 0 0 0 10.5 3 3 3 0 0 0 7.5 6h-.75A2.25 2.25 0 0 0 4.5 8.25v1.5A1.5 1.5 0 0 0 6 11.25m15 0H6" strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} />
-    </svg>
-  );
-}
-
 export function DashboardWalletScreen() {
-  const router = useRouter();
   const searchParams = useSearchParams();
   const { data, error, isLoading, refresh } = useMonthlyUsage();
-  const [catalog, setCatalog] = useState<BillingCatalog | null>(null);
   const [catalogError, setCatalogError] = useState<string | null>(null);
   const [billingAction, setBillingAction] = useState<"checkout" | "portal" | null>(null);
   const [checkoutNotice, setCheckoutNotice] = useState<string | null>(null);
@@ -76,48 +49,86 @@ export function DashboardWalletScreen() {
     : null;
 
   async function loadCatalog() {
-    setCatalogError(null);
     try {
-      const nextCatalog = await billing.getCatalog();
-      setCatalog(nextCatalog);
+      await billing.getCatalog();
+      setCatalogError(null);
     } catch (nextError) {
       setCatalogError(getApiErrorMessage(nextError, "Failed to load billing catalog."));
     }
   }
 
   useEffect(() => {
-    void loadCatalog();
+    let cancelled = false;
+
+    async function bootstrapCatalog() {
+      try {
+        await billing.getCatalog();
+        if (!cancelled) {
+          setCatalogError(null);
+        }
+      } catch (nextError) {
+        if (!cancelled) {
+          setCatalogError(getApiErrorMessage(nextError, "Failed to load billing catalog."));
+        }
+      }
+    }
+
+    void bootstrapCatalog();
+
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   useEffect(() => {
     const checkoutState = searchParams.get("checkout");
     const checkoutSessionId = searchParams.get("session_id");
 
-    if (checkoutState === "success") {
-      const clearCheckoutParams = () => {
-        const nextUrl = new URL(window.location.href);
-        nextUrl.searchParams.delete("checkout");
-        nextUrl.searchParams.delete("session_id");
-        nextUrl.searchParams.delete("type");
-        window.history.replaceState({}, "", nextUrl.pathname);
-      };
+    if (checkoutState !== "success") {
+      return;
+    }
 
+    let cancelled = false;
+    const clearCheckoutParams = () => {
+      const nextUrl = new URL(window.location.href);
+      nextUrl.searchParams.delete("checkout");
+      nextUrl.searchParams.delete("session_id");
+      nextUrl.searchParams.delete("type");
+      window.history.replaceState({}, "", nextUrl.pathname);
+    };
+
+    async function reconcileCheckout() {
       if (!checkoutSessionId) {
-        setCheckoutNotice("Payment completed.");
+        if (!cancelled) {
+          setCheckoutNotice("Payment completed.");
+        }
         clearCheckoutParams();
         return;
       }
 
-      void billing.reconcileCheckout(checkoutSessionId)
-        .then(async () => {
-          await Promise.all([refresh(), loadCatalog()]);
+      try {
+        await billing.reconcileCheckout(checkoutSessionId);
+        if (cancelled) {
+          return;
+        }
+        await Promise.all([refresh(), loadCatalog()]);
+        if (!cancelled) {
           setCheckoutNotice("Credits added successfully.");
-          clearCheckoutParams();
-        })
-        .catch(() => {
+        }
+      } catch {
+        if (!cancelled) {
           setCheckoutNotice("Payment completed, but refresh may be needed.");
-        });
+        }
+      } finally {
+        clearCheckoutParams();
+      }
     }
+
+    void reconcileCheckout();
+
+    return () => {
+      cancelled = true;
+    };
   }, [refresh, searchParams]);
 
   useEffect(() => {
@@ -189,7 +200,7 @@ export function DashboardWalletScreen() {
   if (!data) {
     return (
       <DashboardLayout currentPath="/dashboard/billing" title="Wallet">
-        <DashboardState title="No data available" />
+        <DashboardState title="No data available" description="Wallet data is not available right now." />
       </DashboardLayout>
     );
   }

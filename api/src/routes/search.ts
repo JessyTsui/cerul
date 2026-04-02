@@ -5,12 +5,10 @@ import { apiKeyAuth } from "../middleware/auth";
 import {
   BillingHoldError,
   calculateCreditsRemaining,
-  deductCredits,
-  fetchDailySearchAllowance,
+  consumeSearchCredits,
   fetchUsageSummary,
   InsufficientCreditsError,
   maybeAutoRecharge,
-  recordFreeSearchUsage,
   refundCredits
 } from "../services/billing";
 import { resolveImageToBytes, uploadQueryImageToR2 } from "../services/query-image";
@@ -267,27 +265,28 @@ export function createSearchRouter(): any {
     let creditsUsed = 0;
     let usageRecorded = false;
     try {
-      const dailyFree = await fetchDailySearchAllowance(db, auth.userId);
-      const isFreeSearch = dailyFree.remaining > 0;
+      const chargeRequest = async () => consumeSearchCredits(
+        db,
+        auth.userId,
+        auth.apiKeyId,
+        requestId,
+        "unified",
+        payload.include_answer
+      );
 
-      if (isFreeSearch) {
-        creditsUsed = await recordFreeSearchUsage(
-          db,
-          auth.userId,
-          auth.apiKeyId,
-          requestId,
-          "unified",
-          payload.include_answer
-        );
-      } else {
-        creditsUsed = await deductCredits(
-          db,
-          auth.userId,
-          auth.apiKeyId,
-          requestId,
-          "unified",
-          payload.include_answer
-        );
+      try {
+        creditsUsed = await chargeRequest();
+      } catch (error) {
+        if (!(error instanceof InsufficientCreditsError)) {
+          throw error;
+        }
+
+        const recharge = await maybeAutoRecharge(db, config, auth.userId);
+        if (!recharge.triggered) {
+          throw error;
+        }
+
+        creditsUsed = await chargeRequest();
       }
       usageRecorded = true;
 

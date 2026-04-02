@@ -101,7 +101,7 @@ export function DashboardAnalyticsScreen() {
   if (!data || !stats) {
     return (
       <DashboardLayout currentPath="/dashboard/usage" title="Analytics">
-        <DashboardState title="No data available" />
+        <DashboardState title="No data available" description="Analytics data will appear after your account starts making requests." />
       </DashboardLayout>
     );
   }

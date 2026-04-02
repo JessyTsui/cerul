@@ -109,6 +109,19 @@ function extractInvoicePeriod(invoice: Record<string, unknown>): { periodStart: 
   return { periodStart, periodEnd };
 }
 
+function isCheckoutComplete(checkoutSession: Record<string, unknown>): boolean {
+  return normalizeString(checkoutSession.status) === "complete";
+}
+
+function isPaymentCheckoutPaid(checkoutSession: Record<string, unknown>): boolean {
+  return normalizeString(checkoutSession.payment_status) === "paid";
+}
+
+function isSubscriptionCheckoutReady(checkoutSession: Record<string, unknown>): boolean {
+  const paymentStatus = normalizeString(checkoutSession.payment_status);
+  return paymentStatus === "paid" || paymentStatus === "no_payment_required";
+}
+
 export function getCurrentBillingPeriod(reference?: Date): [string, string] {
   const today = reference ?? utcNow();
   const year = today.getUTCFullYear();
@@ -890,7 +903,14 @@ export function createDashboardRouter(): any {
       }
 
       const mode = normalizeString(checkoutSession.mode);
+      if (!isCheckoutComplete(checkoutSession as unknown as Record<string, unknown>)) {
+        apiError(409, "Stripe checkout has not completed yet.");
+      }
+
       if (mode === "payment") {
+        if (!isPaymentCheckoutPaid(checkoutSession as unknown as Record<string, unknown>)) {
+          apiError(409, "Stripe payment has not settled yet.");
+        }
         const credits = Number(checkoutSession.metadata?.quantity) || 1000;
         const notification = await fulfillTopupCheckout(db, {
           userId: session.userId,
@@ -923,8 +943,14 @@ export function createDashboardRouter(): any {
       }
 
       if (mode === "subscription") {
+        if (!isSubscriptionCheckoutReady(checkoutSession as unknown as Record<string, unknown>)) {
+          apiError(409, "Stripe subscription checkout is not paid yet.");
+        }
         const stripeCustomerId = normalizeExpandableId(checkoutSession.customer);
         const stripeSubscriptionId = normalizeExpandableId(checkoutSession.subscription);
+        if (!stripeSubscriptionId) {
+          apiError(409, "Stripe subscription is not ready yet.");
+        }
 
         await activateCheckoutSubscription(
           db,

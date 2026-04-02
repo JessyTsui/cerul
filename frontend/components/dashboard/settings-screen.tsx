@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import { billing, getApiErrorMessage, type BillingCatalog } from "@/lib/api";
 import { useConsoleViewer } from "@/components/console/console-viewer-context";
 import { formatNumber } from "@/lib/dashboard";
+import { buildReferralPath, buildReferralUrl } from "@/lib/referral";
 import { AccountProfilePanel } from "./account-profile-panel";
 import { DashboardLayout } from "./dashboard-layout";
 import { DashboardSkeleton, DashboardState } from "./dashboard-state";
@@ -105,7 +106,7 @@ export function DashboardSettingsScreen() {
   function handleCopyLink() {
     const code = catalog?.referral.code;
     if (!code) return;
-    const link = `${window.location.origin}/ref/${code}`;
+    const link = buildReferralUrl(window.location.origin, code);
     void navigator.clipboard.writeText(link).then(() => { setCopiedLink(true); setTimeout(() => setCopiedLink(false), 2000); });
   }
 
@@ -123,6 +124,7 @@ export function DashboardSettingsScreen() {
   }
 
   const referral = catalog?.referral;
+  const referralPath = referral?.code ? buildReferralPath(referral.code) : null;
 
   return (
     <DashboardLayout currentPath="/dashboard/settings" title="Settings" actions={null}>
@@ -148,7 +150,7 @@ export function DashboardSettingsScreen() {
                 <p className="text-xs text-[var(--foreground-tertiary)]">Your invite link</p>
                 <div className="mt-1.5 flex items-center gap-2">
                   <div className="min-w-0 flex-1 rounded-[10px] border border-[var(--border)] bg-white/80 px-3 py-2 font-mono text-sm text-[var(--foreground)]">
-                    {referral?.code ? `${typeof window !== "undefined" ? window.location.origin : ""}/ref/${referral.code}` : "—"}
+                    {referralPath ?? "—"}
                   </div>
                   <button type="button" onClick={handleCopyLink} className="flex h-9 shrink-0 items-center gap-1.5 rounded-[10px] border border-[var(--border)] bg-white/70 px-3 text-xs text-[var(--foreground-secondary)] transition hover:bg-white hover:text-[var(--foreground)]">
                     <IconCopy className="h-3.5 w-3.5" />

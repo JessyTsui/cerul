@@ -3,7 +3,7 @@
 import type { Route } from "next";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { startTransition, useState } from "react";
+import { startTransition, useEffect, useState } from "react";
 import { AuthSocialSection } from "@/components/auth/auth-social-section";
 import { authClient } from "@/lib/auth";
 import type { AuthSocialProviderId } from "@/lib/auth-providers";
@@ -11,6 +11,10 @@ import {
   getAuthErrorMessage,
   isEmailNotVerifiedError,
 } from "@/lib/auth-shared";
+import {
+  normalizeReferralCode,
+  PENDING_REFERRAL_CODE_STORAGE_KEY,
+} from "@/lib/referral";
 
 type LoginFormProps = {
   nextPath: string;
@@ -18,6 +22,7 @@ type LoginFormProps = {
   enabledProviders: AuthSocialProviderId[];
   googleOneTapClientId: string | null;
   initialError?: string | null;
+  referralCode?: string | null;
 };
 
 function buildVerifyEmailHref(email: string): string {
@@ -30,6 +35,7 @@ export function LoginForm({
   enabledProviders,
   googleOneTapClientId,
   initialError = null,
+  referralCode = null,
 }: LoginFormProps) {
   const router = useRouter();
   const [mode, setMode] = useState<"login" | "signup">(initialMode);
@@ -41,6 +47,22 @@ export function LoginForm({
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [error, setError] = useState<string | null>(initialError);
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  useEffect(() => {
+    const normalizedReferralCode = normalizeReferralCode(referralCode);
+    if (!normalizedReferralCode) {
+      return;
+    }
+
+    try {
+      window.localStorage.setItem(
+        PENDING_REFERRAL_CODE_STORAGE_KEY,
+        normalizedReferralCode,
+      );
+    } catch {
+      // Ignore localStorage access issues and continue with auth.
+    }
+  }, [referralCode]);
 
   async function handleLoginSubmit(normalizedEmail: string) {
     const result = await authClient.signIn.email({

@@ -2,6 +2,7 @@
 
 import type { ReactNode } from "react";
 import { usePathname } from "next/navigation";
+import { DashboardReferralSync } from "./dashboard-referral-sync";
 import { DashboardSidebar } from "./dashboard-sidebar";
 import { DashboardTopNav } from "./dashboard-top-nav";
 
@@ -14,6 +15,7 @@ export function DashboardAppShell({ children }: DashboardAppShellProps) {
 
   return (
     <div className="soft-theme flex min-h-screen">
+      <DashboardReferralSync />
       <DashboardSidebar currentPath={pathname} />
       <div className="flex min-w-0 flex-1 flex-col">
         <DashboardTopNav currentPath={pathname} />

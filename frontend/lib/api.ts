@@ -109,6 +109,15 @@ type BillingCatalogWire = {
     reward_delay_days?: number;
     redeemed_code?: string | null;
     status?: string | null;
+    max_referrals?: number;
+    total_referred?: number;
+    total_credits_earned?: number;
+    referrals?: Array<{
+      referee_email?: string;
+      status?: string;
+      created_at?: string;
+      credits_earned?: number;
+    }>;
   };
 };
 
@@ -730,9 +739,6 @@ function normalizeUsage(payload: unknown): DashboardMonthlyUsage {
           requestCount: entry.request_count ?? 0,
         }))
     : [];
-
-  // eslint-disable-next-line no-console
-  console.log("[API] normalizeUsage - server_timestamp:", usagePayload.server_timestamp, "wallet_balance:", usagePayload.wallet_balance);
 
   return {
     tier: usagePayload.tier,

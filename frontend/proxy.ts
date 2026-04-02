@@ -34,7 +34,7 @@ function matchesPath(pathname: string, paths: readonly string[]): boolean {
   return paths.some((path) => pathname === path || pathname.startsWith(`${path}/`));
 }
 
-export function middleware(request: NextRequest) {
+export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
   if (

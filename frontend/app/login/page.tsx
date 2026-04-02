@@ -26,8 +26,21 @@ type LoginPageProps = {
     mode?: string | string[];
     error?: string | string[];
     error_description?: string | string[];
+    ref?: string | string[];
   }>;
 };
+
+function appendQueryParam(path: string, key: string, value: string | null): string {
+  if (!value) {
+    return path;
+  }
+
+  const [pathname, query = ""] = path.split("?", 2);
+  const params = new URLSearchParams(query);
+  params.set(key, value);
+  const nextQuery = params.toString();
+  return nextQuery ? `${pathname}?${nextQuery}` : pathname;
+}
 
 export default async function LoginPage({ searchParams }: LoginPageProps) {
   const resolvedSearchParams = await searchParams;
@@ -40,10 +53,14 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
   const errorDescriptionValue = Array.isArray(resolvedSearchParams.error_description)
     ? resolvedSearchParams.error_description[0]
     : resolvedSearchParams.error_description;
+  const referralValue = Array.isArray(resolvedSearchParams.ref)
+    ? resolvedSearchParams.ref[0]
+    : resolvedSearchParams.ref;
   const modeValue = Array.isArray(resolvedSearchParams.mode)
     ? resolvedSearchParams.mode[0]
     : resolvedSearchParams.mode;
   const nextPath = normalizeAuthRedirectPath(nextValue);
+  const nextPathWithReferral = appendQueryParam(nextPath, "ref", referralValue ?? null);
   const initialMode = modeValue === "signup" ? "signup" : "login";
   const initialError = getAuthCallbackErrorMessage(
     errorValue,
@@ -53,7 +70,7 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
   const session = await getServerSession();
 
   if (session?.user?.id) {
-    redirect(nextPath as Route);
+    redirect(nextPathWithReferral as Route);
   }
 
   return (
@@ -67,6 +84,7 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
         enabledProviders={authUiConfig.enabledProviders}
         googleOneTapClientId={authUiConfig.googleOneTapClientId}
         initialError={initialError}
+        referralCode={referralValue ?? null}
       />
     </AuthShell>
   );

@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { apiKeys, billing, getApiErrorMessage, type DashboardApiKey } from "@/lib/api";
+import { apiKeys, getApiErrorMessage, type DashboardApiKey } from "@/lib/api";
 import { formatNumber, getTierLabel } from "@/lib/dashboard";
 import { ApiKeyRow } from "./api-key-row";
 import { CreateKeyDialog } from "./create-key-dialog";
@@ -104,7 +104,7 @@ export function DashboardHomeScreen() {
   if (!data) {
     return (
       <DashboardLayout currentPath="/dashboard" title="Home">
-        <DashboardState title="No data available" />
+        <DashboardState title="No data available" description="Dashboard data is not available right now." />
       </DashboardLayout>
     );
   }
@@ -123,6 +123,9 @@ export function DashboardHomeScreen() {
 
       {checkoutNotice && (
         <DashboardNotice title="Success" description={checkoutNotice} tone="success" />
+      )}
+      {keysError && (
+        <DashboardNotice title="API key action failed" description={keysError} tone="error" />
       )}
 
       {/* Hero: Credit Balance */}

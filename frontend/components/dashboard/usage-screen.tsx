@@ -57,12 +57,6 @@ function formatRelativeTime(iso: string): string {
   return date.toLocaleDateString("en-US", { month: "short", day: "numeric" });
 }
 
-function formatTimestamp(iso: string): string {
-  const date = new Date(iso);
-  if (Number.isNaN(date.getTime())) return iso;
-  return date.toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit", hour12: true });
-}
-
 function scorePercent(score: number | null): number {
   if (score == null) return 0;
   return Math.round(Math.max(0, Math.min(1, score)) * 100);
@@ -108,6 +102,8 @@ function QueryRow({ log }: { log: QueryLogEntry }) {
           {previewResults.map((result) => (
             <div key={result.rank} className="relative h-14 w-24 shrink-0 overflow-hidden rounded-[8px] border border-[var(--border)] bg-[rgba(36,29,21,0.03)]">
               {result.thumbnailUrl ? (
+                // Result thumbnails are remote content returned by the API, so we intentionally skip next/image optimization here.
+                // eslint-disable-next-line @next/next/no-img-element
                 <img src={result.thumbnailUrl} alt="" className="h-full w-full object-cover" />
               ) : (
                 <span className="flex h-full w-full items-center justify-center text-[10px] text-[var(--foreground-tertiary)]">
@@ -159,6 +155,8 @@ function QueryRow({ log }: { log: QueryLogEntry }) {
                     onClick={(e) => e.stopPropagation()}
                   >
                     {result.thumbnailUrl ? (
+                      // Result thumbnails are remote content returned by the API, so we intentionally skip next/image optimization here.
+                      // eslint-disable-next-line @next/next/no-img-element
                       <img src={result.thumbnailUrl} alt="" className="h-10 w-16 shrink-0 rounded-[5px] object-cover" />
                     ) : (
                       <span className="flex h-10 w-16 shrink-0 items-center justify-center rounded-[5px] bg-[rgba(36,29,21,0.05)] text-[11px] font-semibold text-[var(--foreground-tertiary)]">
@@ -270,9 +268,12 @@ export function DashboardUsageScreen() {
           <div className="surface-elevated dashboard-card flex items-center gap-3 rounded-[20px] px-5 py-4">
             <IconSparkles className="h-5 w-5 shrink-0 text-[var(--foreground-tertiary)]" />
             <div>
-              <p className="text-xs text-[var(--foreground-tertiary)]">Available</p>
+              <p className="text-xs text-[var(--foreground-tertiary)]">Spendable credits</p>
               <p className="text-xl font-semibold tabular-nums text-[var(--foreground)]">
-                {formatNumber(usageData.walletBalance + usageData.dailyFreeRemaining)}
+                {formatNumber(usageData.walletBalance)}
+              </p>
+              <p className="text-xs text-[var(--foreground-tertiary)]">
+                Free today: {formatNumber(usageData.dailyFreeRemaining)} / {formatNumber(usageData.dailyFreeLimit)}
               </p>
             </div>
           </div>

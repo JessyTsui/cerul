@@ -200,9 +200,12 @@ export function DashboardOverviewScreen() {
                 <IconBolt className="h-6 w-6 text-[var(--brand-bright)]" />
               </span>
               <div className="min-w-0 flex-1">
-                <p className="text-xs text-[var(--foreground-tertiary)]">Credits available</p>
+                <p className="text-xs text-[var(--foreground-tertiary)]">Spendable credits</p>
                 <p className="mt-0.5 text-3xl font-semibold tracking-[-0.04em] text-[var(--foreground)]">
-                  {formatNumber(data.walletBalance + data.dailyFreeRemaining)}
+                  {formatNumber(data.walletBalance)}
+                </p>
+                <p className="mt-1 text-xs text-[var(--foreground-tertiary)]">
+                  Free today: {formatNumber(data.dailyFreeRemaining)} / {formatNumber(data.dailyFreeLimit)}
                 </p>
               </div>
               <div className="hidden items-center gap-5 border-l border-[var(--border)] pl-5 sm:flex">

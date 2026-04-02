@@ -42,7 +42,10 @@ export function DashboardAccountHub() {
 
   const initials = getInitials(viewer.displayName, viewer.email);
   const planLabel = data ? getTierLabel(data.tier) : "Free";
-  const creditsDisplay = data ? formatNumber(data.walletBalance + data.dailyFreeRemaining) : "—";
+  const spendableCredits = data ? formatNumber(data.walletBalance) : "—";
+  const freeToday = data
+    ? `${formatNumber(data.dailyFreeRemaining)}/${formatNumber(data.dailyFreeLimit)} free today`
+    : "—";
 
   useEffect(() => {
     if (!open) {
@@ -103,7 +106,7 @@ export function DashboardAccountHub() {
             {viewer.displayName ?? "Personal"}
           </p>
           <p className="truncate text-xs text-[var(--foreground-secondary)]">
-            {planLabel} · <IconBolt className="inline h-3 w-3" /> {creditsDisplay} credits
+            {planLabel} · <IconBolt className="inline h-3 w-3" /> {spendableCredits} credits · {freeToday}
           </p>
         </div>
       </button>

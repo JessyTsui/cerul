@@ -12,7 +12,6 @@ import {
 import { useConsoleViewer } from "@/components/console/console-viewer-context";
 import { formatNumber } from "@/lib/dashboard";
 import { DashboardLayout } from "./dashboard-layout";
-import { DashboardNotice } from "./dashboard-state";
 import { useMonthlyUsage } from "./use-monthly-usage";
 
 type BootstrapStatus =
@@ -40,7 +39,7 @@ function IconCheck({ className }: { className?: string }) {
 export function DashboardAccountScreen() {
   const router = useRouter();
   const viewer = useConsoleViewer();
-  const { data } = useMonthlyUsage();
+  useMonthlyUsage();
   const [catalog, setCatalog] = useState<BillingCatalog | null>(null);
   const [referralInput, setReferralInput] = useState("");
   const [referralError, setReferralError] = useState<string | null>(null);
@@ -249,15 +248,15 @@ export function DashboardAccountScreen() {
           <a href="mailto:support@cerul.co" className="block text-sm text-[var(--foreground-secondary)] hover:text-[var(--foreground)]">
             Contact Support
           </a>
-          <a href="/docs" className="block text-sm text-[var(--foreground-secondary)] hover:text-[var(--foreground)]">
+          <Link href={"/docs" as Route} className="block text-sm text-[var(--foreground-secondary)] hover:text-[var(--foreground)]">
             Documentation
-          </a>
-          <a href="/privacy" className="block text-sm text-[var(--foreground-secondary)] hover:text-[var(--foreground)]">
+          </Link>
+          <Link href={"/privacy" as Route} className="block text-sm text-[var(--foreground-secondary)] hover:text-[var(--foreground)]">
             Privacy Policy
-          </a>
-          <a href="/terms" className="block text-sm text-[var(--foreground-secondary)] hover:text-[var(--foreground)]">
+          </Link>
+          <Link href={"/terms" as Route} className="block text-sm text-[var(--foreground-secondary)] hover:text-[var(--foreground)]">
             Terms of Service
-          </a>
+          </Link>
         </div>
       </section>
     </DashboardLayout>

@@ -36,4 +36,14 @@ describe("SignupPage", () => {
       "/login?mode=signup&next=%2Fdashboard%2Fusage&error=EMAIL_NOT_VERIFIED&error_description=Please+verify+your+email+first.",
     );
   });
+
+  it("preserves referral codes when redirecting to signup mode", async () => {
+    await SignupPage({
+      searchParams: Promise.resolve({
+        ref: "crlbonus",
+      }),
+    });
+
+    expect(redirectMock).toHaveBeenCalledWith("/login?mode=signup&ref=crlbonus");
+  });
 });

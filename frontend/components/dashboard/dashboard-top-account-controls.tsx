@@ -1,6 +1,5 @@
 "use client";
 
-import type { Route } from "next";
 import Link from "next/link";
 import { startTransition, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
@@ -55,17 +54,9 @@ function IconArrowRight({ className }: { className?: string }) {
   );
 }
 
-function IconRefresh({ className }: { className?: string }) {
-  return (
-    <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-      <path d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0 3.181 3.183a8.25 8.25 0 0 0 13.803-3.7M4.031 9.865a8.25 8.25 0 0 1 13.803-3.7l3.181 3.182m0-4.991v4.99" strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} />
-    </svg>
-  );
-}
-
 export function DashboardTopAccountControls() {
   const viewer = useConsoleViewer();
-  const { data, refresh, lastUpdatedAt } = useMonthlyUsage();
+  const { data, lastUpdatedAt } = useMonthlyUsage();
   const router = useRouter();
   const [creditDropdownOpen, setCreditDropdownOpen] = useState(false);
   const [avatarDropdownOpen, setAvatarDropdownOpen] = useState(false);
@@ -77,7 +68,7 @@ export function DashboardTopAccountControls() {
   const avatarTimeoutRef = useRef<number | null>(null);
 
   const initials = getInitials(viewer.displayName, viewer.email);
-  const remainingCredits = data ? formatNumber(data.walletBalance + data.dailyFreeRemaining) : "—";
+  const spendableCredits = data ? formatNumber(data.walletBalance) : "—";
   const planLabel = data ? getTierLabel(data.tier) : "Free";
 
   // Clear timeouts on unmount
@@ -174,7 +165,7 @@ export function DashboardTopAccountControls() {
           className="flex items-center gap-1.5 rounded-full border border-[var(--border)] bg-white/88 px-3 py-1.5 text-sm font-medium text-[var(--foreground-secondary)] transition hover:bg-white hover:text-[var(--foreground)]"
         >
           <IconBolt className="h-4 w-4 text-[var(--brand)]" />
-          <span>{remainingCredits}</span>
+          <span>{spendableCredits}</span>
         </button>
 
         {/* Credits dropdown - Lovart style breakdown */}
@@ -203,10 +194,10 @@ export function DashboardTopAccountControls() {
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <IconBolt className="h-4 w-4 text-[var(--brand)]" />
-                  <span className="text-sm text-[var(--foreground)]">Total remaining</span>
+                  <span className="text-sm text-[var(--foreground)]">Spendable credits</span>
                 </div>
                 <span className="text-sm font-semibold text-[var(--foreground)]">
-                  {formatNumber(data.walletBalance + data.dailyFreeRemaining)}
+                  {formatNumber(data.walletBalance)}
                 </span>
               </div>
 
@@ -289,6 +280,8 @@ export function DashboardTopAccountControls() {
           className="flex h-10 w-10 items-center justify-center rounded-full border border-[var(--border)] bg-white/88 transition hover:border-[var(--border-strong)] hover:bg-white"
         >
           {viewer.image ? (
+            // Avatar hosts come from auth providers, so we intentionally avoid a global next/image allowlist here.
+            // eslint-disable-next-line @next/next/no-img-element
             <img src={viewer.image} alt="" className="h-full w-full rounded-full object-cover" />
           ) : (
             <span className="text-xs font-semibold text-[var(--foreground-secondary)]">{initials}</span>
@@ -307,6 +300,8 @@ export function DashboardTopAccountControls() {
             <div className="flex items-center gap-3 border-b border-[var(--border)] pb-3">
               <span className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-[var(--border)] bg-[var(--background-elevated)] text-sm font-semibold text-[var(--foreground-secondary)]">
                 {viewer.image ? (
+                  // Avatar hosts come from auth providers, so we intentionally avoid a global next/image allowlist here.
+                  // eslint-disable-next-line @next/next/no-img-element
                   <img src={viewer.image} alt="" className="h-full w-full rounded-full object-cover" />
                 ) : (
                   initials

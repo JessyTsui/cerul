@@ -366,10 +366,21 @@ describe("dashboard API client", () => {
           },
           referral: {
             code: "CRL1A2B3C",
-            bonus_credits: 500,
-            reward_delay_days: 7,
+            bonus_credits: 100,
+            reward_delay_days: 0,
             redeemed_code: null,
             status: null,
+            max_referrals: 100,
+            total_referred: 2,
+            total_credits_earned: 200,
+            referrals: [
+              {
+                referee_email: "te***@example.com",
+                status: "awarded",
+                created_at: "2026-04-01T00:00:00.000Z",
+                credits_earned: 100,
+              },
+            ],
           },
         }),
         {
@@ -392,10 +403,21 @@ describe("dashboard API client", () => {
       expiringCredits: [],
       referral: {
         code: "CRL1A2B3C",
-        bonusCredits: 500,
-        rewardDelayDays: 7,
+        bonusCredits: 100,
+        rewardDelayDays: 0,
         redeemedCode: null,
         status: null,
+        maxReferrals: 100,
+        totalReferred: 2,
+        totalCreditsEarned: 200,
+        referrals: [
+          {
+            refereeEmail: "te***@example.com",
+            status: "awarded",
+            createdAt: "2026-04-01T00:00:00.000Z",
+            creditsEarned: 100,
+          },
+        ],
       },
     });
   });

@@ -249,6 +249,7 @@ export interface TrackingLinkRecord {
   transcript?: string | null;
   visual_desc?: string | null;
   keyframe_url?: string | null;
+  score?: number | null;
 }
 
 export interface ResolvedQueryImage {
