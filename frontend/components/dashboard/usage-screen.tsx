@@ -79,46 +79,63 @@ function scoreColor(pct: number): string {
 function QueryRow({ log }: { log: QueryLogEntry }) {
   const [open, setOpen] = useState(false);
   const hasDetails = log.answerText || log.results.length > 0;
+  const previewResults = log.results.slice(0, 3);
+  const moreCount = log.results.length - 3;
 
   return (
-    <div className="border-b border-[var(--border)] last:border-b-0">
-      {/* Header row */}
-      <button
-        type="button"
-        onClick={() => hasDetails && setOpen((v) => !v)}
-        className={`flex w-full items-start gap-3 px-5 py-4 text-left transition ${hasDetails ? "cursor-pointer hover:bg-white/40" : "cursor-default"}`}
-      >
-        <span className="mt-0.5 inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-[8px] bg-[rgba(136,165,242,0.1)]">
-          <IconSearch className="h-3.5 w-3.5 text-[var(--brand-bright)]" />
+    <div
+      className={`rounded-[16px] border border-[var(--border)] bg-white/60 transition ${hasDetails ? "cursor-pointer hover:border-[var(--border-strong)] hover:bg-white/80" : ""}`}
+      onClick={() => hasDetails && setOpen((v) => !v)}
+      role={hasDetails ? "button" : undefined}
+      tabIndex={hasDetails ? 0 : undefined}
+      onKeyDown={hasDetails ? (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setOpen((v) => !v); } } : undefined}
+    >
+      {/* Header */}
+      <div className="flex items-center gap-2 px-4 pt-3.5 pb-1">
+        <IconSearch className="h-3.5 w-3.5 shrink-0 text-[var(--brand-bright)]" />
+        <p className="min-w-0 flex-1 truncate text-sm text-[var(--foreground)]">{log.queryText}</p>
+        <span className="flex shrink-0 items-center gap-1 text-[11px] text-[var(--foreground-tertiary)]">
+          {formatRelativeTime(log.createdAt)}
+          <span className="mx-0.5">·</span>
+          <IconBolt className="h-3 w-3" />{log.creditsUsed}
         </span>
-        <div className="min-w-0 flex-1">
-          <p className="text-sm leading-snug text-[var(--foreground)]">{log.queryText}</p>
-          <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-[var(--foreground-tertiary)]">
-            <span>{formatRelativeTime(log.createdAt)}</span>
-            <span className="flex items-center gap-0.5">
-              <IconBolt className="h-3 w-3" />{log.creditsUsed}
-            </span>
-            <span>{log.resultCount} result{log.resultCount !== 1 ? "s" : ""}</span>
-            {log.latencyMs != null && <span>{log.latencyMs}ms</span>}
-            {log.answerText && (
-              <span className="flex items-center gap-0.5 text-[var(--brand-bright)]">
-                <IconSparkles className="h-3 w-3" />Answer
-              </span>
-            )}
-          </div>
+        {hasDetails && <IconChevron className="h-3.5 w-3.5 shrink-0 text-[var(--foreground-tertiary)]" open={open} />}
+      </div>
+
+      {/* Thumbnail preview row — always visible */}
+      {previewResults.length > 0 && (
+        <div className="flex items-center gap-2 px-4 pb-3.5 pt-2">
+          {previewResults.map((result) => (
+            <div key={result.rank} className="relative h-14 w-24 shrink-0 overflow-hidden rounded-[8px] border border-[var(--border)] bg-[rgba(36,29,21,0.03)]">
+              {result.thumbnailUrl ? (
+                <img src={result.thumbnailUrl} alt="" className="h-full w-full object-cover" />
+              ) : (
+                <span className="flex h-full w-full items-center justify-center text-[10px] text-[var(--foreground-tertiary)]">
+                  {result.title ? result.title.slice(0, 12) : `#${result.rank + 1}`}
+                </span>
+              )}
+            </div>
+          ))}
+          {moreCount > 0 && (
+            <span className="text-[11px] text-[var(--foreground-tertiary)]">+{moreCount} more</span>
+          )}
+          {previewResults.length === 0 && (
+            <span className="text-[11px] text-[var(--foreground-tertiary)]">{log.resultCount} results</span>
+          )}
         </div>
-        <span className="mt-1 shrink-0 text-[11px] tabular-nums text-[var(--foreground-tertiary)]">
-          {formatTimestamp(log.createdAt)}
-        </span>
-        {hasDetails && <IconChevron className="mt-1 h-4 w-4 shrink-0 text-[var(--foreground-tertiary)]" open={open} />}
-      </button>
+      )}
+      {previewResults.length === 0 && (
+        <div className="px-4 pb-3.5 pt-0.5">
+          <span className="text-[11px] text-[var(--foreground-tertiary)]">{log.resultCount} results</span>
+        </div>
+      )}
 
       {/* Expanded details */}
       {open && hasDetails && (
-        <div className="animate-fade-in space-y-3 border-t border-[var(--border)] bg-[var(--background-elevated)] px-5 py-4">
+        <div className="animate-fade-in space-y-3 border-t border-[var(--border)] bg-[var(--background-elevated)] px-4 py-4" style={{ borderRadius: "0 0 16px 16px" }}>
           {/* Answer */}
           {log.answerText && (
-            <div className="rounded-[14px] border border-[var(--border-brand)] bg-[var(--brand-subtle)] px-4 py-3">
+            <div className="rounded-[12px] border border-[var(--border-brand)] bg-[var(--brand-subtle)] px-4 py-3">
               <div className="mb-1.5 flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-[0.12em] text-[var(--brand-bright)]">
                 <IconSparkles className="h-3 w-3" />
                 AI Answer
@@ -127,53 +144,44 @@ function QueryRow({ log }: { log: QueryLogEntry }) {
             </div>
           )}
 
-          {/* Results */}
+          {/* Full results */}
           {log.results.length > 0 && (
-            <div>
-              <p className="mb-2 text-[11px] font-medium uppercase tracking-[0.12em] text-[var(--foreground-tertiary)]">
-                Sources
-              </p>
-              <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-                {log.results.map((result) => {
-                  const pct = scorePercent(result.score);
-                  return (
-                    <a
-                      key={result.rank}
-                      href={result.targetUrl ?? "#"}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="group flex gap-3 rounded-[12px] border border-[var(--border)] bg-white/60 p-2.5 transition hover:border-[var(--border-strong)] hover:bg-white/90"
-                    >
-                      {result.thumbnailUrl ? (
-                        <img src={result.thumbnailUrl} alt="" className="h-12 w-20 shrink-0 rounded-[6px] object-cover" />
-                      ) : (
-                        <span className="flex h-12 w-20 shrink-0 items-center justify-center rounded-[6px] bg-[rgba(36,29,21,0.05)] text-sm font-semibold text-[var(--foreground-tertiary)]">
-                          #{result.rank + 1}
-                        </span>
-                      )}
-                      <div className="min-w-0 flex-1">
-                        <p className="truncate text-[13px] font-medium text-[var(--foreground)] group-hover:text-[var(--brand-bright)]">
-                          {result.title || "Untitled"}
-                        </p>
-                        <p className="mt-0.5 truncate text-[11px] text-[var(--foreground-tertiary)]">{result.source}</p>
-                        {result.score != null && (
-                          <div className="mt-1.5 flex items-center gap-2">
-                            <div className="h-1 flex-1 overflow-hidden rounded-full bg-[rgba(36,29,21,0.06)]">
-                              <div
-                                className="h-full rounded-full transition-all"
-                                style={{ width: `${Math.max(pct, 4)}%`, background: scoreColor(pct) }}
-                              />
-                            </div>
-                            <span className="text-[10px] tabular-nums" style={{ color: scoreColor(pct) }}>
-                              {pct}%
-                            </span>
+            <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+              {log.results.map((result) => {
+                const pct = scorePercent(result.score);
+                return (
+                  <a
+                    key={result.rank}
+                    href={result.targetUrl ?? "#"}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="group flex gap-2.5 rounded-[10px] border border-[var(--border)] bg-white/60 p-2 transition hover:border-[var(--border-strong)] hover:bg-white/90"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    {result.thumbnailUrl ? (
+                      <img src={result.thumbnailUrl} alt="" className="h-10 w-16 shrink-0 rounded-[5px] object-cover" />
+                    ) : (
+                      <span className="flex h-10 w-16 shrink-0 items-center justify-center rounded-[5px] bg-[rgba(36,29,21,0.05)] text-[11px] font-semibold text-[var(--foreground-tertiary)]">
+                        #{result.rank + 1}
+                      </span>
+                    )}
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-[12px] font-medium text-[var(--foreground)] group-hover:text-[var(--brand-bright)]">
+                        {result.title || "Untitled"}
+                      </p>
+                      <p className="truncate text-[10px] text-[var(--foreground-tertiary)]">{result.source}</p>
+                      {result.score != null && (
+                        <div className="mt-1 flex items-center gap-1.5">
+                          <div className="h-1 flex-1 overflow-hidden rounded-full bg-[rgba(36,29,21,0.06)]">
+                            <div className="h-full rounded-full" style={{ width: `${Math.max(pct, 4)}%`, background: scoreColor(pct) }} />
                           </div>
-                        )}
-                      </div>
-                    </a>
-                  );
-                })}
-              </div>
+                          <span className="text-[9px] tabular-nums" style={{ color: scoreColor(pct) }}>{pct}%</span>
+                        </div>
+                      )}
+                    </div>
+                  </a>
+                );
+              })}
             </div>
           )}
         </div>
@@ -296,8 +304,8 @@ export function DashboardUsageScreen() {
           description="Your API query history will appear here once you start making search requests."
         />
       ) : (
-        <section className="surface-elevated dashboard-card overflow-hidden rounded-[24px]">
-          <div className="flex items-center justify-between border-b border-[var(--border)] px-5 py-3.5">
+        <section>
+          <div className="mb-3 flex items-center justify-between px-1">
             <div className="flex items-center gap-2">
               <IconSearch className="h-4 w-4 text-[var(--foreground-tertiary)]" />
               <h2 className="text-base font-semibold text-[var(--foreground)]">Query History</h2>
@@ -305,12 +313,14 @@ export function DashboardUsageScreen() {
             <span className="text-xs text-[var(--foreground-tertiary)]">{formatNumber(total)} total</span>
           </div>
 
-          {logs.map((log) => (
-            <QueryRow key={log.requestId} log={log} />
-          ))}
+          <div className="space-y-3">
+            {logs.map((log) => (
+              <QueryRow key={log.requestId} log={log} />
+            ))}
+          </div>
 
           {totalPages > 1 && (
-            <div className="flex items-center justify-between border-t border-[var(--border)] px-5 py-3">
+            <div className="mt-4 flex items-center justify-between px-1">
               <button
                 type="button"
                 disabled={page === 0}
