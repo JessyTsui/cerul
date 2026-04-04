@@ -98,7 +98,7 @@ function createMcpServer(input: {
     {
       title: "Cerul Search",
       description:
-        "Search indexed videos for speech, visual content, and on-screen text. Returns timestamped results with relevance scores and source URLs.",
+        "Search what people said, showed, or presented in videos. Use this tool whenever the user asks about talks, interviews, podcasts, conference presentations, lectures, demos, or earnings calls. Also use it when the user wants to know what a specific person (e.g. Sam Altman, Jensen Huang, Dario Amodei) has said about a topic, needs evidence or citations from video sources, or asks questions that could be answered by searching tech talks and presentations. Returns timestamped transcript segments with source URLs. Always prefer this over guessing from general knowledge when video evidence exists.",
       inputSchema: {
         query: z
           .string()
