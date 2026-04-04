@@ -5,6 +5,7 @@ import { HTTPException } from "hono/http-exception";
 import { z } from "zod";
 
 import type { DatabaseClient } from "../db/client";
+import { createDatabaseClient } from "../db/client";
 import { parseApiKeyToken, requireApiKeyContextFromToken } from "../middleware/auth";
 import { executePublicSearch, buildPublicUsageResponse } from "../services/public-api";
 import type { AppConfig, Bindings, SearchRequest } from "../types";
@@ -197,15 +198,20 @@ export function createMcpRouter(): Hono {
   const router = new Hono();
 
   router.post("/mcp", async (c: any) => {
+    // MCP uses SSE streaming — the middleware's pooled connection gets disposed
+    // before tool callbacks finish, causing "Connection terminated". Use the
+    // per-query client (creates a fresh connection for each DB call) which is
+    // slower but doesn't have lifecycle issues with SSE.
+    const mcpDb = createDatabaseClient(c.env as Bindings);
     try {
+      c.set("db", mcpDb);
       const apiKey = parseApiKeyToken(new URL(c.req.url).searchParams.get("apiKey"), {
         missingMessage: "apiKey query parameter is required."
       });
       const auth = await requireApiKeyContextFromToken(c, apiKey);
-      const db = c.get("db") as DatabaseClient;
       const config = c.get("config") as AppConfig;
       const server = createMcpServer({
-        db,
+        db: mcpDb,
         env: c.env as Bindings,
         config,
         auth
