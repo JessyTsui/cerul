@@ -93,6 +93,56 @@ describe("tracking proxy route", () => {
     expect(String(target)).toBe("http://127.0.0.1:8787/v/abc123xy/detail");
   });
 
+  it("forwards path-based tracking URLs to the backend", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        new Response(null, {
+          status: 302,
+          headers: {
+            location: "https://www.youtube.com/watch?v=demo123&t=42",
+          },
+        }),
+      ),
+    );
+
+    const request = new NextRequest("http://127.0.0.1:3001/v/abc123xy/req_deadbeef/2");
+    const response = await GET(request, {
+      params: Promise.resolve({
+        shortId: "abc123xy",
+        path: ["req_deadbeef", "2"],
+      }),
+    });
+
+    expect(response.status).toBe(302);
+    const [target] = vi.mocked(global.fetch).mock.calls[0] ?? [];
+    expect(String(target)).toBe("http://127.0.0.1:8787/v/abc123xy/req_deadbeef/2");
+  });
+
+  it("forwards path-based tracking URLs with detail suffix", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        new Response("<html>detail</html>", {
+          status: 200,
+          headers: { "content-type": "text/html; charset=utf-8" },
+        }),
+      ),
+    );
+
+    const request = new NextRequest("http://127.0.0.1:3001/v/abc123xy/req_deadbeef/2/detail");
+    const response = await GET(request, {
+      params: Promise.resolve({
+        shortId: "abc123xy",
+        path: ["req_deadbeef", "2", "detail"],
+      }),
+    });
+
+    expect(response.status).toBe(200);
+    const [target] = vi.mocked(global.fetch).mock.calls[0] ?? [];
+    expect(String(target)).toBe("http://127.0.0.1:8787/v/abc123xy/req_deadbeef/2/detail");
+  });
+
   it("rejects unsupported tracking suffixes", async () => {
     vi.stubGlobal("fetch", vi.fn());
 
