@@ -92,7 +92,7 @@ export default function DocsPage() {
                   </h2>
                   <p className="mt-4 max-w-3xl text-[15px] leading-8 text-[var(--foreground-secondary)]">
                     Sign up at cerul.ai and create an API key from the dashboard.
-                    The free tier gives you 1,000 requests per month — no credit card required.
+                    The free tier gives you 1,000 credits per month — no credit card required.
                   </p>
                   <div className="mt-6 flex flex-wrap gap-3">
                     <Link href="/signup" className="button-primary">
@@ -147,6 +147,7 @@ export default function DocsPage() {
                     <CodeBlock
                       code={`curl "https://api.cerul.ai/v1/search" \\
   -H "Authorization: Bearer YOUR_CERUL_API_KEY" \\
+  -H "Content-Type: application/json" \\
   -d '{
     "query": "Sam Altman views on AI video generation",
     "include_answer": true
@@ -177,7 +178,7 @@ export default function DocsPage() {
                         {[
                           { name: "score", desc: "Relevance from 0.0 to 1.0" },
                           { name: "url", desc: "Tracking link → redirects to source video" },
-                          { name: "unit_type", desc: "summary, speech, or visual" },
+                          { name: "keyframe_url", desc: "Preview frame when available" },
                           { name: "answer", desc: "AI summary (when include_answer is true)" },
                         ].map((field) => (
                           <div
@@ -203,17 +204,17 @@ export default function DocsPage() {
       "title": "Sam Altman on AGI Timeline",
       "snippet": "AGI is coming sooner than most people expect.",
       "thumbnail_url": "https://i.ytimg.com/vi/hmtuvNfytjM/hqdefault.jpg",
+      "keyframe_url": "https://cdn.cerul.ai/frames/hmtuvNfytjM/f0123.jpg",
       "source": "youtube",
       "speaker": "Sam Altman",
       "timestamp_start": 1223.0,
-      "timestamp_end": 1345.0,
-      "unit_type": "speech"
+      "timestamp_end": 1345.0
     }
   ],
   "answer": "Summary grounded in matched evidence.",
-  "credits_used": 1,
-  "credits_remaining": 999,
-  "request_id": "req_abc123xyz"
+  "credits_used": 2,
+  "credits_remaining": 998,
+  "request_id": "req_9f8c1d5b2a9f7d1a8c4e6b02"
 }`}
                       filename="response.json"
                       language="json"
@@ -234,7 +235,7 @@ export default function DocsPage() {
                         Check your usage
                       </h2>
                       <p className="mt-4 max-w-3xl text-[15px] leading-8 text-[var(--foreground-secondary)]">
-                        Monitor your request count and remaining quota before scaling traffic.
+                        Monitor your credit balance, billing window, and rate limits before scaling traffic.
                       </p>
                       <p className="mt-4 text-sm text-[var(--foreground-secondary)]">
                         <Link href="/docs/usage-api" className="font-medium text-[var(--brand-bright)] transition hover:text-[var(--foreground)]">

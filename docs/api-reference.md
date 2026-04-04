@@ -1,6 +1,6 @@
 # Cerul API Reference
 
-Video understanding search API for AI agents. Index any video, then search what was said and shown through one public retrieval surface.
+Video understanding search API for AI agents. Search across indexed videos through one public retrieval surface.
 
 ## Base URL
 
@@ -26,7 +26,7 @@ Get your key from the [Cerul Dashboard](https://cerul.ai/dashboard).
 
 ### POST /v1/search
 
-Search across unified retrieval units. Cerul automatically blends summary, speech, and visual matches. There is no `search_type` field.
+Search across unified retrieval units. Cerul automatically blends speech, visual, and on-screen text evidence. There is no `search_type` field.
 
 #### Request
 
@@ -37,6 +37,7 @@ curl "https://api.cerul.ai/v1/search" \
   -d '{
     "query": "Sam Altman views on AI video generation tools",
     "max_results": 5,
+    "ranking_mode": "rerank",
     "include_answer": true,
     "filters": {
       "speaker": "Sam Altman",
@@ -52,9 +53,10 @@ curl "https://api.cerul.ai/v1/search" \
 
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
-| `query` | string | Yes | Natural-language query describing what you want to find |
+| `query` | string | Yes | Natural-language query describing what you want to find (max 400 characters) |
 | `max_results` | integer | No | Number of results to return (1-50, default: 10) |
-| `include_answer` | boolean | No | Include a synthesized grounded answer |
+| `ranking_mode` | string | No | `"embedding"` (default) or `"rerank"` |
+| `include_answer` | boolean | No | Include a synthesized grounded answer. Search costs 1 credit by default, or 2 credits when `include_answer=true` |
 | `filters` | object | No | Optional unified filters |
 
 #### Filters
@@ -69,6 +71,8 @@ curl "https://api.cerul.ai/v1/search" \
 }
 ```
 
+`image` search is not part of the first public contract yet.
+
 #### Response
 
 ```json
@@ -77,6 +81,7 @@ curl "https://api.cerul.ai/v1/search" \
     {
       "id": "unit_abc123",
       "score": 0.92,
+      "rerank_score": 0.97,
       "url": "https://cerul.ai/v/a8f3k2x",
       "title": "Sam Altman on AGI Timeline - Lex Fridman Podcast",
       "snippet": "I think AGI is coming sooner than most people expect, probably within the next few years...",
@@ -86,14 +91,13 @@ curl "https://api.cerul.ai/v1/search" \
       "source": "youtube",
       "speaker": "Sam Altman",
       "timestamp_start": 1823.5,
-      "timestamp_end": 1945.2,
-      "unit_type": "speech"
+      "timestamp_end": 1945.2
     }
   ],
   "answer": "Sam Altman has consistently said AGI could arrive within the next few years, while framing progress in concrete product terms.",
   "credits_used": 2,
   "credits_remaining": 998,
-  "request_id": "req_abc123def456"
+  "request_id": "req_9f8c1d5b2a9f7d1a8c4e6b02"
 }
 ```
 
@@ -103,113 +107,32 @@ curl "https://api.cerul.ai/v1/search" \
 |-------|------|-------------|
 | `results[].id` | string | Retrieval unit identifier |
 | `results[].score` | float | Relevance score |
+| `results[].rerank_score` | float or null | Reranking score when `ranking_mode="rerank"` |
 | `results[].url` | string | Cerul tracking URL that redirects to the source video |
 | `results[].title` | string | Video title |
 | `results[].snippet` | string | Snippet derived from transcript or visual evidence |
-| `results[].thumbnail_url` | string | Video thumbnail |
+| `results[].thumbnail_url` | string or null | Video thumbnail |
 | `results[].keyframe_url` | string or null | Keyframe image when available. Direct HTTPS URL to a JPEG — agents running in a terminal can render this inline (see [Rendering keyframes in the terminal](#rendering-keyframes-in-the-terminal)) |
 | `results[].duration` | integer | Video duration in seconds |
 | `results[].source` | string | Source platform (`youtube`, `pexels`, `pixabay`, `upload`) |
 | `results[].speaker` | string or null | Speaker name when available |
 | `results[].timestamp_start` | float or null | Start timestamp in seconds |
 | `results[].timestamp_end` | float or null | End timestamp in seconds |
-| `results[].unit_type` | string | One of `summary`, `speech`, `visual` |
 | `answer` | string or null | Optional synthesized answer when `include_answer=true` |
+| `credits_used` | integer | Credits consumed by this request |
+| `credits_remaining` | integer | Remaining credits in the current billing period |
+| `request_id` | string | Request identifier in the form `req_<24-hex-chars>` |
 
 ---
 
-## Index API
+## Public Contract Scope
 
-### POST /v1/index
+The first public Cerul API contract includes only these authenticated endpoints:
 
-Submit a video URL for indexing. Indexing is free and requires an API key.
+- `POST /v1/search`
+- `GET /v1/usage`
 
-```bash
-curl "https://api.cerul.ai/v1/index" \
-  -H "Authorization: Bearer YOUR_CERUL_API_KEY" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "url": "https://www.youtube.com/watch?v=abc123",
-    "force": false
-  }'
-```
-
-#### Request Parameters
-
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| `url` | string | Yes | Video URL to index |
-| `force` | boolean | No | Re-index even if the video already exists |
-
-Supported URLs:
-
-- YouTube (`youtube.com/watch`, `youtu.be`, `youtube.com/shorts`)
-- Pexels video pages
-- Pixabay video pages
-- Direct `.mp4`, `.webm`, `.mov`, `.m4v` URLs
-
-#### Response
-
-```json
-{
-  "video_id": "uuid-xxx",
-  "status": "processing",
-  "request_id": "req_xxx"
-}
-```
-
-### GET /v1/index/{video_id}
-
-Check indexing status for one video.
-
-```json
-{
-  "video_id": "uuid-xxx",
-  "status": "completed",
-  "title": "Sam Altman on AGI",
-  "duration": 7200,
-  "units_created": 28,
-  "created_at": "2026-03-21T10:00:00Z",
-  "completed_at": "2026-03-21T10:03:45Z"
-}
-```
-
-### GET /v1/index
-
-List videos indexed by the current API key owner.
-
-```bash
-curl "https://api.cerul.ai/v1/index?page=1&per_page=20" \
-  -H "Authorization: Bearer YOUR_CERUL_API_KEY"
-```
-
-```json
-{
-  "videos": [
-    {
-      "video_id": "uuid-xxx",
-      "title": "Sam Altman on AGI",
-      "status": "completed",
-      "units_created": 28,
-      "created_at": "2026-03-21T10:00:00Z",
-      "completed_at": "2026-03-21T10:03:45Z"
-    }
-  ],
-  "total": 1,
-  "page": 1,
-  "per_page": 20
-}
-```
-
-### DELETE /v1/index/{video_id}
-
-Delete the current user's access to an indexed video.
-
-```json
-{
-  "deleted": true
-}
-```
+Index endpoints are intentionally omitted from the public contract for now, and are not part of the first SDK / MCP surface.
 
 ---
 
@@ -300,10 +223,7 @@ curl "https://api.cerul.ai/v1/usage" \
 
 | Operation | Credits |
 |-----------|---------|
-| `POST /v1/index` | Free |
-| `GET /v1/index` | Free |
-| `GET /v1/index/{video_id}` | Free |
-| `DELETE /v1/index/{video_id}` | Free |
+| `GET /v1/usage` | Free |
 | `POST /v1/search` | 1 |
 | `POST /v1/search` + `include_answer=true` | 2 |
 
@@ -315,7 +235,6 @@ curl "https://api.cerul.ai/v1/usage" \
 
 ```python
 import requests
-import time
 
 API_KEY = "YOUR_CERUL_API_KEY"
 BASE_URL = "https://api.cerul.ai"
@@ -324,27 +243,6 @@ headers = {
     "Content-Type": "application/json",
 }
 
-submit = requests.post(
-    f"{BASE_URL}/v1/index",
-    headers=headers,
-    json={"url": "https://www.youtube.com/watch?v=abc123"},
-    timeout=30,
-)
-submit.raise_for_status()
-video_id = submit.json()["video_id"]
-
-while True:
-    status = requests.get(
-        f"{BASE_URL}/v1/index/{video_id}",
-        headers=headers,
-        timeout=30,
-    )
-    status.raise_for_status()
-    payload = status.json()
-    if payload["status"] in {"completed", "failed"}:
-        break
-    time.sleep(10)
-
 search = requests.post(
     f"{BASE_URL}/v1/search",
     headers=headers,
@@ -352,11 +250,20 @@ search = requests.post(
         "query": "what did they say about AGI",
         "max_results": 5,
         "include_answer": True,
+        "ranking_mode": "rerank",
     },
     timeout=30,
 )
 search.raise_for_status()
 print(search.json())
+
+usage = requests.get(
+    f"{BASE_URL}/v1/usage",
+    headers=headers,
+    timeout=30,
+)
+usage.raise_for_status()
+print(usage.json())
 ```
 
 ### JavaScript / Node.js
@@ -376,6 +283,7 @@ async function searchVideos(query) {
       query,
       max_results: 5,
       include_answer: true,
+      ranking_mode: "rerank",
     }),
   });
 
@@ -386,23 +294,37 @@ async function searchVideos(query) {
   const data = await response.json();
   return data.results;
 }
+
+async function getUsage() {
+  const response = await fetch(`${BASE_URL}/v1/usage`, {
+    headers: {
+      Authorization: `Bearer ${API_KEY}`,
+    },
+  });
+
+  if (!response.ok) {
+    throw new Error(`Cerul request failed: ${response.status}`);
+  }
+
+  return response.json();
+}
 ```
 
 ---
 
 ## Error Handling
 
-The API uses standard HTTP status codes:
+The public API uses a stable JSON error envelope:
 
-| Status | Description |
-|--------|-------------|
-| `200 OK` | Request successful |
-| `202 Accepted` | Index request accepted and queued |
-| `401 Unauthorized` | Missing or invalid API key |
-| `404 Not Found` | Requested indexed video or tracking link does not exist |
-| `422 Unprocessable Entity` | Invalid request payload or unsupported URL format |
-| `429 Too Many Requests` | Rate limit exceeded |
-| `500 Internal Server Error` | Unexpected server error |
+| HTTP Status | `error.code` | Description |
+|-------------|--------------|-------------|
+| `400` | `invalid_request` | Invalid JSON body or request validation error |
+| `401` | `unauthorized` | Missing or invalid API key |
+| `403` | `forbidden` | Inactive API key or insufficient credits |
+| `404` | `not_found` | Route or resource not found |
+| `422` | `invalid_request` | Payload is syntactically valid but semantically invalid |
+| `429` | `rate_limited` | Rate limit exceeded |
+| `500+` | `api_error` | Unexpected server error |
 
 Error response format:
 

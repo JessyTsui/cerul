@@ -90,7 +90,7 @@ export const docsLandingSections = [
     kicker: "Getting Started",
     title: "Cerul API Overview",
     description:
-      "The Cerul API lets AI agents search video by meaning — across visual scenes, speech, and on-screen text. One endpoint, one API key, grounded results with timestamps.",
+      "The Cerul API lets AI agents search video by meaning — across visual scenes, speech, and on-screen text. Two public endpoints, one API key, grounded results with timestamps.",
     list: [
       "Base URL: https://api.cerul.ai",
       "Bearer token authentication",
@@ -106,11 +106,12 @@ export const docsLandingSections = [
       "Include your API key in the Authorization header as a Bearer token. Create and manage keys from your dashboard.",
     list: [
       "Authorization: Bearer YOUR_CERUL_API_KEY",
-      "Free tier: 1,000 requests/month, no credit card",
+      "Free tier: 1,000 credits/month, no credit card",
       "Keys start with cerul_ prefix",
     ],
     code: `curl "${API_BASE_URL}/v1/search" \\
   -H "Authorization: Bearer YOUR_CERUL_API_KEY" \\
+  -H "Content-Type: application/json" \\
   -d '{"query": "your search query"}'`,
     language: "bash",
     filename: "auth.sh",
@@ -128,6 +129,7 @@ export const docsLandingSections = [
     ],
     code: `curl "${API_BASE_URL}/v1/search" \\
   -H "Authorization: Bearer YOUR_CERUL_API_KEY" \\
+  -H "Content-Type: application/json" \\
   -d '{
     "query": "Sam Altman views on AI video generation tools",
     "max_results": 5,
@@ -141,9 +143,9 @@ export const docsLandingSections = [
     kicker: "Monitoring",
     title: "GET /v1/usage",
     description:
-      "Check your current request count, remaining quota, and rate limits. Call this before scaling traffic.",
+      "Check your current credit balance, billing window, and rate limits. Call this before scaling traffic.",
     list: [
-      "Current billing period and request counts",
+      "Current billing period and credit totals",
       "Rate limit status per tier",
       "No request body needed",
     ],
@@ -162,7 +164,7 @@ export const docsLandingSections = [
       "results[]: array of matched video segments",
       "score: relevance from 0.0 to 1.0",
       "url: Cerul tracking link → redirects to source",
-      "unit_type: summary, speech, or visual",
+      "keyframe_url: preview frame when available",
     ],
     code: `{
   "results": [
@@ -173,17 +175,17 @@ export const docsLandingSections = [
       "title": "Sam Altman on AGI Timeline",
       "snippet": "AGI is coming sooner than most people expect.",
       "thumbnail_url": "https://i.ytimg.com/vi/hmtuvNfytjM/hqdefault.jpg",
+      "keyframe_url": "https://cdn.cerul.ai/frames/hmtuvNfytjM/f0123.jpg",
       "source": "youtube",
       "speaker": "Sam Altman",
       "timestamp_start": 1223.0,
-      "timestamp_end": 1345.0,
-      "unit_type": "speech"
+      "timestamp_end": 1345.0
     }
   ],
   "answer": "Summary grounded in the matched evidence.",
-  "credits_used": 1,
-  "credits_remaining": 999,
-  "request_id": "req_abc123xyz"
+  "credits_used": 2,
+  "credits_remaining": 998,
+  "request_id": "req_9f8c1d5b2a9f7d1a8c4e6b02"
 }`,
     language: "json",
     filename: "response.json",
@@ -229,9 +231,9 @@ export const docsPages: DocPage[] = [
         body:
           "Requests exceeding your rate limit return HTTP 429. The limit resets every second.",
         bullets: [
-          "Free: 1 request/second, 1,000 requests/month",
+          "Free: 1 request/second, 1,000 credits/month",
           "Pay as you go: 5 requests/second",
-          "Monthly: 10 requests/second, 5,000 requests included",
+          "Monthly: 10 requests/second, 5,000 credits included",
           "Enterprise: custom limits",
         ],
       },
@@ -337,7 +339,7 @@ export const docsPopularTopics = [
   {
     title: "Rate limits and quotas",
     href: "/docs/usage-api",
-    description: "Understand your tier limits before scaling traffic.",
+    description: "Understand your credit and rate-limit envelope before scaling traffic.",
   },
   {
     title: "Full endpoint reference",
@@ -361,7 +363,7 @@ export const docsFeatureCards: DocsFeatureCard[] = [
   },
   {
     title: "Usage",
-    description: "Check request counts, quotas, and rate limits.",
+    description: "Check credits, quotas, and rate limits.",
     snippet: "GET /v1/usage",
     href: "/docs/usage-api",
   },
@@ -422,17 +424,18 @@ export const apiReferenceEndpoints: ApiReferenceEndpoint[] = [
         description: "Number of results to return, 1–50. Default: 10.",
       },
       {
-        name: "include_answer",
-        type: "boolean",
-        required: "Optional",
-        description: "Generate an AI summary grounded in the matched evidence. Default: false.",
-      },
-      {
         name: "ranking_mode",
         type: "string",
         required: "Optional",
         description:
           "\"embedding\" (default) for vector similarity, or \"rerank\" for LLM-based reranking.",
+      },
+      {
+        name: "include_answer",
+        type: "boolean",
+        required: "Optional",
+        description:
+          "Generate an AI summary grounded in the matched evidence. Default: false. Costs 2 credits instead of 1.",
       },
       {
         name: "filters",
@@ -449,10 +452,16 @@ export const apiReferenceEndpoints: ApiReferenceEndpoint[] = [
         filename: "search.sh",
         code: `curl "https://api.cerul.ai/v1/search" \\
   -H "Authorization: Bearer YOUR_CERUL_API_KEY" \\
+  -H "Content-Type: application/json" \\
   -d '{
     "query": "Sam Altman views on AI video generation tools",
     "max_results": 5,
-    "include_answer": true
+    "ranking_mode": "rerank",
+    "include_answer": true,
+    "filters": {
+      "speaker": "Sam Altman",
+      "published_after": "2024-01-01"
+    }
   }'`,
       },
       {
@@ -463,11 +472,19 @@ export const apiReferenceEndpoints: ApiReferenceEndpoint[] = [
 
 response = requests.post(
     "https://api.cerul.ai/v1/search",
-    headers={"Authorization": "Bearer YOUR_CERUL_API_KEY"},
+    headers={
+        "Authorization": "Bearer YOUR_CERUL_API_KEY",
+        "Content-Type": "application/json",
+    },
     json={
         "query": "Sam Altman views on AI video generation tools",
         "max_results": 5,
+        "ranking_mode": "rerank",
         "include_answer": True,
+        "filters": {
+            "speaker": "Sam Altman",
+            "published_after": "2024-01-01",
+        },
     },
 )
 
@@ -481,11 +498,17 @@ print(response.json())`,
   method: "POST",
   headers: {
     "Authorization": "Bearer YOUR_CERUL_API_KEY",
+    "Content-Type": "application/json",
   },
   body: JSON.stringify({
     query: "Sam Altman views on AI video generation tools",
     max_results: 5,
+    ranking_mode: "rerank",
     include_answer: true,
+    filters: {
+      speaker: "Sam Altman",
+      published_after: "2024-01-01",
+    },
   }),
 });
 
@@ -498,15 +521,17 @@ console.log(data);`,
     {
       "id": "string",
       "score": "number (0.0–1.0)",
+      "rerank_score": "number | null",
       "url": "string (tracking URL → redirects to source)",
       "title": "string",
       "snippet": "string",
-      "thumbnail_url": "string",
+      "thumbnail_url": "string | null",
+      "keyframe_url": "string | null",
+      "duration": "integer",
       "source": "string",
       "speaker": "string | null",
       "timestamp_start": "number | null",
-      "timestamp_end": "number | null",
-      "unit_type": "summary | speech | visual"
+      "timestamp_end": "number | null"
     }
   ],
   "answer": "string | null",
@@ -519,15 +544,17 @@ console.log(data);`,
     {
       "id": "unit_hmtuvNfytjM_1223",
       "score": 0.93,
+      "rerank_score": 0.97,
       "url": "https://cerul.ai/v/a8f3k2x",
       "title": "Sam Altman on AI video generation",
       "snippet": "Current AI video generation tools are improving quickly but still constrained by controllability.",
       "thumbnail_url": "https://i.ytimg.com/vi/hmtuvNfytjM/hqdefault.jpg",
+      "keyframe_url": "https://cdn.cerul.ai/frames/hmtuvNfytjM/f0123.jpg",
+      "duration": 7200,
       "source": "youtube",
       "speaker": "Sam Altman",
       "timestamp_start": 1223.0,
-      "timestamp_end": 1345.0,
-      "unit_type": "speech"
+      "timestamp_end": 1345.0
     }
   ],
   "answer": "Sam Altman frames current AI video generation tools as improving quickly but still constrained by controllability and production reliability.",
@@ -542,7 +569,7 @@ console.log(data);`,
     method: "GET",
     path: "/v1/usage",
     title: "Check usage",
-    description: "Returns your current plan tier, billing period, request counts, and rate limit.",
+    description: "Returns your current plan tier, billing period, credit totals, and rate limit.",
     authLabel: "Bearer API key",
     authDescription:
       "Requires a Cerul API key. Use this to monitor usage before scaling traffic.",

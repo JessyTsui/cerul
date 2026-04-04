@@ -1,0 +1,534 @@
+openapi: 3.1.0
+info:
+  title: Cerul API
+  version: 1.0.0
+  description: |
+    Video understanding search API for AI agents.
+    Search across indexed videos by meaning — visual scenes, speech, and on-screen text.
+  contact:
+    name: Cerul
+    url: https://cerul.ai
+  license:
+    name: MIT
+    url: https://opensource.org/licenses/MIT
+
+servers:
+  - url: https://api.cerul.ai
+    description: Production
+
+security:
+  - bearerAuth: []
+
+tags:
+  - name: Search
+    description: Search indexed videos through the public Cerul API.
+  - name: Usage
+    description: Inspect account-level credits, billing period, and rate limits.
+
+paths:
+  /v1/search:
+    post:
+      operationId: search
+      tags:
+        - Search
+      summary: Search indexed videos
+      description: |
+        Search across unified retrieval units. Cerul automatically blends
+        speech, visual, and on-screen text evidence. Returns timestamped
+        results with relevance scores and source URLs.
+
+        Each search costs 1 credit, or 2 credits when `include_answer` is true.
+        Image search is not part of the first public contract.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SearchRequest"
+            examples:
+              minimal:
+                summary: Minimal search request
+                value:
+                  query: Sam Altman views on AI video generation tools
+              rerankWithFiltersAndAnswer:
+                summary: Reranked search with filters and answer
+                value:
+                  query: Sam Altman views on AI video generation tools
+                  max_results: 5
+                  ranking_mode: rerank
+                  include_answer: true
+                  filters:
+                    speaker: Sam Altman
+                    published_after: "2024-01-01"
+                    min_duration: 60
+                    max_duration: 7200
+                    source: youtube
+      responses:
+        "200":
+          description: Search results
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SearchResponse"
+              examples:
+                embeddingSearch:
+                  summary: Embedding search without answer
+                  value:
+                    results:
+                      - id: unit_hmtuvNfytjM_1223
+                        score: 0.93
+                        url: https://cerul.ai/v/a8f3k2x
+                        title: Sam Altman on AI video generation
+                        snippet: >-
+                          Current AI video generation tools are improving quickly
+                          but still constrained by controllability.
+                        thumbnail_url: https://i.ytimg.com/vi/hmtuvNfytjM/hqdefault.jpg
+                        keyframe_url: https://cdn.cerul.ai/frames/hmtuvNfytjM/f0123.jpg
+                        duration: 7200
+                        source: youtube
+                        speaker: Sam Altman
+                        timestamp_start: 1223.0
+                        timestamp_end: 1345.0
+                    credits_used: 1
+                    credits_remaining: 999
+                    request_id: req_9f8c1d5b2a9f7d1a8c4e6b02
+                rerankedSearchWithAnswer:
+                  summary: Reranked search with answer
+                  value:
+                    results:
+                      - id: unit_hmtuvNfytjM_1223
+                        score: 0.93
+                        rerank_score: 0.97
+                        url: https://cerul.ai/v/a8f3k2x
+                        title: Sam Altman on AI video generation
+                        snippet: >-
+                          Current AI video generation tools are improving quickly
+                          but still constrained by controllability.
+                        thumbnail_url: https://i.ytimg.com/vi/hmtuvNfytjM/hqdefault.jpg
+                        keyframe_url: https://cdn.cerul.ai/frames/hmtuvNfytjM/f0123.jpg
+                        duration: 7200
+                        source: youtube
+                        speaker: Sam Altman
+                        timestamp_start: 1223.0
+                        timestamp_end: 1345.0
+                    answer: >-
+                      Sam Altman frames current AI video generation tools as
+                      improving quickly but still constrained by controllability
+                      and production reliability.
+                    credits_used: 2
+                    credits_remaining: 998
+                    request_id: req_9f8c1d5b2a9f7d1a8c4e6b02
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /v1/usage:
+    get:
+      operationId: getUsage
+      tags:
+        - Usage
+      summary: Check usage and quota
+      description: |
+        Returns the current plan tier, billing period, credit totals,
+        and rate limit for the authenticated account.
+      responses:
+        "200":
+          description: Usage information
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UsageResponse"
+              example:
+                tier: free
+                period_start: "2026-03-01"
+                period_end: "2026-03-31"
+                credits_limit: 1000
+                credits_used: 128
+                credits_remaining: 872
+                rate_limit_per_sec: 1
+                api_keys_active: 1
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      description: |
+        Cerul API key. Pass as `Authorization: Bearer cerul_sk_...`.
+        Create and manage keys from the [dashboard](https://cerul.ai/dashboard).
+
+  schemas:
+    SearchRequest:
+      type: object
+      additionalProperties: false
+      required:
+        - query
+      properties:
+        query:
+          type: string
+          maxLength: 400
+          pattern: \S
+          description: Natural language search query. Must contain at least one non-whitespace character.
+        max_results:
+          type: integer
+          minimum: 1
+          maximum: 50
+          default: 10
+          description: Number of results to return.
+        ranking_mode:
+          type: string
+          enum:
+            - embedding
+            - rerank
+          default: embedding
+          description: >-
+            `embedding` for vector similarity, `rerank` for LLM-based reranking.
+        include_answer:
+          type: boolean
+          default: false
+          description: >-
+            Generate an AI summary grounded in the matched evidence.
+            Costs 2 credits instead of 1.
+        filters:
+          $ref: "#/components/schemas/SearchFilters"
+
+    SearchFilters:
+      type: object
+      additionalProperties: false
+      description: Optional filters to narrow search results.
+      properties:
+        speaker:
+          type: string
+          description: Filter results by speaker name.
+        published_after:
+          type: string
+          format: date
+          description: Filter videos published after this date (YYYY-MM-DD).
+        min_duration:
+          type: integer
+          minimum: 0
+          description: Minimum video duration in whole seconds. Must be less than or equal to `max_duration` when both are provided.
+        max_duration:
+          type: integer
+          minimum: 0
+          description: Maximum video duration in whole seconds. Must be greater than or equal to `min_duration` when both are provided.
+        source:
+          type: string
+          description: Filter by video source (e.g. "youtube").
+
+    SearchResponse:
+      type: object
+      additionalProperties: false
+      required:
+        - results
+        - credits_used
+        - credits_remaining
+        - request_id
+      properties:
+        results:
+          type: array
+          items:
+            $ref: "#/components/schemas/SearchResult"
+        answer:
+          type:
+            - string
+            - "null"
+          description: >-
+            AI-generated summary grounded in matched evidence.
+            Only present when `include_answer` is true.
+        credits_used:
+          type: integer
+          description: Credits consumed by this request.
+        credits_remaining:
+          type: integer
+          description: Remaining credits in the current billing period.
+        request_id:
+          type: string
+          pattern: ^req_[0-9a-f]{24}$
+          description: Unique request identifier.
+
+    SearchResult:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - score
+        - url
+        - title
+        - snippet
+        - duration
+        - source
+      properties:
+        id:
+          type: string
+          description: Retrieval unit identifier.
+        score:
+          type: number
+          format: float
+          minimum: 0
+          maximum: 1
+          description: Relevance score from 0.0 to 1.0.
+        rerank_score:
+          type:
+            - number
+            - "null"
+          format: float
+          minimum: 0
+          maximum: 1
+          description: Reranking score when `ranking_mode` is `rerank`.
+        url:
+          type: string
+          format: uri
+          description: Cerul tracking URL that redirects to the source video.
+        title:
+          type: string
+          description: Video title.
+        snippet:
+          type: string
+          description: Matched transcript or visual description.
+        thumbnail_url:
+          type:
+            - string
+            - "null"
+          format: uri
+          description: Preview image URL.
+        keyframe_url:
+          type:
+            - string
+            - "null"
+          format: uri
+          description: Representative keyframe image when available.
+        duration:
+          type: integer
+          description: Video duration in seconds.
+        source:
+          type: string
+          description: Content source (e.g. "youtube").
+        speaker:
+          type:
+            - string
+            - "null"
+          description: Speaker name when available.
+        timestamp_start:
+          type:
+            - number
+            - "null"
+          format: float
+          description: Start timestamp in seconds.
+        timestamp_end:
+          type:
+            - number
+            - "null"
+          format: float
+          description: End timestamp in seconds.
+
+    UsageResponse:
+      type: object
+      additionalProperties: false
+      required:
+        - tier
+        - period_start
+        - period_end
+        - credits_limit
+        - credits_used
+        - credits_remaining
+        - rate_limit_per_sec
+        - api_keys_active
+      properties:
+        tier:
+          type: string
+          enum:
+            - free
+            - pro
+            - monthly
+            - enterprise
+          description: Current subscription tier.
+        period_start:
+          type: string
+          format: date
+          description: Billing period start date (YYYY-MM-DD).
+        period_end:
+          type: string
+          format: date
+          description: Billing period end date (YYYY-MM-DD).
+        credits_limit:
+          type: integer
+          description: Monthly credit limit.
+        credits_used:
+          type: integer
+          description: Credits used in the current billing period.
+        credits_remaining:
+          type: integer
+          description: Credits remaining in the current billing period.
+        rate_limit_per_sec:
+          type: integer
+          description: Maximum requests per second for this tier.
+        api_keys_active:
+          type: integer
+          description: Number of active API keys.
+
+    ErrorResponse:
+      type: object
+      additionalProperties: false
+      required:
+        - error
+      properties:
+        error:
+          type: object
+          additionalProperties: false
+          required:
+            - code
+            - message
+          properties:
+            code:
+              type: string
+              enum:
+                - invalid_request
+                - unauthorized
+                - forbidden
+                - not_found
+                - rate_limited
+                - api_error
+              description: Machine-readable error code.
+            message:
+              type: string
+              description: Human-readable error message.
+
+  responses:
+    BadRequest:
+      description: Invalid request body or missing required field.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+          examples:
+            queryTooLong:
+              summary: Query exceeds max length
+              value:
+                error:
+                  code: invalid_request
+                  message: query must be 400 characters or fewer
+            invalidRankingMode:
+              summary: ranking_mode is not supported
+              value:
+                error:
+                  code: invalid_request
+                  message: ranking_mode must be 'embedding' or 'rerank'
+            invalidFiltersType:
+              summary: filters is not an object
+              value:
+                error:
+                  code: invalid_request
+                  message: filters must be an object
+            invalidDurationRange:
+              summary: min_duration is greater than max_duration
+              value:
+                error:
+                  code: invalid_request
+                  message: min_duration must be less than or equal to max_duration
+
+    Unauthorized:
+      description: Missing or invalid API key.
+      headers:
+        WWW-Authenticate:
+          schema:
+            type: string
+          description: Bearer authentication challenge.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+          examples:
+            missingAuthorizationHeader:
+              summary: Missing Authorization header
+              value:
+                error:
+                  code: unauthorized
+                  message: Missing Authorization header
+            invalidBearerScheme:
+              summary: Authorization header must use Bearer
+              value:
+                error:
+                  code: unauthorized
+                  message: Authorization header must use the Bearer scheme
+            malformedApiKey:
+              summary: API key format is invalid
+              value:
+                error:
+                  code: unauthorized
+                  message: Malformed API key
+            invalidApiKey:
+              summary: API key not recognized
+              value:
+                error:
+                  code: unauthorized
+                  message: Invalid API key
+
+    Forbidden:
+      description: Inactive API key or insufficient credits.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+          examples:
+            inactiveApiKey:
+              summary: API key is inactive
+              value:
+                error:
+                  code: forbidden
+                  message: API key is inactive
+            monthlyCreditsExhausted:
+              summary: Monthly credit limit exhausted
+              value:
+                error:
+                  code: forbidden
+                  message: Monthly credit limit exhausted
+            requestCreditsInsufficient:
+              summary: Insufficient credits for this request
+              value:
+                error:
+                  code: forbidden
+                  message: Insufficient credits for this request
+
+    RateLimited:
+      description: Rate limit exceeded.
+      headers:
+        Retry-After:
+          schema:
+            type: integer
+            minimum: 1
+          description: Seconds to wait before retrying.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+          example:
+            error:
+              code: rate_limited
+              message: Rate limit exceeded
+
+    InternalError:
+      description: Unexpected server error.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+          example:
+            error:
+              code: api_error
+              message: Internal server error

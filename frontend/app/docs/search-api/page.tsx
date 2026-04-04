@@ -37,13 +37,13 @@ const parameters = [
     name: "max_results",
     type: "integer",
     required: false,
-    description: "Number of results to return. 1–20, default 5.",
+    description: "Number of results to return. 1–50, default 10.",
   },
   {
     name: "include_answer",
     type: "boolean",
     required: false,
-    description: "Generate an AI summary grounded in the matched evidence. Default false.",
+    description: "Generate an AI summary grounded in the matched evidence. Default false. Costs 2 credits instead of 1.",
   },
   {
     name: "ranking_mode",
@@ -71,26 +71,31 @@ const responseFields = [
   { name: "results", type: "array", description: "Array of matched video segments." },
   { name: "results[].id", type: "string", description: "Unique result identifier." },
   { name: "results[].score", type: "number", description: "Relevance score, 0.0 to 1.0." },
+  { name: "results[].rerank_score", type: "number | null", description: "Reranking score when ranking_mode is set to rerank." },
   { name: "results[].url", type: "string", description: "Cerul tracking URL — redirects to the source video." },
   { name: "results[].title", type: "string", description: "Video title." },
   { name: "results[].snippet", type: "string", description: "Matched transcript or visual description." },
-  { name: "results[].thumbnail_url", type: "string", description: "Preview image URL." },
+  { name: "results[].thumbnail_url", type: "string | null", description: "Preview image URL." },
+  { name: "results[].keyframe_url", type: "string | null", description: "Representative keyframe image when available." },
+  { name: "results[].duration", type: "integer", description: "Video duration in seconds." },
   { name: "results[].source", type: "string", description: "Content source (e.g. \"youtube\")." },
   { name: "results[].speaker", type: "string | null", description: "Speaker name, if detected." },
   { name: "results[].timestamp_start", type: "number | null", description: "Start time in seconds." },
   { name: "results[].timestamp_end", type: "number | null", description: "End time in seconds." },
-  { name: "results[].unit_type", type: "string", description: "\"summary\", \"speech\", or \"visual\"." },
   { name: "answer", type: "string | null", description: "AI-generated summary. Only present when include_answer is true." },
   { name: "credits_used", type: "integer", description: "Credits consumed by this request." },
   { name: "credits_remaining", type: "integer", description: "Remaining credits in current billing period." },
-  { name: "request_id", type: "string", description: "Unique request identifier for debugging." },
+  { name: "request_id", type: "string", description: "Unique request identifier in the form req_<24-hex-chars>." },
 ];
 
 const errors = [
-  { code: "400", description: "Invalid request body or missing required field." },
-  { code: "401", description: "Missing or invalid API key." },
-  { code: "429", description: "Rate limit exceeded. Retry after the limit resets." },
-  { code: "500", description: "Internal server error." },
+  { status: "400", code: "invalid_request", description: "Invalid JSON body or request validation error." },
+  { status: "401", code: "unauthorized", description: "Missing or invalid API key." },
+  { status: "403", code: "forbidden", description: "Inactive API key or insufficient credits." },
+  { status: "404", code: "not_found", description: "Route or resource not found." },
+  { status: "422", code: "invalid_request", description: "Payload is syntactically valid but semantically invalid." },
+  { status: "429", code: "rate_limited", description: "Rate limit exceeded. Retry after the limit resets." },
+  { status: "500+", code: "api_error", description: "Internal server error." },
 ];
 
 export default function SearchApiPage() {
@@ -152,6 +157,7 @@ export default function SearchApiPage() {
                           <CodeBlock
                             code={`curl "https://api.cerul.ai/v1/search" \\
   -H "Authorization: Bearer YOUR_CERUL_API_KEY" \\
+  -H "Content-Type: application/json" \\
   -d '{
     "query": "Sam Altman views on AI video generation"
   }'`}
@@ -169,7 +175,10 @@ export default function SearchApiPage() {
 
 response = requests.post(
     "https://api.cerul.ai/v1/search",
-    headers={"Authorization": "Bearer YOUR_CERUL_API_KEY"},
+    headers={
+        "Authorization": "Bearer YOUR_CERUL_API_KEY",
+        "Content-Type": "application/json",
+    },
     json={"query": "Sam Altman views on AI video generation"},
 )
 
@@ -188,6 +197,7 @@ print(response.json())`}
   method: "POST",
   headers: {
     "Authorization": "Bearer YOUR_CERUL_API_KEY",
+    "Content-Type": "application/json",
   },
   body: JSON.stringify({
     query: "Sam Altman views on AI video generation",
@@ -210,6 +220,7 @@ console.log(data);`}
   method: "POST",
   headers: {
     "Authorization": "Bearer YOUR_CERUL_API_KEY",
+    "Content-Type": "application/json",
   },
   body: JSON.stringify({
     query: "Sam Altman views on AI video generation",
@@ -219,15 +230,22 @@ console.log(data);`}
 type SearchResult = {
   id: string;
   score: number;
+  rerank_score?: number | null;
   url: string;
   title: string;
   snippet: string;
-  unit_type: "summary" | "speech" | "visual";
+  thumbnail_url?: string | null;
+  keyframe_url?: string | null;
+  duration: number;
+  source: string;
+  speaker?: string | null;
+  timestamp_start?: number | null;
+  timestamp_end?: number | null;
 };
 
 type SearchResponse = {
   results: SearchResult[];
-  answer: string | null;
+  answer?: string | null;
   credits_used: number;
   credits_remaining: number;
   request_id: string;
@@ -338,6 +356,7 @@ console.log(data);`}
                   <CodeBlock
                     code={`curl "https://api.cerul.ai/v1/search" \\
   -H "Authorization: Bearer YOUR_CERUL_API_KEY" \\
+  -H "Content-Type: application/json" \\
   -d '{
     "query": "AGI timeline discussion",
     "max_results": 5,
@@ -345,6 +364,9 @@ console.log(data);`}
     "ranking_mode": "rerank",
     "filters": {
       "speaker": "Sam Altman",
+      "published_after": "2024-01-01",
+      "min_duration": 60,
+      "max_duration": 7200,
       "source": "youtube"
     }
   }'`}
@@ -402,15 +424,17 @@ console.log(data);`}
     {
       "id": "unit_hmtuvNfytjM_1223",
       "score": 0.93,
+      "rerank_score": 0.97,
       "url": "https://cerul.ai/v/a8f3k2x",
       "title": "Sam Altman on AI video generation",
       "snippet": "Current AI video generation tools are improving quickly but still constrained by controllability.",
       "thumbnail_url": "https://i.ytimg.com/vi/hmtuvNfytjM/hqdefault.jpg",
+      "keyframe_url": "https://cdn.cerul.ai/frames/hmtuvNfytjM/f0123.jpg",
+      "duration": 7200,
       "source": "youtube",
       "speaker": "Sam Altman",
       "timestamp_start": 1223.0,
-      "timestamp_end": 1345.0,
-      "unit_type": "speech"
+      "timestamp_end": 1345.0
     }
   ],
   "answer": "Sam Altman frames current AI video generation tools as improving quickly but still constrained by controllability.",
@@ -438,13 +462,17 @@ console.log(data);`}
                     <thead className="bg-[var(--background-elevated)] text-[var(--foreground-secondary)]">
                       <tr>
                         <th className="px-4 py-3 font-medium">Status</th>
+                        <th className="px-4 py-3 font-medium">Code</th>
                         <th className="px-4 py-3 font-medium">Description</th>
                       </tr>
                     </thead>
                     <tbody className="bg-white/65">
                       {errors.map((error) => (
-                        <tr key={error.code} className="border-t border-[var(--border)]">
+                        <tr key={`${error.status}-${error.code}`} className="border-t border-[var(--border)]">
                           <td className="px-4 py-4 font-mono text-[var(--foreground)]">
+                            {error.status}
+                          </td>
+                          <td className="px-4 py-4 font-mono text-[var(--foreground-secondary)]">
                             {error.code}
                           </td>
                           <td className="px-4 py-4 text-[var(--foreground-secondary)]">
