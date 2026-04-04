@@ -127,7 +127,7 @@ function createMcpServer(input: {
           .boolean()
           .optional()
           .describe("AI summary of results. Costs 2 credits and adds latency. Only use when the user explicitly asks for a summary."),
-        speaker: z.string().optional().describe("Filter results by speaker name."),
+        speaker: z.string().optional().describe("Filter by speaker/channel name. Note: this field often contains the channel name (e.g. 'Sequoia Capital', 'a16z', 'Lex Fridman') rather than the interviewee. If no results, retry without this filter and use the query to find the person."),
         published_after: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional().describe("Filter videos published after this date (YYYY-MM-DD)."),
         min_duration: z
           .number()
