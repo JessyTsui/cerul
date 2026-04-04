@@ -30,16 +30,25 @@ function resolveSuffix(pathSegments: string[] | undefined): string | null {
     return "";
   }
 
-  if (pathSegments.length !== 1) {
+  // Legacy: /v/{shortId}/detail or /v/{shortId}/go
+  if (pathSegments.length === 1) {
+    const [segment] = pathSegments;
+    if (segment === "detail" || segment === "go") {
+      return `/${segment}`;
+    }
     return null;
   }
 
-  const [segment] = pathSegments;
-  if (segment !== "detail" && segment !== "go") {
-    return null;
+  // Path-based tracking: /v/{shortId}/{requestId}/{rank}[/detail|/go]
+  if (pathSegments.length === 2 || pathSegments.length === 3) {
+    const tail = pathSegments.length === 3 ? `/${pathSegments[2]}` : "";
+    if (tail && tail !== "/detail" && tail !== "/go") {
+      return null;
+    }
+    return `/${pathSegments[0]}/${pathSegments[1]}${tail}`;
   }
 
-  return `/${segment}`;
+  return null;
 }
 
 async function proxyTrackingRequest(
