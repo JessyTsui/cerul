@@ -114,10 +114,8 @@ function truncateText(value: string, limit: number): string {
 }
 
 function buildTrackingUrl(webBaseUrl: string, shortId: string, requestId: string, rank: number): string {
-  const url = new URL(`/v/${shortId}`, webBaseUrl.replace(/\/+$/, "/"));
-  url.searchParams.set("req", requestId);
-  url.searchParams.set("rank", String(rank));
-  return url.toString();
+  const base = webBaseUrl.replace(/\/+$/, "");
+  return `${base}/v/${encodeURIComponent(shortId)}/${encodeURIComponent(requestId)}/${rank}`;
 }
 
 export class UnifiedSearchService {

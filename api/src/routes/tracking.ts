@@ -38,17 +38,13 @@ function normalizeOptionalRank(value: unknown): number | null {
 }
 
 function buildTrackingPath(shortId: string, suffix: "" | "/go", context: TrackingContext): string {
-  const params = new URLSearchParams();
-  if (context.requestId) {
-    params.set("req", context.requestId);
-  }
-  if (context.resultRank != null) {
-    params.set("rank", String(context.resultRank));
-  }
-
   const encodedShortId = encodeURIComponent(shortId);
-  const query = params.toString();
-  return query ? `/v/${encodedShortId}${suffix}?${query}` : `/v/${encodedShortId}${suffix}`;
+  if (context.requestId) {
+    const encodedReq = encodeURIComponent(context.requestId);
+    const rank = context.resultRank ?? 0;
+    return `/v/${encodedShortId}/${encodedReq}/${rank}${suffix}`;
+  }
+  return `/v/${encodedShortId}${suffix}`;
 }
 
 function renderDetailPage(trackingRow: Record<string, unknown>, shortId: string, context: TrackingContext): string {
@@ -252,8 +248,14 @@ function buildTargetUrl(trackingRow: Record<string, unknown>, webBaseUrl: string
 
 function resolveTrackingContext(c: any, trackingRow: Record<string, unknown>): TrackingContext {
   return {
-    requestId: normalizeOptionalText(c.req.query("req")) ?? normalizeOptionalText(trackingRow.request_id),
-    resultRank: normalizeOptionalRank(c.req.query("rank")) ?? normalizeOptionalRank(trackingRow.result_rank)
+    requestId:
+      normalizeOptionalText(c.req.param("requestId")) ??
+      normalizeOptionalText(c.req.query("req")) ??
+      normalizeOptionalText(trackingRow.request_id),
+    resultRank:
+      normalizeOptionalRank(c.req.param("rank")) ??
+      normalizeOptionalRank(c.req.query("rank")) ??
+      normalizeOptionalRank(trackingRow.result_rank)
   };
 }
 
@@ -381,6 +383,47 @@ async function recordTrackingEvent(
 export function createTrackingRouter(): any {
   const router = new Hono();
 
+  // Path-based tracking URLs: /v/{shortId}/{requestId}/{rank}
+  // LLMs strip query params but preserve path segments.
+  router.get("/v/:shortId/:requestId/:rank", async (c: any) => {
+    const db = c.get("db") as DatabaseClient;
+    const config = c.get("config") as AppConfig;
+    const shortId = c.req.param("shortId");
+    const trackingRow = await fetchTrackingRow(db, shortId);
+    if (!trackingRow) {
+      return c.html(renderNotFoundPage(shortId), 404);
+    }
+    const trackingContext = resolveTrackingContext(c, trackingRow);
+    await recordTrackingEvent(db, shortId, "redirect", trackingRow, trackingContext, c.req.raw);
+    return c.redirect(buildTargetUrl(trackingRow, config.public.webBaseUrl), 302);
+  });
+
+  router.get("/v/:shortId/:requestId/:rank/detail", async (c: any) => {
+    const db = c.get("db") as DatabaseClient;
+    const shortId = c.req.param("shortId");
+    const trackingRow = await fetchTrackingRow(db, shortId);
+    if (!trackingRow) {
+      return c.html(renderNotFoundPage(shortId), 404);
+    }
+    const trackingContext = resolveTrackingContext(c, trackingRow);
+    await recordTrackingEvent(db, shortId, "page_view", trackingRow, trackingContext, c.req.raw);
+    return c.html(renderDetailPage(trackingRow, shortId, trackingContext), 200);
+  });
+
+  router.get("/v/:shortId/:requestId/:rank/go", async (c: any) => {
+    const db = c.get("db") as DatabaseClient;
+    const config = c.get("config") as AppConfig;
+    const shortId = c.req.param("shortId");
+    const trackingRow = await fetchTrackingRow(db, shortId);
+    if (!trackingRow) {
+      return c.html(renderNotFoundPage(shortId), 404);
+    }
+    const trackingContext = resolveTrackingContext(c, trackingRow);
+    await recordTrackingEvent(db, shortId, "outbound_click", trackingRow, trackingContext, c.req.raw);
+    return c.redirect(buildTargetUrl(trackingRow, config.public.webBaseUrl), 302);
+  });
+
+  // Legacy query-param routes: /v/{shortId}?req=...&rank=...
   router.get("/v/:shortId", async (c: any) => {
     const db = c.get("db") as DatabaseClient;
     const config = c.get("config") as AppConfig;
