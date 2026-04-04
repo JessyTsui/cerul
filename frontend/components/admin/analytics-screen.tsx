@@ -30,6 +30,7 @@ import {
 const SURFACE_OPTIONS: Array<{ label: string; value: AdminSearchSurfaceFilter }> = [
   { label: "All surfaces", value: "all" },
   { label: "API only", value: "api" },
+  { label: "MCP only", value: "mcp" },
   { label: "Playground only", value: "playground" },
 ];
 
@@ -69,6 +70,9 @@ function formatSurfaceLabel(value: string | null): string {
   }
   if (value === "playground") {
     return "Playground";
+  }
+  if (value === "mcp") {
+    return "MCP";
   }
   return "Legacy";
 }

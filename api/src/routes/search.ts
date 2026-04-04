@@ -5,6 +5,7 @@ import { apiKeyAuth } from "../middleware/auth";
 import { executePublicSearch } from "../services/public-api";
 import { resolveImageToBytes, uploadQueryImageToR2 } from "../services/query-image";
 import type { SearchRequest, UnifiedFilters } from "../types";
+import { resolveClientSource } from "../utils/client-source";
 import { apiError } from "../utils/http";
 import { asString, ensureJsonObject, isPlainObject, parseBoolean, parseDateString, parseInteger } from "../utils/validation";
 
@@ -165,7 +166,8 @@ export function createSearchRouter(): any {
       config,
       auth,
       payload,
-      image
+      image,
+      clientSource: resolveClientSource(c.req.raw)
     });
 
     if (image) {

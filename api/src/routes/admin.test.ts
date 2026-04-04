@@ -61,8 +61,8 @@ vi.mock("../services/admin-analytics", () => ({
     if (!normalized) {
       return null;
     }
-    if (normalized !== "api" && normalized !== "playground") {
-      throw new Error("search_surface must be one of: api, playground.");
+    if (normalized !== "api" && normalized !== "mcp" && normalized !== "playground") {
+      throw new Error("search_surface must be one of: api, mcp, playground.");
     }
     return normalized;
   }),
@@ -154,7 +154,7 @@ describe("createAdminRouter analytics routes", () => {
 
     expect(response.status).toBe(422);
     await expect(response.json()).resolves.toEqual({
-      detail: "search_surface must be one of: api, playground",
+      detail: "search_surface must be one of: api, mcp, playground",
     });
     expect(fetchAdminAnalyticsOverview).not.toHaveBeenCalled();
   });

@@ -22,6 +22,10 @@ export function isPublicApiPath(pathname: string): boolean {
   return pathname.startsWith("/v1");
 }
 
+export function isMcpPath(pathname: string): boolean {
+  return pathname === "/mcp";
+}
+
 export function normalizeErrorCode(status: number): string {
   return {
     400: "invalid_request",
@@ -45,6 +49,28 @@ export function buildPublicErrorPayload(status: number, message: unknown, explic
       message: normalizeErrorMessage(message)
     }
   };
+}
+
+export function buildJsonRpcErrorResponse(
+  status: number,
+  message: unknown,
+  code = -32000,
+  headers?: HeadersInit
+): Response {
+  return jsonResponse(
+    {
+      jsonrpc: "2.0",
+      error: {
+        code,
+        message: normalizeErrorMessage(message)
+      },
+      id: null
+    },
+    {
+      status,
+      headers
+    }
+  );
 }
 
 export function jsonResponse(body: unknown, init?: ResponseInit): Response {

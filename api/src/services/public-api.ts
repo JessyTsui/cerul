@@ -33,6 +33,7 @@ async function appendQueryLog(
   requestId: string,
   auth: AuthContext,
   searchSurface: SearchSurface,
+  clientSource: string | null,
   payload: SearchRequest,
   resultsCount: number,
   latencyMs: number,
@@ -47,6 +48,7 @@ async function appendQueryLog(
           api_key_id,
           search_type,
           search_surface,
+          client_source,
           query_text,
           filters,
           max_results,
@@ -56,13 +58,14 @@ async function appendQueryLog(
           results_preview,
           answer_text
       )
-      VALUES ($1, $2, $3::uuid, $4, $5, $6, $7::jsonb, $8, $9, $10, $11, $12::jsonb, $13)
+      VALUES ($1, $2, $3::uuid, $4, $5, $6, $7, $8::jsonb, $9, $10, $11, $12, $13::jsonb, $14)
     `,
     requestId,
     auth.userId,
     auth.apiKeyId,
     "unified",
     searchSurface,
+    clientSource,
     payload.query ?? "",
     JSON.stringify(payload.filters ?? {}),
     payload.max_results,
@@ -83,10 +86,12 @@ export async function executePublicSearch(input: {
   image?: ResolvedQueryImage | null;
   requestId?: string;
   searchSurface?: SearchSurface;
+  clientSource?: string | null;
 }): Promise<SearchResponse> {
   const requestStartedAt = Date.now();
   const requestId = input.requestId ?? buildRequestId();
   const searchSurface = input.searchSurface ?? "api";
+  const clientSource = input.clientSource ?? null;
   const service = new UnifiedSearchService(input.db, input.env, input.config);
 
   let creditsUsed = 0;
@@ -133,6 +138,7 @@ export async function executePublicSearch(input: {
         requestId,
         input.auth,
         searchSurface,
+        clientSource,
         input.payload,
         execution.results.length,
         latencyMs,

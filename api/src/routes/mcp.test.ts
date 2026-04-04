@@ -3,6 +3,8 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
 
+import { handleError } from "../middleware/errors";
+import { ApiError } from "../utils/http";
 import { createMcpRouter } from "./mcp";
 
 const mocks = vi.hoisted(() => ({
@@ -87,6 +89,7 @@ function createTestApp() {
     await next();
   });
   app.route("/", createMcpRouter());
+  app.onError(handleError);
   return app;
 }
 
@@ -209,6 +212,33 @@ describe("createMcpRouter", () => {
     expect(mocks.requireApiKeyContextFromToken).toHaveBeenCalledTimes(1);
   });
 
+  it("keeps JSON-RPC error formatting when middleware fails before the MCP route", async () => {
+    const app = new Hono();
+    app.use("*", async () => {
+      throw new ApiError(503, "Database unavailable.");
+    });
+    app.route("/", createMcpRouter());
+    app.onError(handleError);
+
+    const response = await app.fetch(
+      new Request("http://cerul.test/mcp?apiKey=cerul_abcdefghijklmnopqrstuvwxyz123456", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "initialize", params: {} })
+      })
+    );
+
+    expect(response.status).toBe(503);
+    await expect(response.json()).resolves.toEqual({
+      jsonrpc: "2.0",
+      error: {
+        code: -32000,
+        message: "Database unavailable"
+      },
+      id: null
+    });
+  });
+
   it("lists tools through a real MCP client connection", async () => {
     const app = createTestApp();
     const transport = new StreamableHTTPClientTransport(
@@ -295,6 +325,8 @@ describe("createMcpRouter", () => {
       expect(payload.credits_used).toBe(2);
       expect(mocks.executePublicSearch).toHaveBeenCalledWith(
         expect.objectContaining({
+          searchSurface: "mcp",
+          clientSource: "mcp",
           payload: {
             query: "Sam Altman on AI video tools",
             max_results: 3,

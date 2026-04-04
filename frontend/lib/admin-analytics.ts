@@ -1,7 +1,7 @@
 import type { AdminMetricValue, AdminNotice, AdminRange, AdminWindow } from "./admin-api";
 import { ApiClientError, fetchWithAuth } from "./api";
 
-export type AdminSearchSurfaceFilter = "all" | "api" | "playground";
+export type AdminSearchSurfaceFilter = "all" | "api" | "mcp" | "playground";
 
 export type AdminAnalyticsTrendPoint = {
   date: string;

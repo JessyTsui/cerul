@@ -8,24 +8,7 @@ import type { DatabaseClient } from "../db/client";
 import { parseApiKeyToken, requireApiKeyContextFromToken } from "../middleware/auth";
 import { executePublicSearch, buildPublicUsageResponse } from "../services/public-api";
 import type { AppConfig, Bindings, SearchRequest } from "../types";
-import { ApiError, jsonResponse, normalizeErrorCode, normalizeErrorMessage } from "../utils/http";
-
-function buildJsonRpcErrorResponse(status: number, message: string, code = -32000, headers?: HeadersInit): Response {
-  return jsonResponse(
-    {
-      jsonrpc: "2.0",
-      error: {
-        code,
-        message: normalizeErrorMessage(message)
-      },
-      id: null
-    },
-    {
-      status,
-      headers
-    }
-  );
-}
+import { ApiError, buildJsonRpcErrorResponse, normalizeErrorCode, normalizeErrorMessage } from "../utils/http";
 
 function buildToolErrorResult(error: unknown) {
   if (error instanceof ApiError) {
@@ -156,7 +139,9 @@ function createMcpServer(input: {
           env: input.env,
           config: input.config,
           auth: input.auth,
-          payload: buildSearchPayload(args)
+          payload: buildSearchPayload(args),
+          searchSurface: "mcp",
+          clientSource: "mcp"
         });
         return {
           content: [

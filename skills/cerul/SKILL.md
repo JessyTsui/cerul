@@ -26,6 +26,7 @@ Use this skill when the task involves:
 - Read the API key from `CERUL_API_KEY`.
 - Read the base URL from `CERUL_BASE_URL` if present.
 - Default the base URL to `https://api.cerul.ai`.
+- When calling the HTTP API directly, set `X-Cerul-Client-Source` to a stable identifier such as `skill/claude`, `skill/codex`, or `skill/opencode`.
 - Never hardcode secrets or write them into repository files.
 - If `CERUL_API_KEY` is missing, stop and ask the user to provide it through their environment.
 

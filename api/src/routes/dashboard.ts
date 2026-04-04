@@ -1413,12 +1413,13 @@ export function createDashboardRouter(): any {
 
       // Log the query
       await db.execute(
-        `INSERT INTO query_logs (request_id, user_id, api_key_id, search_type, search_surface, query_text, filters, max_results, include_answer, result_count, latency_ms, results_preview, answer_text)
-         VALUES ($1, $2, $3::uuid, $4, $5, $6, $7::jsonb, $8, $9, $10, $11, $12::jsonb, $13)`,
+        `INSERT INTO query_logs (request_id, user_id, api_key_id, search_type, search_surface, client_source, query_text, filters, max_results, include_answer, result_count, latency_ms, results_preview, answer_text)
+         VALUES ($1, $2, $3::uuid, $4, $5, $6, $7, $8::jsonb, $9, $10, $11, $12, $13::jsonb, $14)`,
         requestId,
         session.userId,
         apiKeyId,
         "unified",
+        "playground",
         "playground",
         query,
         JSON.stringify(payload.filters ?? {}),
