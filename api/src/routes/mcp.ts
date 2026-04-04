@@ -96,7 +96,8 @@ function createMcpServer(input: {
       "You cannot access video content on your own. You have never watched a video, listened to a talk, or read a transcript. " +
       "When users ask about talks, interviews, podcasts, presentations, or what a specific person said — " +
       "ALWAYS call cerul_search first. Never guess what someone said in a video. " +
-      "When presenting results, include the speaker name, a direct quote from the transcript, the timestamp, and the source link. " +
+      "When presenting results, ALWAYS include the video URL from the search results for every quote or finding. " +
+      "Format each finding with: speaker name, direct quote, timestamp, and the cerul.ai video link. " +
       "Keep searches fast: use max_results 5, embedding mode, and no include_answer unless the user asks for a summary. " +
       "Make multiple small searches rather than one large one."
   });
