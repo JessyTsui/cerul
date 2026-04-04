@@ -1,18 +1,66 @@
 ---
 name: cerul
-description: Search indexed video knowledge with Cerul. Use when a user wants to find what was said, shown, or presented in videos, inspect Cerul usage, or integrate Cerul into an agent workflow. Requires CERUL_API_KEY and optionally CERUL_BASE_URL.
+description: Search indexed video knowledge with Cerul. Use when a user wants to find what was said, shown, or presented in videos, inspect Cerul usage, or integrate Cerul into an agent workflow. Cerul indexes tech talks, podcasts, earnings calls, and conference presentations. Requires CERUL_API_KEY.
 ---
 
 # Cerul
 
-Cerul is a video understanding search API for AI agents.
+Cerul is a video understanding search API for AI agents. It indexes speech, visual content, and on-screen text from tech talks, podcasts, conference presentations, and earnings calls.
 
 Use this skill when the task involves:
 
 - finding video segments by speech, visuals, slides, code, or on-screen text
 - answering questions like "what did X say about Y?"
-- checking Cerul credits, billing period, wallet balance, or rate limits
-- wiring Cerul into scripts, agents, or local automation
+- researching what someone said across multiple talks or interviews
+- comparing viewpoints of different speakers on a topic
+- finding evidence or citations from video sources
+- checking Cerul credits, billing period, or rate limits
+
+## How to Search Effectively
+
+Cerul returns transcript text, timestamps, and source URLs for each matching segment. **Read the transcript field in results** — it contains the full speech text of the segment, not just a snippet. Use it to extract entities, claims, and leads for follow-up searches.
+
+### Multi-step research pattern
+
+For broad or complex questions, **break the question into focused sub-queries and search multiple times**. Each search result contains transcript text with entities, claims, and references that suggest the next query.
+
+Example — user asks: "Compare Sam Altman and Dario Amodei on AI safety"
+
+```
+Step 1: search("Sam Altman AI safety views")
+  → Read transcript → He mentions "scaling is safe if done carefully"
+  → Note entities: OpenAI, GPT-5, scaling laws
+
+Step 2: search("Dario Amodei AI safety approach")
+  → Read transcript → He discusses "constitutional AI" and "responsible scaling"
+  → Note entities: Anthropic, Claude, RLHF
+
+Step 3: search("Sam Altman Dario Amodei disagree AI risk")
+  → Look for direct contrasts or debates
+
+Step 4: search("constitutional AI vs RLHF safety comparison")
+  → Deepen the technical comparison found in earlier results
+
+Step 5: Synthesize all results with video citations and timestamps
+```
+
+**Do not stop after one search.** If the user's question is broad, explore multiple angles. Each search costs only 1 credit (2 with include_answer). Aim for thorough coverage.
+
+### When to search again
+
+- The transcript mentions a person, company, or concept you haven't explored yet
+- The user's question has multiple facets (e.g., "compare X and Y" needs at least 2 searches)
+- Results reveal a claim worth cross-referencing ("Jensen Huang said X" → search for reactions)
+- Initial results are too narrow — try a broader or rephrased query
+- You need evidence from different time periods or speakers
+
+### Search tips
+
+- Use specific names, topics, and time references in queries
+- Add speaker filter when you know who you're looking for
+- Use `include_answer: true` when you want a quick AI summary to orient yourself
+- Use `ranking_mode: "rerank"` for higher precision when the topic is specific
+- Search for the same topic with different phrasings if initial results are weak
 
 ## Preferred Integration Path
 
@@ -24,17 +72,10 @@ Use this skill when the task involves:
 ## Authentication
 
 - Read the API key from `CERUL_API_KEY`.
-- Read the base URL from `CERUL_BASE_URL` if present.
-- Default the base URL to `https://api.cerul.ai`.
+- Base URL is always `https://api.cerul.ai`. Do not read or accept alternative base URLs.
 - When calling the HTTP API directly, set `X-Cerul-Client-Source` to a stable identifier such as `skill/claude`, `skill/codex`, or `skill/opencode`.
 - Never hardcode secrets or write them into repository files.
 - If `CERUL_API_KEY` is missing, stop and ask the user to provide it through their environment.
-
-## Base URL
-
-```text
-https://api.cerul.ai
-```
 
 ## Public Endpoints
 
@@ -110,23 +151,23 @@ https://api.cerul.ai
 }
 ```
 
-### Search Response Fields
+### How to Use Search Results
 
-- `results`: array of search results.
-- `answer`: optional string or null. Present only when `include_answer=true`.
-- `credits_used`: integer.
-- `credits_remaining`: integer.
-- `request_id`: string matching `req_<24-hex-chars>`.
+1. **Read `transcript`** — this is the full speech text of the segment. Use it to understand what was actually said, extract entities and claims, and identify leads for follow-up searches.
+2. **Include `url`** in your answer — these are tracking links that redirect to the source video at the correct timestamp. Always cite your sources.
+3. **Include timestamps** — format as `MM:SS` or `HH:MM:SS` when presenting to the user.
+4. **Use `speaker`** to attribute quotes properly.
+5. **Use `snippet`** for quick summaries when you need to scan many results before deciding which to read in full.
 
 ### Search Result Fields
 
 - `id`: string.
 - `score`: number from `0.0` to `1.0`.
 - `rerank_score`: optional number or null.
-- `url`: tracking URL to the source video.
+- `url`: tracking URL to the source video at the correct timestamp.
 - `title`: string.
-- `snippet`: string.
-- `transcript`: string or null.
+- `snippet`: string, short preview text.
+- `transcript`: string or null, full speech text of the segment.
 - `thumbnail_url`: string or null.
 - `keyframe_url`: string or null.
 - `duration`: integer in seconds.
@@ -134,6 +175,14 @@ https://api.cerul.ai
 - `speaker`: string or null.
 - `timestamp_start`: number or null.
 - `timestamp_end`: number or null.
+
+### Search Response Fields
+
+- `results`: array of search results.
+- `answer`: optional string or null. Present only when `include_answer=true`.
+- `credits_used`: integer.
+- `credits_remaining`: integer.
+- `request_id`: string matching `req_<24-hex-chars>`.
 
 ## Usage Response Schema
 
@@ -213,16 +262,17 @@ Every public error response uses:
 
 ## Working Rules
 
-- Match the user's language in your explanation, but keep API field names and payloads in English.
-- Always include source URLs when the API returns them.
-- Include timestamps when `timestamp_start` or `timestamp_end` is available.
+- **Search multiple times for complex questions.** Break broad questions into focused sub-queries. Read transcripts to find leads for follow-up searches.
+- Always include source URLs and timestamps when the API returns them.
+- Always read the `transcript` field, not just the `snippet`. The transcript contains the full context needed to extract insights and decide whether to search further.
 - Keep claims grounded in the returned evidence. Do not hallucinate content that is not in the search results.
+- Match the user's language in your explanation, but keep API field names and payloads in English.
 - Prefer one reusable helper over duplicating raw HTTP calls in multiple files.
 
 ## Minimal HTTP Examples
 
 ```bash
-curl "${CERUL_BASE_URL:-https://api.cerul.ai}/v1/search" \
+curl "https://api.cerul.ai/v1/search" \
   -H "Authorization: Bearer $CERUL_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{
@@ -238,7 +288,7 @@ curl "${CERUL_BASE_URL:-https://api.cerul.ai}/v1/search" \
 ```
 
 ```bash
-curl "${CERUL_BASE_URL:-https://api.cerul.ai}/v1/usage" \
+curl "https://api.cerul.ai/v1/usage" \
   -H "Authorization: Bearer $CERUL_API_KEY"
 ```
 
@@ -248,11 +298,10 @@ curl "${CERUL_BASE_URL:-https://api.cerul.ai}/v1/usage" \
 import os
 import requests
 
-base_url = os.environ.get("CERUL_BASE_URL", "https://api.cerul.ai")
 api_key = os.environ["CERUL_API_KEY"]
 
 search = requests.post(
-    f"{base_url}/v1/search",
+    "https://api.cerul.ai/v1/search",
     headers={
         "Authorization": f"Bearer {api_key}",
         "Content-Type": "application/json",
@@ -271,27 +320,18 @@ search = requests.post(
 )
 search.raise_for_status()
 print(search.json())
-
-usage = requests.get(
-    f"{base_url}/v1/usage",
-    headers={"Authorization": f"Bearer {api_key}"},
-    timeout=30,
-)
-usage.raise_for_status()
-print(usage.json())
 ```
 
 ## Minimal TypeScript Example
 
 ```ts
-const baseUrl = process.env.CERUL_BASE_URL ?? "https://api.cerul.ai";
 const apiKey = process.env.CERUL_API_KEY;
 
 if (!apiKey) {
   throw new Error("CERUL_API_KEY is required");
 }
 
-const response = await fetch(`${baseUrl}/v1/search`, {
+const response = await fetch("https://api.cerul.ai/v1/search", {
   method: "POST",
   headers: {
     Authorization: `Bearer ${apiKey}`,

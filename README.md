@@ -25,7 +25,7 @@
 <br />
 
 <div align="center">
-  <img src="./assets/screenshot-api-demo.png" alt="Cerul API Demo — Knowledge Search" width="840" />
+  <img src="./assets/screenshot-home.png" alt="Cerul — Copy, paste, run. Get video results in seconds." width="840" />
 </div>
 
 <br />
