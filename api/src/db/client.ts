@@ -138,3 +138,43 @@ class NeonDatabaseClient implements DatabaseClient {
 export function createDatabaseClient(env: Bindings): DatabaseClient {
   return new NeonDatabaseClient(env);
 }
+
+/**
+ * Create a DatabaseClient backed by a single pooled connection.
+ * The connection is acquired lazily on first query and reused for
+ * all subsequent queries within the same request. Call `dispose()`
+ * at the end of the request to release the connection back to the pool.
+ */
+export function createPooledDatabaseClient(env: Bindings): DatabaseClient & { dispose(): Promise<void> } {
+  const pool = new Pool({
+    connectionString: requireDatabaseUrl(env),
+    max: 1
+  });
+  let client: Queryable | null = null;
+
+  const inner = {
+    async getClient(): Promise<Queryable> {
+      if (!client) {
+        client = (await pool.connect()) as Queryable;
+      }
+      return client;
+    }
+  };
+
+  const db = new NeonDatabaseClient(env, {
+    async query(queryText: string, params?: QueryValue[]) {
+      const c = await inner.getClient();
+      return c.query(queryText, params);
+    }
+  } as Queryable);
+
+  return Object.assign(db, {
+    async dispose() {
+      if (client) {
+        client.release?.();
+        client = null;
+      }
+      await pool.end();
+    }
+  });
+}

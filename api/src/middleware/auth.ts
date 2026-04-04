@@ -2,7 +2,7 @@ import type { Context, MiddlewareHandler } from "hono";
 
 import { getConfig } from "../config";
 import type { AuthContext, Bindings, SessionContext } from "../types";
-import { createDatabaseClient } from "../db/client";
+import { createDatabaseClient, createPooledDatabaseClient } from "../db/client";
 import type { DatabaseClient } from "../db/client";
 import { calculateCreditsRemaining, fetchUsageSummary } from "../services/billing";
 import { hmacSha256Hex, sha256Hex, timingSafeEqual } from "../utils/crypto";
@@ -51,8 +51,13 @@ function getDb(c: Context): DatabaseClient {
 export function baseContextMiddleware(): MiddlewareHandler {
   return async (c: any, next: () => Promise<void>) => {
     c.set("config", getConfig(c.env));
-    c.set("db", createDatabaseClient(c.env));
-    await next();
+    const db = createPooledDatabaseClient(c.env);
+    c.set("db", db);
+    try {
+      await next();
+    } finally {
+      await db.dispose();
+    }
   };
 }
 
