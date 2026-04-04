@@ -1,12 +1,7 @@
 import { Hono } from "hono";
 
 import { apiKeyAuth } from "../middleware/auth";
-import {
-  calculateCreditsRemaining,
-  countActiveApiKeys,
-  fetchDailySearchAllowance,
-  fetchUsageSummary
-} from "../services/billing";
+import { buildPublicUsageResponse } from "../services/public-api";
 import type { DatabaseClient } from "../db/client";
 
 export function createUsageRouter(): any {
@@ -15,31 +10,7 @@ export function createUsageRouter(): any {
   router.get("/usage", apiKeyAuth(), async (c: any) => {
     const auth = c.get("apiAuth");
     const db = c.get("db") as DatabaseClient;
-    const usageSummary = await fetchUsageSummary(db, auth.userId);
-    const apiKeysActive = await countActiveApiKeys(db, auth.userId);
-    const dailyFree = await fetchDailySearchAllowance(db, auth.userId);
-
-    return c.json({
-      tier: String(usageSummary.tier ?? ""),
-      plan_code: String(usageSummary.plan_code ?? usageSummary.tier ?? ""),
-      period_start: String(usageSummary.period_start),
-      period_end: String(usageSummary.period_end),
-      credits_limit: Number(usageSummary.credits_limit ?? 0),
-      credits_used: Number(usageSummary.credits_used ?? 0),
-      credits_remaining: calculateCreditsRemaining(usageSummary),
-      wallet_balance: Number(usageSummary.wallet_balance ?? calculateCreditsRemaining(usageSummary)),
-      credit_breakdown: usageSummary.credit_breakdown ?? {
-        included_remaining: 0,
-        bonus_remaining: 0,
-        paid_remaining: 0
-      },
-      expiring_credits: Array.isArray(usageSummary.expiring_credits) ? usageSummary.expiring_credits : [],
-      rate_limit_per_sec: Number(usageSummary.rate_limit_per_sec ?? 0),
-      api_keys_active: apiKeysActive,
-      billing_hold: Boolean(usageSummary.billing_hold),
-      daily_free_remaining: dailyFree.remaining,
-      daily_free_limit: dailyFree.limit
-    });
+    return c.json(await buildPublicUsageResponse(db, auth));
   });
 
   return router;

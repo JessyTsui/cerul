@@ -107,7 +107,7 @@ curl "https://api.cerul.ai/v1/search" \
 | **Unified Indexing** | `POST /v1/index` | Index YouTube, Pexels, Pixabay, and direct video URLs on the same pipeline |
 | **Agent-Ready** | Built for LLMs | Designed for tool-use and function calling — clean JSON in, clean JSON out |
 | **Timestamp Precision** | Frame-accurate results | Every result comes with exact start/end timestamps and confidence scores |
-| **Installable Skills** | Codex & Claude | Drop-in agent skills with direct HTTP access — no MCP needed |
+| **Agent Integrations** | Skills + Remote MCP | Installable skills plus a hosted MCP endpoint for zero-install tool use |
 | **Open Core** | Apache 2.0 | Application code, pipelines, and agent integrations are open source |
 
 ## Architecture
@@ -197,7 +197,7 @@ database as a release/predeploy step before rolling out code that depends on the
 - [x] Shared platform backbone: auth, API keys, usage tracking, rate limiting, dashboard, and docs
 - [x] Unified `index + search` flow on the shared retrieval stack
 - [x] Summary, speech, and visual retrieval units in one embedding space
-- [x] Agent-facing integrations via installable skills and direct HTTP access
+- [x] Agent-facing integrations via installable skills and hosted remote MCP
 - [ ] Higher-scale production validation for indexing coverage and retrieval quality
 - [ ] Stripe billing validation in test mode
 - [ ] Python & TypeScript SDKs, only if direct API + skill access proves insufficient

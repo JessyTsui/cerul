@@ -2,25 +2,12 @@ import { Hono } from "hono";
 
 import type { DatabaseClient } from "../db/client";
 import { apiKeyAuth } from "../middleware/auth";
-import {
-  BillingHoldError,
-  calculateCreditsRemaining,
-  consumeSearchCredits,
-  fetchUsageSummary,
-  InsufficientCreditsError,
-  maybeAutoRecharge,
-  refundCredits
-} from "../services/billing";
+import { executePublicSearch } from "../services/public-api";
 import { resolveImageToBytes, uploadQueryImageToR2 } from "../services/query-image";
-import { UnifiedSearchService } from "../services/search";
-import type { SearchRequest, SearchResponse, SearchSurface, UnifiedFilters } from "../types";
-import { randomHex } from "../utils/crypto";
+import type { SearchRequest, UnifiedFilters } from "../types";
+import { resolveClientSource } from "../utils/client-source";
 import { apiError } from "../utils/http";
 import { asString, ensureJsonObject, isPlainObject, parseBoolean, parseDateString, parseInteger } from "../utils/validation";
-
-function generateRequestId(): string {
-  return `req_${randomHex(24)}`;
-}
 
 function normalizeFilters(filters: unknown): UnifiedFilters | null {
   if (filters == null) {
@@ -163,152 +150,31 @@ async function buildSearchRequestFromHttpRequest(request: Request): Promise<{ pa
   return { payload: validatedPayload, image };
 }
 
-async function appendQueryLog(
-  db: DatabaseClient,
-  requestId: string,
-  auth: any,
-  searchSurface: SearchSurface,
-  payload: SearchRequest,
-  resultsCount: number,
-  latencyMs: number,
-  resultPreviews: unknown[],
-  answerText?: string | null
-): Promise<void> {
-  await db.execute(
-    `
-      INSERT INTO query_logs (
-          request_id,
-          user_id,
-          api_key_id,
-          search_type,
-          search_surface,
-          query_text,
-          filters,
-          max_results,
-          include_answer,
-          result_count,
-          latency_ms,
-          results_preview,
-          answer_text
-      )
-      VALUES ($1, $2, $3::uuid, $4, $5, $6, $7::jsonb, $8, $9, $10, $11, $12::jsonb, $13)
-    `,
-    requestId,
-    auth.userId,
-    auth.apiKeyId,
-    "unified",
-    searchSurface,
-    payload.query ?? "",
-    JSON.stringify(payload.filters ?? {}),
-    payload.max_results,
-    payload.include_answer,
-    resultsCount,
-    latencyMs,
-    JSON.stringify(resultPreviews),
-    answerText ?? null
-  );
-}
 
 export function createSearchRouter(): any {
   const router = new Hono();
 
   router.post("/search", apiKeyAuth(), async (c: any) => {
-    const requestStartedAt = Date.now();
-    const requestId = generateRequestId();
     const db = c.get("db") as DatabaseClient;
     const auth = c.get("apiAuth");
     const config = c.get("config");
     const { payload, image } = await buildSearchRequestFromHttpRequest(c.req.raw);
-    const service = new UnifiedSearchService(db, c.env, config);
 
-    let creditsUsed = 0;
-    let usageRecorded = false;
-    try {
-      const chargeRequest = async () => consumeSearchCredits(
-        db,
-        auth.userId,
-        auth.apiKeyId,
-        requestId,
-        "unified",
-        payload.include_answer
-      );
+    const response = await executePublicSearch({
+      db,
+      env: c.env,
+      config,
+      auth,
+      payload,
+      image,
+      clientSource: resolveClientSource(c.req.raw)
+    });
 
-      try {
-        creditsUsed = await chargeRequest();
-      } catch (error) {
-        if (!(error instanceof InsufficientCreditsError)) {
-          throw error;
-        }
-
-        const recharge = await maybeAutoRecharge(db, config, auth.userId);
-        if (!recharge.triggered) {
-          throw error;
-        }
-
-        creditsUsed = await chargeRequest();
-      }
-      usageRecorded = true;
-
-      const execution = await service.search({
-        payload,
-        userId: auth.userId,
-        requestId,
-        image
-      });
-
-      const latencyMs = Math.max(Date.now() - requestStartedAt, 0);
-      const usageSummary = await db.transaction(async (tx) => {
-        await appendQueryLog(
-          tx,
-          requestId,
-          auth,
-          "api",
-          payload,
-          execution.results.length,
-          latencyMs,
-          execution.result_previews,
-          execution.answer
-        );
-        return fetchUsageSummary(tx, auth.userId);
-      });
-
-      if (image) {
-        c.executionCtx?.waitUntil(uploadQueryImageToR2(c.env, config, image, requestId));
-      }
-
-      if (creditsUsed > 0) {
-        void maybeAutoRecharge(db, config, auth.userId).catch((error) =>
-          console.error("[billing] auto-recharge error:", error)
-        );
-      }
-
-      const response: SearchResponse = {
-        results: execution.results,
-        credits_used: creditsUsed,
-        credits_remaining: calculateCreditsRemaining(usageSummary),
-        request_id: requestId
-      };
-      if (payload.include_answer) {
-        response.answer = execution.answer;
-      }
-
-      return c.json(response);
-    } catch (error) {
-      if (error instanceof BillingHoldError) {
-        apiError(403, "Billing account requires review before more requests can be served.");
-      }
-      if (error instanceof InsufficientCreditsError) {
-        apiError(403, "Insufficient credits for this request.");
-      }
-      if (usageRecorded) {
-        try {
-          await refundCredits(db, requestId);
-        } catch {
-          // Best-effort refund only.
-        }
-      }
-      throw error;
+    if (image) {
+      c.executionCtx?.waitUntil(uploadQueryImageToR2(c.env, config, image, response.request_id));
     }
+
+    return c.json(response);
   });
 
   return router;

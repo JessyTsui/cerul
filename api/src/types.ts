@@ -114,7 +114,7 @@ export interface UnifiedFilters {
   source?: string | null;
 }
 
-export type SearchSurface = "api" | "playground";
+export type SearchSurface = "api" | "playground" | "mcp";
 
 export interface SearchImageInput {
   url?: string | null;
@@ -158,28 +158,28 @@ export interface SearchResponse {
 
 export interface UsageResponse {
   tier: string;
-  plan_code?: string;
+  plan_code: string;
   period_start: string;
   period_end: string;
   credits_limit: number;
   credits_used: number;
   credits_remaining: number;
-  wallet_balance?: number;
-  credit_breakdown?: {
+  wallet_balance: number;
+  credit_breakdown: {
     included_remaining: number;
     bonus_remaining: number;
     paid_remaining: number;
   };
-  expiring_credits?: Array<{
+  expiring_credits: Array<{
     grant_type: string;
     credits: number;
     expires_at: string;
   }>;
   rate_limit_per_sec: number;
   api_keys_active: number;
-  billing_hold?: boolean;
-  daily_free_remaining?: number;
-  daily_free_limit?: number;
+  billing_hold: boolean;
+  daily_free_remaining: number;
+  daily_free_limit: number;
 }
 
 export interface IndexRequest {

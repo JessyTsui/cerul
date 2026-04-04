@@ -1,0 +1,7 @@
+{
+  "owner": "cerul-ai",
+  "repo": "cerul",
+  "description": "Search video knowledge from AI agents - speech, visuals, and on-screen text",
+  "tags": ["video-search", "ai-agent", "api"],
+  "category": "external-integrations"
+}

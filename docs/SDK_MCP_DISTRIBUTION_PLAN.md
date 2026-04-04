@@ -537,7 +537,7 @@ startCommand:
 
 ### 5.1 现状
 
-`skills/cerul-api/SKILL.md` 已存在，供 Claude Code / Codex 通过 curl/fetch 直接调用 API。
+`skills/cerul/SKILL.md` 已存在，供 Claude Code / Codex 通过 curl/fetch 直接调用 API。
 
 ### 5.2 与 MCP 的关系
 
@@ -706,7 +706,7 @@ const result = await generateText({
 
 ### Skill 更新
 
-- [ ] 更新 `skills/cerul-api/SKILL.md`，移除 index 端点，添加 SDK/MCP 信息
+- [ ] 更新 `skills/cerul/SKILL.md`，移除 index 端点，添加 SDK/MCP 信息
 
 ### AI SDK 集成（`cerul-ai/cerul-js` → npm: `@cerul/ai-sdk`）
 

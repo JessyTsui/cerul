@@ -139,6 +139,78 @@ Index endpoints are intentionally omitted from the public contract for now, and 
 
 ---
 
+## Remote MCP
+
+Cerul also exposes a hosted MCP endpoint for agents that support Streamable HTTP.
+
+### Endpoint
+
+```text
+https://api.cerul.ai/mcp?apiKey=YOUR_CERUL_API_KEY
+```
+
+This MCP server is stateless and currently authenticates with the `apiKey` URL query parameter.
+
+### Exposed Tools
+
+- `cerul_search`
+- `cerul_usage`
+
+### cerul_search Tool Inputs
+
+The MCP tool mirrors the public search contract, but flattens `filters` into top-level tool arguments:
+
+```json
+{
+  "query": "Sam Altman views on AI video generation tools",
+  "max_results": 5,
+  "ranking_mode": "rerank",
+  "include_answer": true,
+  "speaker": "Sam Altman",
+  "published_after": "2024-01-01",
+  "min_duration": 60,
+  "max_duration": 7200,
+  "source": "youtube"
+}
+```
+
+`cerul_usage` takes no arguments.
+
+### Claude Code
+
+```bash
+claude mcp add --transport http cerul \
+  "https://api.cerul.ai/mcp?apiKey=YOUR_CERUL_API_KEY"
+```
+
+### Codex
+
+```bash
+codex mcp add --transport http cerul \
+  "https://api.cerul.ai/mcp?apiKey=YOUR_CERUL_API_KEY"
+```
+
+### Clients That Still Need a Stdio Bridge
+
+Some clients still expect a local stdio server. In those environments, use a generic bridge such as `mcp-remote`:
+
+```json
+{
+  "mcpServers": {
+    "cerul": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "mcp-remote",
+        "https://api.cerul.ai/mcp?apiKey=YOUR_CERUL_API_KEY"
+      ]
+    }
+  }
+}
+```
+
+---
+
 ## Rendering keyframes in the terminal
 
 Each search result includes a `keyframe_url` pointing to a JPEG image of the most representative frame in that segment. AI agents running in a terminal can render this image inline — no browser required — using standard terminal graphics protocols.

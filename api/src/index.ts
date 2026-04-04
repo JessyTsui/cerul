@@ -6,6 +6,7 @@ import { handleError, handleNotFound } from "./middleware/errors";
 import { createAdminRouter } from "./routes/admin";
 import { createHealthRouter } from "./routes/health";
 import { createIndexRouter } from "./routes";
+import { createMcpRouter } from "./routes/mcp";
 import { createSearchRouter } from "./routes/search";
 import { createTrackingRouter } from "./routes/tracking";
 import { createUsageRouter } from "./routes/usage";
@@ -18,6 +19,7 @@ app.use("*", baseContextMiddleware());
 app.use("*", corsMiddleware());
 
 app.route("/", createHealthRouter());
+app.route("/", createMcpRouter());
 app.route("/", createTrackingRouter());
 app.route("/v1", createSearchRouter());
 app.route("/v1", createIndexRouter());

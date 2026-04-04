@@ -47,7 +47,7 @@ export interface AnalyticsQueryPerformanceRow {
 }
 
 const ANALYTICS_RANGE_KEYS = new Set<AdminAnalyticsRange>(["today", "7d", "30d"]);
-const SEARCH_SURFACE_KEYS = new Set<SearchSurface>(["api", "playground"]);
+const SEARCH_SURFACE_KEYS = new Set<SearchSurface>(["api", "playground", "mcp"]);
 const FALLBACK_SHORT_ID_SQL =
   "SUBSTRING(" +
   "ENCODE(" +
@@ -408,7 +408,7 @@ export function normalizeAnalyticsSearchSurface(value: string | null | undefined
     return null;
   }
   if (!SEARCH_SURFACE_KEYS.has(normalized as SearchSurface)) {
-    throw new Error("search_surface must be one of: api, playground.");
+    throw new Error("search_surface must be one of: api, mcp, playground.");
   }
   return normalized as SearchSurface;
 }

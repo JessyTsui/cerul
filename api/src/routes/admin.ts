@@ -69,7 +69,7 @@ function parseSourceAnalyticsRange(rangeKey: string | null | undefined): string 
   return normalized;
 }
 
-function parseSearchSurface(value: string | null | undefined): "api" | "playground" | null {
+function parseSearchSurface(value: string | null | undefined): "api" | "mcp" | "playground" | null {
   try {
     return normalizeAnalyticsSearchSurface(value);
   } catch (error) {

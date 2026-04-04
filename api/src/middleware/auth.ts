@@ -71,13 +71,30 @@ export function parseApiKeyFromAuthorization(authorization: string | null): stri
   }
 
   const apiKey = token.trim();
-  if (!API_KEY_PATTERN.test(apiKey)) {
+  return parseApiKeyToken(apiKey, {
+    missingMessage: "Authorization header must use the Bearer scheme.",
+    challengeWithBearer: true
+  });
+}
+
+export function parseApiKeyToken(
+  apiKey: string | null | undefined,
+  options?: { missingMessage?: string; challengeWithBearer?: boolean }
+): string {
+  const normalized = (apiKey ?? "").trim();
+  if (!normalized) {
+    apiError(401, options?.missingMessage ?? "Missing API key.", options?.challengeWithBearer
+      ? { headers: { "WWW-Authenticate": "Bearer" } }
+      : undefined);
+  }
+
+  if (!API_KEY_PATTERN.test(normalized)) {
     apiError(401, "Malformed API key.", {
-      headers: { "WWW-Authenticate": "Bearer" }
+      ...(options?.challengeWithBearer ? { headers: { "WWW-Authenticate": "Bearer" } } : {})
     });
   }
 
-  return apiKey;
+  return normalized;
 }
 
 function buildAuthContext(row: AuthRow, creditsRemaining: number): AuthContext {
@@ -136,6 +153,14 @@ export async function requireApiKeyContext(c: Context): Promise<AuthContext> {
   const db = getDb(c);
   const authorization = c.req.header("authorization") ?? null;
   const apiKey = parseApiKeyFromAuthorization(authorization);
+  return requireApiKeyContextFromToken(c, apiKey, db);
+}
+
+export async function requireApiKeyContextFromToken(
+  c: Context,
+  apiKey: string,
+  db: DatabaseClient = getDb(c)
+): Promise<AuthContext> {
   const keyHash = await sha256Hex(apiKey);
   const authRow = await fetchAuthRow(db, keyHash);
 
