@@ -152,35 +152,14 @@ function createMcpServer(input: {
           clientSource: "mcp"
         });
 
-        const content: Array<{ type: "text"; text: string } | { type: "image"; data: string; mimeType: string }> = [
-          {
-            type: "text" as const,
-            text: JSON.stringify(result, null, 2)
-          }
-        ];
-
-        // Fetch keyframe images for top 3 results
-        const imageResults = result.results.slice(0, 3);
-        for (const r of imageResults) {
-          const imageUrl = (r as any).keyframe_url || (r as any).thumbnail_url;
-          if (!imageUrl) continue;
-          try {
-            const imgResp = await fetch(imageUrl);
-            if (!imgResp.ok) continue;
-            const buffer = await imgResp.arrayBuffer();
-            const base64 = btoa(String.fromCharCode(...new Uint8Array(buffer)));
-            const contentType = imgResp.headers.get("content-type") || "image/jpeg";
-            content.push({
-              type: "image" as const,
-              data: base64,
-              mimeType: contentType
-            });
-          } catch {
-            // Skip failed image fetches
-          }
-        }
-
-        return { content };
+        return {
+          content: [
+            {
+              type: "text" as const,
+              text: JSON.stringify(result, null, 2)
+            }
+          ]
+        };
       } catch (error) {
         return buildToolErrorResult(error);
       }
