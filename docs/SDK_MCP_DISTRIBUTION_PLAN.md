@@ -25,12 +25,11 @@ Cerul 目前是纯 REST API（curl / fetch 调用），没有发布任何包。
 
 ## 仓库结构
 
-SDK 和 MCP 使用独立 public repo，主产品代码在 private repo 中。
+主产品代码全部保留在 `cerul` 这个 repo 中（公开）。SDK 和 MCP 使用独立 public repo；`cerul-search` 暂不单独拆 repo，先在 `cerul` 主仓库内作为可自部署子项目孵化。
 
 ```
 cerul-ai/                          ← GitHub Organization
-  cerul              ← public  | 产品首页：README、OpenAPI spec、示例、changelog、issue tracker
-  cerul-api          ← private | API + workers + db + frontend（核心业务代码）
+  cerul              ← public  | 主仓库：API + workers + db + frontend + docs（全部产品代码）
   cerul-js           ← public  | TypeScript SDK → npm: cerul
   cerul-python       ← public  | Python SDK → PyPI: cerul
   cerul-mcp          ← public  | MCP Server → npm: @cerul/mcp
@@ -40,15 +39,14 @@ cerul-ai/                          ← GitHub Organization
 
 1. 创建 GitHub Organization `cerul-ai`
 2. Transfer `JessyTsui/cerul` → `cerul-ai/cerul`（保留 star、fork、issue，旧 URL 自动 301 重定向）
-3. 将 `cerul-ai/cerul` 设为 private，或拆分为 public 首页 + private `cerul-api`
-4. 新建 `cerul-js`、`cerul-python`、`cerul-mcp` 三个 public repo
+3. 新建 `cerul-js`、`cerul-python`、`cerul-mcp` 三个 public repo
+4. 在 `cerul` 主仓库中新增 `cerul-search/` 子目录，作为可自部署 OSS 版本的孵化入口
 
 ### 各 repo 职责
 
 | Repo | 可见性 | 内容 |
 |------|--------|------|
-| `cerul` | public | README（产品介绍 + SDK/MCP 链接）、OpenAPI spec、示例代码、changelog、issue tracker |
-| `cerul-api` | private | api/、frontend/、workers/、db/、skills/、config/ |
+| `cerul` | public | 主仓库：api/、frontend/、workers/、db/、docs/、OpenAPI spec、README、`cerul-search/` 子项目 |
 | `cerul-js` | public | TypeScript SDK 源码、package.json、README |
 | `cerul-python` | public | Python SDK 源码、pyproject.toml、README |
 | `cerul-mcp` | public | MCP Server 源码、smithery.yaml、README |
@@ -59,12 +57,13 @@ cerul-ai/                          ← GitHub Organization
 
 | 包名 | 注册表 | 来源 repo | 作用 |
 |------|--------|-----------|------|
+| `cerul-search` | PyPI | cerul（`cerul-search/` 子目录） | 可自部署的视频知识搜索 CLI |
 | `cerul` | npm | cerul-js | TypeScript SDK（核心） |
 | `cerul` | PyPI | cerul-python | Python SDK（核心） |
 | `@cerul/mcp` | npm | cerul-mcp | MCP Server |
 | `@cerul/ai-sdk` | npm | cerul-js | Vercel AI SDK tool provider |
 
-发布顺序：核心 SDK（TS + Python 并行）→ MCP Server + AI SDK 集成。
+发布顺序：`cerul-search` MVP → 核心 SDK（TS + Python 并行）→ MCP Server + AI SDK 集成。
 
 ---
 
@@ -654,6 +653,16 @@ const result = await generateText({
 - [ ] 确认 SearchResponse 字段与上方契约一致
 - [ ] 确认 index 端点的认证中间件不允许普通用户调用（或从文档中移除）
 
+### cerul-search（主仓库内子项目）
+
+- [ ] 在 `cerul` repo 中创建 `cerul-search/` 子目录
+- [ ] 搭建 `pyproject.toml` + CLI 入口，支持 `pip install cerul-search`
+- [ ] 优先复用现有 worker / pipeline / embedding / search 逻辑，避免复制实现
+- [ ] 选定本地存储方案（v1 计划使用 ChromaDB）
+- [ ] 写独立 README，确保普通用户可按文档自行部署
+- [ ] 本地跑通：index → search → list / stats 基础流程
+- [ ] 验证它作为单独子项目时的目录边界，便于未来按需拆 repo
+
 ### TypeScript SDK（`cerul-ai/cerul-js` → npm: `cerul`）
 
 - [ ] 创建 `cerul-ai/cerul-js` public repo
@@ -755,3 +764,247 @@ git tag v0.1.1 && git push --tags
 | `@cerul/mcp` | v1 | Node 18+（通过 npx 运行） |
 
 API 增加 v2 时，SDK 发 major version（1.x → 2.x）。
+
+---
+
+## 十、cerul-search — 开源视频知识搜索引擎
+
+### 定位
+
+> Semantic search over video knowledge. Find any moment by what was said, shown, or presented.
+
+`cerul-search` 是 Cerul 主仓库中的一个可自部署子项目，用户可以在本地或自己的机器上部署，对自己的视频做语义搜索。它是 cerul.ai SaaS 的开源轻量版本，承担开源社区获客和品牌积累的角色。
+
+### 仓库策略
+
+当前阶段不单独拆 `cerul-search` repo，而是在 `cerul` 主仓库中以逻辑独立、仓库不独立的方式孵化：
+
+- **代码位置**：放在主仓库顶层子目录 `cerul-search/`
+- **工程目标**：做成一个自包含的 Python CLI / 可自部署项目
+- **实现策略**：尽量复用现有 Cerul 的 worker、pipeline、embedding 和搜索逻辑，避免过早复制代码
+- **品牌策略**：先验证安装体验、README、CLI 可用性，再决定是否未来拆成单独 repo
+
+这样做的原因：
+
+- 现有核心技术已经成熟，先复用主仓库能力更快出 MVP
+- 过早拆 repo 会增加同步和维护成本
+- 先把产品打磨到能独立传播，再拆 repo 更划算
+
+未来只有在下面条件满足时，再考虑拆出 `cerul-ai/cerul-search`：
+
+- README 和安装体验已经足够自解释，不依赖主仓库其他文档
+- 配置、存储、运行方式已经稳定
+- 发布节奏开始和主仓库明显不同
+- 有明确的社区增长需求，需要把 star、issue、目录收录集中到单独 repo
+
+### 与 SentrySearch 的差异
+
+SentrySearch（2600+ star）做的是纯视觉搜索（dashcam 帧 → embedding），不理解语音。cerul-search 的核心差异是**多模态知识搜索**：视觉 + 语音 + 幻灯片文字。
+
+| 能力 | SentrySearch | cerul-search |
+|---|---|---|
+| 视觉内容搜索 | 有（核心能力） | 有 |
+| 语音/演讲搜索 | **没有** | **有（ASR + transcript embedding）** |
+| PPT/幻灯片文字搜索 | 没有 | 有（keyframe 分析） |
+| 场景分割 | 固定 30 秒 chunk | **FFmpeg 智能分割（画面变化 + 静音边界）** |
+| 返回 transcript | 没有 | **有（带时间戳逐句文本）** |
+| Embedding 后端 | Gemini / Qwen3-VL | Gemini Embedding 2（v1），Qwen-VL（v2 计划） |
+
+一句话：SentrySearch 搜"你看到了什么"，cerul-search 搜"他说了什么、讲了什么、展示了什么"。
+
+### CLI 设计
+
+```bash
+pip install cerul-search
+
+# 索引视频
+cerul-search index video.mp4
+cerul-search index ./lectures/
+cerul-search index "https://youtube.com/watch?v=..."
+
+# 搜索
+cerul-search search "how does attention mechanism work"
+cerul-search search "gradient descent explanation" --max-results 5 --show-transcript
+
+# 管理
+cerul-search list
+cerul-search stats
+cerul-search remove video.mp4
+cerul-search reset
+```
+
+### 搜索结果输出
+
+```
+$ cerul-search search "transformer attention explained"
+
+Found 3 results:
+
+[1] Score: 0.847  |  lecture_01.mp4  |  14:32 - 16:45
+    "So the key insight of attention is that instead of compressing
+     the entire input into a fixed-size vector, we allow the decoder
+     to look back at all encoder hidden states..."
+
+[2] Score: 0.791  |  talk_stanford.mp4  |  28:10 - 30:22
+    "Multi-head attention lets the model jointly attend to information
+     from different representation subspaces..."
+
+[3] Score: 0.734  |  podcast_ep12.mp4  |  45:01 - 46:18
+    "The way I think about self-attention is like a lookup table
+     where every token gets to ask every other token..."
+```
+
+### 索引 Pipeline
+
+```
+Input video
+  │
+  ├── FFmpeg 场景检测 + 静音检测 ──→ 智能分割片段（10-120 秒，每段一个完整话题）
+  │
+  ├── ASR（可配置）──────────────→ 带时间戳的逐句 transcript
+  │
+  ├── Keyframe 提取 ────────────→ 每段 1-2 张代表帧
+  │
+  └── Embedding ────────────────→ 文本向量 + 视觉向量
+                                     │
+                                     ▼
+                               ChromaDB（本地向量存储）
+                                     │
+                                     ▼
+                          文本查询 → embedding → 向量搜索 → 排序返回
+```
+
+**1. 场景分割（FFmpeg）**
+- `ffmpeg -filter:v "select='gt(scene,0.3)'"` 做视觉场景变化检测
+- 结合 `silencedetect` 做语音边界感知
+- 产出可变长片段（10-120 秒），每段是一个完整的"知识点"
+
+**2. ASR — 语音转文字**
+- 通过环境变量配置，兼容任何 OpenAI `/v1/audio/transcriptions` 接口
+- 产出每段的带时间戳 transcript
+
+**3. Keyframe 提取（FFmpeg）**
+- 每段提取 1-2 张代表帧
+- 用于视觉 embedding 和搜索结果展示
+
+**4. Embedding**
+- 文本 embedding：embed 每段的 transcript 文本
+- 视觉 embedding：embed keyframe（Gemini Embedding 2 多模态）
+- 搜索时按 transcript 相似度 + 视觉相似度加权排序
+
+**5. 存储**
+- ChromaDB（本地，零配置）
+
+### 配置方案
+
+所有配置通过环境变量或 `.env` 文件：
+
+```bash
+# ── ASR 配置 ───────────────────────────────────────
+# 兼容任何 OpenAI Whisper 接口。通过 API_BASE + API_KEY + MODEL 指定。
+
+# Groq（推荐，速度快，有免费额度）
+ASR_API_BASE=https://api.groq.com/openai/v1
+ASR_API_KEY=gsk_...
+ASR_MODEL=whisper-large-v3-turbo
+
+# OpenAI Whisper
+# ASR_API_BASE=https://api.openai.com/v1
+# ASR_API_KEY=sk-...
+# ASR_MODEL=whisper-1
+
+# 本地 whisper（通过 whisper.cpp server 等）
+# ASR_API_BASE=http://localhost:8080/v1
+# ASR_API_KEY=not-needed
+# ASR_MODEL=default
+
+# ── Embedding 配置 ─────────────────────────────────
+EMBEDDING_BACKEND=gemini
+GEMINI_API_KEY=AIza...
+
+# ── 场景检测配置 ───────────────────────────────────
+SCENE_THRESHOLD=0.3          # 场景变化灵敏度（0.0-1.0，越低分段越多）
+MIN_SEGMENT_DURATION=10      # 最短片段时长（秒）
+MAX_SEGMENT_DURATION=120     # 最长片段时长（秒）
+```
+
+#### ASR 兼容性矩阵
+
+| Provider | ASR_API_BASE | Model | 费用 | 速度 |
+|---|---|---|---|---|
+| Groq | `https://api.groq.com/openai/v1` | `whisper-large-v3-turbo` | 免费额度 / $0.04/hr | 极快 |
+| OpenAI | `https://api.openai.com/v1` | `whisper-1` | $0.006/min | 快 |
+| Deepgram | `https://api.deepgram.com/v1` | `nova-2` | $0.0043/min | 快 |
+| 本地 | `http://localhost:8080/v1` | 任意 | 免费 | 取决于硬件 |
+
+### 项目结构
+
+```
+cerul/
+  ...
+  cerul-search/
+    README.md
+    pyproject.toml             # 包配置（pip / uv 可安装）
+    cerul_search/
+      __init__.py
+      cli.py                   # Click CLI 入口
+      indexer/
+        pipeline.py            # 编排：分割 → ASR → embedding → 存储
+        scene_detect.py        # FFmpeg 场景 + 静音检测
+        asr.py                 # OpenAI 兼容 ASR 客户端
+        keyframe.py            # FFmpeg keyframe 提取
+      embedding/
+        gemini.py              # Gemini Embedding 2 客户端
+        base.py                # 抽象 embedding 接口（为 v2 后端预留）
+      search/
+        engine.py              # 查询 → embed → 向量搜索 → 排序
+      storage/
+        chromadb.py            # ChromaDB 封装
+      config.py                # 环境变量加载
+    tests/
+```
+
+实现上优先复用主仓库已有能力，尤其是：
+
+- `workers/common/` 中的共享 pipeline 抽象和 runtime helpers
+- 已有的 embedding backend 抽象
+- 已有的视频切分、索引、检索经验和测试用例模式
+
+但 `cerul-search/` 自己需要保持完整的安装、运行、README 和 CLI 入口，确保它以后即使拆 repo 也能平滑迁移。
+
+### Phase 2（v2 计划）
+
+- **Qwen-VL embedding 后端**：本地替代 Gemini，消费级 GPU 可运行
+  - 包含部署指南（Docker + CUDA）
+  - 支持 Apple Silicon（Metal）加速
+- **批量索引**：大型视频库的并行处理
+- **增量索引**：添加新视频不需要重建整个索引
+- **导出**：搜索结果导出为裁剪后的视频片段（FFmpeg）
+
+### 与 cerul.ai SaaS 的关系
+
+| | cerul-search | cerul.ai |
+|---|---|---|
+| 部署 | 自托管 | 云端 API |
+| 内容 | 用户自己的视频 | 预索引的公开知识视频 |
+| 规模 | 单机 | 分布式 |
+| 费用 | 免费（+ ASR/embedding API 费用） | Credit 计费 |
+| 维护 | 用户自行管理 | 我们管理 |
+
+用户转化漏斗：
+1. 开发者在 GitHub 发现 cerul-search → star
+2. 索引自己的视频，体验搜索质量
+3. 需要搜索公开知识内容（演讲、教程等）
+4. 发现 cerul.ai 已预索引 → 注册 API
+
+### 发布优先级
+
+```
+Phase 1: 在 `cerul` 主仓库内孵化 cerul-search MVP（CLI + Gemini + Groq ASR）
+Phase 2: cerul-js + cerul-python SDK
+Phase 3: cerul-mcp MCP Server
+Phase 4: cerul-search v2（Qwen-VL 本地后端）
+Phase 5: 视社区增长情况决定是否拆分为独立 `cerul-search` repo
+```
+
+`cerul-search` 仍然优先于 SDK 发布，因为它是获取开源社区关注的主力。区别只是当前阶段不急着拆独立 repo，而是先在主仓库中把产品和分发体验打磨成熟。SDK 面向的是已经决定用 cerul.ai API 的开发者，转化路径更短但受众更窄。
