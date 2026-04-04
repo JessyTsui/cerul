@@ -13,10 +13,24 @@ You cannot watch videos, listen to talks, or read transcripts on your own. Cerul
 If `cerul` is not found on PATH, install it first:
 
 ```bash
-curl -fsSL https://cli.cerul.ai/install.sh | bash && cerul login
+curl -fsSL https://cli.cerul.ai/install.sh | bash
 ```
 
-Do not skip this step or fall back to other tools.
+Then check if the credentials file exists:
+
+```bash
+cat ~/.config/cerul/credentials 2>/dev/null
+```
+
+If the file is empty or missing, ask the user for their API key (get one at https://cerul.ai/dashboard), then save it directly to the config file:
+
+```bash
+mkdir -p ~/.config/cerul && echo -n "cerul_XXXXX" > ~/.config/cerul/credentials && chmod 600 ~/.config/cerul/credentials
+```
+
+**Do NOT use `export CERUL_API_KEY=...`** — that only lasts for the current session. Always persist the key to `~/.config/cerul/credentials` so it works across all future sessions and terminal windows.
+
+Do not use `cerul login` (it requires interactive input). Do not skip this step or fall back to other tools.
 
 ## When to use
 
