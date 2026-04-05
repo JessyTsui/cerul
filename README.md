@@ -4,21 +4,20 @@
     <img src="./assets/logo.png" alt="Cerul" width="80" />
   </a>
   <h1>Cerul</h1>
-  <p><strong>Video understanding search API for AI agents.</strong></p>
+  <p><strong>Video search API for AI agents.</strong></p>
   <p>Search what is shown in videos, not just what is said.</p>
 
   <p>
     <a href="https://cerul.ai/docs"><strong>Docs</strong></a> &middot;
-    <a href="https://cerul.ai/docs#quickstart"><strong>Quickstart</strong></a> &middot;
-    <a href="https://cerul.ai/docs#api-reference"><strong>API Reference</strong></a> &middot;
+    <a href="https://cerul.ai/docs/search-api"><strong>API Reference</strong></a> &middot;
     <a href="https://cerul.ai/pricing"><strong>Pricing</strong></a> &middot;
-    <a href="https://github.com/cerul-ai/cerul"><strong>GitHub</strong></a>
+    <a href="https://x.com/cerul_hq"><strong>Twitter</strong></a>
   </p>
 
   <p>
     <a href="./LICENSE"><img alt="License" src="https://img.shields.io/badge/license-Apache_2.0-3b82f6?style=flat-square" /></a>
-    <img alt="Status" src="https://img.shields.io/badge/status-beta-f97316?style=flat-square" />
-    <img alt="Model" src="https://img.shields.io/badge/model-open--core-22c55e?style=flat-square" />
+    <a href="https://www.npmjs.com/package/cerul"><img alt="npm" src="https://img.shields.io/npm/v/cerul?style=flat-square&color=22c55e" /></a>
+    <a href="https://pypi.org/project/cerul"><img alt="PyPI" src="https://img.shields.io/pypi/v/cerul?style=flat-square&color=22c55e" /></a>
   </p>
 </div>
 
@@ -30,6 +29,12 @@
 
 <br />
 
+<div align="center">
+  <video src="./assets/demo.mp4" width="720" controls></video>
+</div>
+
+<br />
+
 ## Why Cerul
 
 Web pages are easy for AI agents to search. **Video is not.**
@@ -37,161 +42,104 @@ Web pages are easy for AI agents to search. **Video is not.**
 Most video search today is limited to transcripts — what was *said*. Cerul goes further by indexing what is *shown*: slides, charts, product demos, code walkthroughs, whiteboards, and other visual evidence.
 
 > [!NOTE]
-> Cerul is in active development. The API is live at [cerul.ai](https://cerul.ai) — get a free API key to start.
+> Cerul is in active development. The API is live at [cerul.ai](https://cerul.ai) — sign up to get a free API key.
 
 ## Quickstart
 
-Index any video, then search it with one query:
+### Use with your AI agent
+
+Copy this and send it to your agent (Claude Code, Codex, Cursor, etc.):
+
+> Install the Cerul video search skill by reading and following https://github.com/cerul-ai/cerul/blob/main/skills/cerul/SKILL.md
+
+Your agent will install the CLI, set up credentials, and start searching videos as a tool.
+
+<div align="center">
+  <img src="./assets/agent-skill-search.png" alt="Claude Code using Cerul skill to search videos" width="720" />
+  <img src="./assets/agent-skill-result.png" alt="Agent synthesizing video evidence into an answer" width="720" />
+</div>
+
+Or install via the skills CLI:
 
 ```bash
-curl "https://api.cerul.ai/v1/index" \
-  -H "Authorization: Bearer YOUR_CERUL_API_KEY" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "url": "https://www.youtube.com/watch?v=hmtuvNfytjM"
-  }'
+npx skills add cerul-ai/cerul
 ```
 
+### CLI
+
 ```bash
-curl "https://api.cerul.ai/v1/search" \
-  -H "Authorization: Bearer YOUR_CERUL_API_KEY" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "query": "Sam Altman views on AI video generation tools",
-    "max_results": 3,
-    "include_answer": true,
-    "filters": {
-      "speaker": "Sam Altman",
-      "source": "youtube"
-    }
-  }'
+curl -fsSL https://cli.cerul.ai/install.sh | bash
+cerul search "Sam Altman on AI video generation tools"
 ```
+
+<div align="center">
+  <img src="./assets/cli-search.png" alt="cerul search CLI output" width="720" />
+</div>
+
+> Inline video frame previews are supported in iTerm2, WezTerm, and Kitty. Enable with `cerul config` and toggle **Images** on. Other terminals show text-only results.
+
+### MCP (Model Context Protocol)
+
+Connect any MCP-compatible client to the hosted endpoint (replace with your API key):
+
+```bash
+# Claude Code
+claude mcp add --transport streamable-http "https://api.cerul.ai/mcp?apiKey=YOUR_API_KEY" cerul
+
+# Codex
+codex mcp add --url "https://api.cerul.ai/mcp?apiKey=YOUR_API_KEY" cerul
+```
+
+Also works with Claude Desktop, Cursor, Windsurf, and other MCP clients.
 
 <details>
-<summary><strong>Example search response</strong></summary>
+<summary><strong>SDK & API</strong></summary>
 
-```json
-{
-  "results": [
-    {
-      "id": "unit_hmtuvNfytjM_1223",
-      "score": 0.96,
-      "title": "Sam Altman on the Future of AI Creative Tools",
-      "url": "https://cerul.ai/v/a8f3k2x",
-      "snippet": "AI video generation tools are improving fast, but controllability and reliability still need work.",
-      "thumbnail_url": "https://i.ytimg.com/vi/hmtuvNfytjM/hqdefault.jpg",
-      "keyframe_url": "https://cdn.cerul.ai/frames/hmtuvNfytjM/f012.jpg",
-      "duration": 5400,
-      "source": "youtube",
-      "speaker": "Sam Altman",
-      "timestamp_start": 1223,
-      "timestamp_end": 1345,
-      "unit_type": "speech"
-    }
-  ],
-  "answer": "Altman frames AI video generation as improving quickly, while noting that production-grade control is still the bottleneck.",
-  "credits_used": 2,
-  "credits_remaining": 998,
-  "request_id": "req_abc123xyz456"
+**Python**
+
+```bash
+pip install cerul
+```
+
+```python
+from cerul import Cerul
+
+client = Cerul(api_key="YOUR_API_KEY")
+results = client.search(query="Sam Altman on AGI timeline", max_results=5)
+
+for r in results:
+    print(r.title, r.url)
+```
+
+**JavaScript**
+
+```bash
+npm install cerul
+```
+
+```javascript
+import { cerul } from "cerul";
+
+const client = cerul({ apiKey: "YOUR_API_KEY" });
+const result = await client.search({ query: "Sam Altman on AGI timeline", max_results: 5 });
+
+for (const r of result.results) {
+  console.log(r.title, r.url);
 }
 ```
 
-</details>
-
-## Features
-
-| | Feature | Description |
-|---|---|---|
-| **Visual Retrieval** | Beyond transcripts | Index slides, charts, demos, and on-screen content — not just speech |
-| **Unified Search** | One query surface | Search summaries, speech segments, and visual evidence without choosing a track |
-| **Unified Indexing** | `POST /v1/index` | Index YouTube, Pexels, Pixabay, and direct video URLs on the same pipeline |
-| **Agent-Ready** | Built for LLMs | Designed for tool-use and function calling — clean JSON in, clean JSON out |
-| **Timestamp Precision** | Frame-accurate results | Every result comes with exact start/end timestamps and confidence scores |
-| **Agent Integrations** | Skills + Remote MCP | Installable skills plus a hosted MCP endpoint for zero-install tool use |
-| **Open Core** | Apache 2.0 | Public client surfaces and agent integrations are open source |
-
-## Architecture
-
-```text
-frontend/     Next.js app — landing page, docs, dashboard, auth surface
-docs/         Public-safe docs and API references
-skills/       Agent skills for Codex / Claude-style clients
-openapi.yaml  Public copy of the API contract
-scripts/      Frontend-side local helpers
-```
-
-Private companion repositories:
-
-- `cerul-api` — Hono / Cloudflare Workers API, migrations, OpenAPI source of truth
-- `cerul-worker` — Python workers, evaluation assets, and Docker deployment
-
-This repository is a public-safe server-side Next.js app. It still requires `DATABASE_URL` for Better Auth and a few server-side auth helpers, but it no longer contains the backend API or worker implementation.
-
-## Development
+**cURL**
 
 ```bash
-# Frontend-only development in this repository
-./rebuild.sh
-pnpm --dir frontend dev
-
-# Full-stack local development uses sibling repositories
-(cd ../cerul-api && ./rebuild.sh)
-(cd ../cerul-worker && ./rebuild.sh)
+curl "https://api.cerul.ai/v1/search" \
+  -H "Authorization: Bearer YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"query": "Sam Altman on AGI timeline", "max_results": 5}'
 ```
 
-<details>
-<summary><strong>Full command reference</strong></summary>
-
-**Frontend**
-
-```bash
-pnpm --dir frontend install
-pnpm --dir frontend dev
-pnpm --dir frontend lint
-pnpm --dir frontend test
-pnpm --dir frontend build
-```
-
-**Companion repos**
-
-```bash
-cd ../cerul-api && ./rebuild.sh
-cd ../cerul-worker && ./rebuild.sh
-```
+Full API spec: [`openapi.yaml`](./openapi.yaml) | [cerul.ai/docs](https://cerul.ai/docs/search-api)
 
 </details>
-
-## Deployment
-
-Deploy the frontend on Vercel:
-
-1. Import the repository and set Root Directory to `frontend`
-2. Keep the included `frontend/vercel.json`
-3. Optionally set `NEXT_PUBLIC_SITE_URL` for custom domain metadata
-4. Set `DATABASE_URL`, `BETTER_AUTH_SECRET`, and any OAuth provider credentials you want to enable
-5. If Google login is enabled, add each frontend origin to Google Authorized JavaScript origins so Google One Tap can run on `/login` and `/signup`
-
-Backend deployments now live in sibling repositories:
-
-- `cerul-api` deploys the API to Cloudflare Workers
-- `cerul-worker` builds and publishes the worker Docker image
-- apply schema migrations from `cerul-api` before shipping dependent frontend or worker changes
-
-## Project Status
-
-- [x] Shared platform backbone: auth, API keys, usage tracking, rate limiting, dashboard, and docs
-- [x] Unified `index + search` flow on the shared retrieval stack
-- [x] Summary, speech, and visual retrieval units in one embedding space
-- [x] Agent-facing integrations via installable skills and hosted remote MCP
-- [ ] Higher-scale production validation for indexing coverage and retrieval quality
-- [ ] Stripe billing validation in test mode
-- [ ] Python & TypeScript SDKs, only if direct API + skill access proves insufficient
-
-## Community
-
-- [Contributing Guide](./CONTRIBUTING.md)
-- [Security Policy](./SECURITY.md)
-- [Code of Conduct](./CODE_OF_CONDUCT.md)
 
 ## License
 
