@@ -26,6 +26,11 @@ Treat these as baseline project rules:
 ## Product & Architecture Guardrails
 Cerul has two tracks, `broll` and `knowledge`, but they should share one platform backbone.
 
+This repository is the `cerul` web app after the backend split. Private backend code now lives in sibling repositories:
+
+- `cerul-api` for the Hono / Cloudflare Workers API and database migrations
+- `cerul-worker` for indexing, evaluation, and media-heavy processing
+
 Default architectural assumptions:
 
 - frontend: Next.js
@@ -45,9 +50,9 @@ For agent integrations, keep the first phase simple:
 
 Keep these boundaries intact:
 
-- `api/` handles request orchestration, auth, usage, and API responses
-- `workers/` handles indexing and other media-heavy processing
-- `workers/common/` holds shared Python runtime helpers used by workers and evaluation scripts
+- `cerul-api` handles request orchestration, auth, usage, and API responses
+- `cerul-worker` handles indexing and other media-heavy processing
+- shared worker runtime helpers live in `cerul-worker/workers/common/`
 - frontend pages should not become the primary business logic layer
 
 Worker-side indexing should continue to follow a shared step-pipeline approach:
@@ -73,7 +78,7 @@ Do not commit:
 If material is useful internally but not suitable for the repository, keep it under the local private workspace rather than adding it here.
 
 ## Project Structure & Module Organization
-Cerul is organized as a lightweight monorepo with root-level product entrypoints. Put the Next.js app in `frontend/` (`app/`, `components/`, `lib/`) and the public API in `api/` (`src/routes`, `src/services`, `src/middleware`). Shared Python runtime helpers belong under `workers/common/` (`config/`, `embedding/`, `pipeline/`, `search/`, `sources/`, `storage.py`), while track-specific indexing flows live in `workers/broll` and `workers/knowledge`. Keep public-safe docs in `docs/`, migrations and seed data in `db/`, installable agent skills in `skills/`, public-safe config files in `config/`, and local automation scripts in `scripts/`.
+This repository is the public-safe server-side Next.js app. Put the web app in `frontend/` (`app/`, `components/`, `lib/`), keep public-safe docs in `docs/`, installable agent skills in `skills/`, the public API contract copy in `openapi.yaml`, and frontend-side automation in `scripts/`. Do not reintroduce `api/`, `workers/`, `db/`, or `config/` as top-level product directories here; those belong in the private sibling repositories.
 
 Do not create a top-level `sdk/` just to wrap Cerul's own backend calls. An SDK only belongs in the repo once there is a real public client package to ship and version independently. Until then, frontend code should call backend APIs directly, and agent integrations should prefer a documented skill plus direct HTTP access. Treat MCP the same way: it is a future adapter, not a required first-class module in the initial repository layout.
 
@@ -84,7 +89,7 @@ This repository is still scaffold-first: no root `package.json`, `pyproject.toml
 cp .env.example .env
 ```
 
-Use it to seed local secrets, runtime profile selection, and any optional env overrides before running new app code. Public-safe default config should live in `config/*.yaml`, not in `.env`. Frontend browser code must consume a derived public config subset rather than reading raw repo config files directly. When you add runnable modules, expose explicit commands close to that module and document them in both `README.md` and this file (for example, `pnpm --dir frontend dev` or `npm --prefix api run check`).
+Use it to seed local secrets, runtime profile selection, and any optional env overrides before running new app code. Frontend browser code must consume a derived public config subset rather than reading raw repo config files directly. When you add runnable modules, expose explicit commands close to that module and document them in both `README.md` and this file.
 
 Current frontend commands:
 
@@ -96,14 +101,6 @@ pnpm --dir frontend test
 pnpm --dir frontend build
 ```
 
-Current API commands:
-
-```sh
-npm --prefix api install
-npm --prefix api run dev -- --env development --ip 127.0.0.1 --port 8787
-npm --prefix api run check
-```
-
 Repository-level reset:
 
 ```sh
@@ -112,7 +109,7 @@ Repository-level reset:
 ```
 
 ## Coding Style & Naming Conventions
-Match the target stack. Use `snake_case` for Python modules, functions, and worker steps (`knowledge`, `scene_threshold`), and `PascalCase` for React components with `camelCase` helpers. Prefer 4-space indentation in Python and 2 spaces in TypeScript, JSON, and YAML. Keep files narrowly scoped: API routing stays in `api/src/routes`, shared worker-side retrieval logic stays in `workers/common/search`, pipeline primitives stay in `workers/common/pipeline`, and app-only utilities stay inside the owning app.
+Match the target stack. In this repository, prefer `PascalCase` for React components with `camelCase` helpers and 2-space indentation in TypeScript, JSON, and YAML. Keep files narrowly scoped so app-only utilities stay inside the owning app. If work spans the private companion repositories, follow their local conventions there instead of reintroducing backend structure into this repo.
 
 Additional Cerul-specific expectations:
 
@@ -122,15 +119,14 @@ Additional Cerul-specific expectations:
 - default to ASCII unless an existing file already uses non-ASCII text for a clear reason
 
 ## Testing Guidelines
-No repo-wide test runner is defined yet, so add tests with each new module. Name Python tests `test_*.py`; name web tests `*.test.ts` or `*.test.tsx`. Cover happy paths and one failure case for new routers, pipeline steps, and shared search logic. If a PR ships without tests, explain the gap clearly.
+No repo-wide test runner is defined yet, so add tests with each new module. Name web tests `*.test.ts` or `*.test.tsx`. Cover happy paths and one failure case for new routes, auth helpers, and shared frontend utilities. If a PR ships without tests, explain the gap clearly.
 
-For this project specifically, prioritize tests around:
+For this repository specifically, prioritize tests around:
 
-- search request validation
-- usage and credit accounting
-- pipeline step idempotency
-- vector retrieval helpers
-- API authentication paths
+- Better Auth server paths
+- dashboard/admin proxy behavior
+- public docs and API-reference rendering
+- frontend API client error handling
 
 ## Branch, Commit, PR, and Issue Workflow
 
@@ -245,6 +241,6 @@ Issue rules:
 - include acceptance criteria when the task is implementation-driven
 
 ## Security & Configuration Tips
-Never commit `.env`, provider credentials, or generated artifacts. Use `.env.example` as the source of truth for required private variables such as `OPENAI_API_KEY`, `DATABASE_URL`, and content API keys. Use `config/*.yaml` for commit-safe defaults and non-sensitive tuning values. Treat `publicConfig` as a code-level whitelist derived from those sources, not as a third configuration store.
+Never commit `.env`, provider credentials, or generated artifacts. Use `.env.example` as the source of truth for required private variables such as `DATABASE_URL`, `BETTER_AUTH_SECRET`, and OAuth credentials. Treat `publicConfig` as a code-level whitelist derived from those sources, not as a third configuration store.
 
 If a change affects public docs or repository metadata, ensure the result still matches the intended open-source boundary of the project.

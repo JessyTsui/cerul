@@ -27,4 +27,4 @@ body:
     id: scope
     attributes:
       label: Scope Notes
-      description: Mention affected areas such as `frontend/`, `backend/`, `workers/`, or `docs/`.
+      description: Mention affected areas such as `frontend/`, `docs/`, `skills/`, `cerul-api`, or `cerul-worker`.

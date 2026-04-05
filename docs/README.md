@@ -2,11 +2,10 @@
 
 This directory holds public-safe project documentation for Cerul.
 
-Recommended layout:
+Recommended contents:
 
-- `architecture/` for public architecture notes
-- `api/` for API-facing docs
-- `product/` for product and use-case docs
-- `runbooks/` for operational guides and contributor workflows
+- public API references and public contract notes
+- user-facing product or onboarding docs
+- public architecture notes that are safe to expose
 
-Keep internal-only strategy notes, prompts, benchmarks, and hidden architecture drafts outside this tree.
+Keep internal-only strategy notes, prompts, benchmarks, operational runbooks, and hidden architecture drafts in the private companion repositories instead of here.

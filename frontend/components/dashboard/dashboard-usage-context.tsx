@@ -40,7 +40,6 @@ export function DashboardUsageProvider({
       const nextUsage = await usage.getMonthly();
       setData(nextUsage);
       setLastUpdatedAt(new Date());
-      console.log("[DashboardUsage] Data refreshed at", new Date().toISOString(), "walletBalance:", nextUsage.walletBalance);
     } catch (nextError) {
       setError(getApiErrorMessage(nextError, "Failed to load monthly usage."));
     } finally {

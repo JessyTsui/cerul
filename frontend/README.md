@@ -9,8 +9,9 @@ The frontend is responsible for:
 - landing and marketing pages
 - public documentation pages
 - dashboard and demo surfaces
+- server-side auth routes and Better Auth integration
 
-The frontend should consume Cerul's API instead of becoming the primary business logic layer.
+This is not a pure static frontend. The repo still connects to PostgreSQL for Better Auth session management and a small set of auth-related server routes, but the product API and indexing logic live in sibling repositories.
 
 ## Stack
 
@@ -45,6 +46,7 @@ variables for metadata, canonical URLs, `robots.txt`, and `sitemap.xml`.
 
 Cerul's frontend uses Better Auth for dashboard sessions.
 
+- `DATABASE_URL` is required because auth runs server-side in this repo
 - `BETTER_AUTH_SECRET` is required outside local development
 - `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` enable Google OAuth
 - `GITHUB_CLIENT_ID` and `GITHUB_CLIENT_SECRET` enable GitHub OAuth
@@ -65,3 +67,8 @@ Cerul's frontend uses Better Auth for dashboard sessions.
 - `/dashboard/keys`, `/dashboard/usage`, `/dashboard/settings`
 - `/admin/pipelines`, `/admin/workers`, `/admin/sources`, `/admin/content`
 - `/api/demo/search` and `/api/demo/dashboard` mock API routes for the frontend demo
+
+## Companion Repositories
+
+- `../cerul-api` holds the Cloudflare Workers API, migrations, and OpenAPI source
+- `../cerul-worker` holds indexing workers, evaluation assets, and Docker deployment

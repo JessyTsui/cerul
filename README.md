@@ -108,40 +108,35 @@ curl "https://api.cerul.ai/v1/search" \
 | **Agent-Ready** | Built for LLMs | Designed for tool-use and function calling — clean JSON in, clean JSON out |
 | **Timestamp Precision** | Frame-accurate results | Every result comes with exact start/end timestamps and confidence scores |
 | **Agent Integrations** | Skills + Remote MCP | Installable skills plus a hosted MCP endpoint for zero-install tool use |
-| **Open Core** | Apache 2.0 | Application code, pipelines, and agent integrations are open source |
+| **Open Core** | Apache 2.0 | Public client surfaces and agent integrations are open source |
 
 ## Architecture
 
 ```text
-frontend/     Next.js app — landing page, docs, dashboard
-api/          Hono / Cloudflare Workers API — public HTTP surface
-workers/      Indexing pipelines and shared Python runtime helpers
-docs/         Architecture, API specs, and runbooks
-db/           Migrations and seed data
+frontend/     Next.js app — landing page, docs, dashboard, auth surface
+docs/         Public-safe docs and API references
 skills/       Agent skills for Codex / Claude-style clients
-config/       YAML config defaults and templates
-scripts/      Bootstrap and utility scripts
+openapi.yaml  Public copy of the API contract
+scripts/      Frontend-side local helpers
 ```
+
+Private companion repositories:
+
+- `cerul-api` — Hono / Cloudflare Workers API, migrations, OpenAPI source of truth
+- `cerul-worker` — Python workers, evaluation assets, and Docker deployment
+
+This repository is a public-safe server-side Next.js app. It still requires `DATABASE_URL` for Better Auth and a few server-side auth helpers, but it no longer contains the backend API or worker implementation.
 
 ## Development
 
 ```bash
-# Local development uses .env by default. Keep deployment-only secrets in .env.production.
-# When .env points to the local docker database, rebuild.sh will start the compose db service automatically.
-
-# Quick start — install deps, run database migrations, and start both servers
+# Frontend-only development in this repository
 ./rebuild.sh
-
-# Apply SQL migrations manually (useful for remote or one-off database updates)
-./scripts/migrate-db.sh
-
-# Load a different env file explicitly when needed
-./rebuild.sh --env-file ./.env.production
-./scripts/migrate-db.sh --env-file ./.env.production
-
-# Or run frontend and API separately
 pnpm --dir frontend dev
-npm --prefix api run dev -- --env development --ip 127.0.0.1 --port 8787
+
+# Full-stack local development uses sibling repositories
+(cd ../cerul-api && ./rebuild.sh)
+(cd ../cerul-worker && ./rebuild.sh)
 ```
 
 <details>
@@ -157,22 +152,11 @@ pnpm --dir frontend test
 pnpm --dir frontend build
 ```
 
-**API**
+**Companion repos**
 
 ```bash
-npm --prefix api install
-npm --prefix api run dev -- --env development --ip 127.0.0.1 --port 8787
-npm --prefix api run check
-```
-
-**Workers**
-
-```bash
-python3 -m venv workers/.venv
-workers/.venv/bin/python -m pip install -r workers/requirements.txt
-workers/.venv/bin/pytest workers/tests
-workers/.venv/bin/python -m workers.worker --db-url "$DATABASE_URL"
-workers/.venv/bin/python -m workers.scheduler --once --database-url "$DATABASE_URL"
+cd ../cerul-api && ./rebuild.sh
+cd ../cerul-worker && ./rebuild.sh
 ```
 
 </details>
@@ -184,13 +168,14 @@ Deploy the frontend on Vercel:
 1. Import the repository and set Root Directory to `frontend`
 2. Keep the included `frontend/vercel.json`
 3. Optionally set `NEXT_PUBLIC_SITE_URL` for custom domain metadata
-4. Set `BETTER_AUTH_SECRET` plus any OAuth provider credentials you want to enable
+4. Set `DATABASE_URL`, `BETTER_AUTH_SECRET`, and any OAuth provider credentials you want to enable
 5. If Google login is enabled, add each frontend origin to Google Authorized JavaScript origins so Google One Tap can run on `/login` and `/signup`
 
-Deploy the API from `api/` with `wrangler deploy`.
+Backend deployments now live in sibling repositories:
 
-For API or worker deployments, run `./scripts/migrate-db.sh` once against the target
-database as a release/predeploy step before rolling out code that depends on the new schema.
+- `cerul-api` deploys the API to Cloudflare Workers
+- `cerul-worker` builds and publishes the worker Docker image
+- apply schema migrations from `cerul-api` before shipping dependent frontend or worker changes
 
 ## Project Status
 
