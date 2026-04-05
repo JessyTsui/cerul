@@ -272,9 +272,9 @@ function IconThumbDown({ className, filled }: { className?: string; filled?: boo
 
 function IconSpinner({ className }: { className?: string }) {
   return (
-    <svg className={`animate-spin ${className ?? ""}`} fill="none" viewBox="0 0 24 24">
-      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 0 1 8-8V0C5.373 0 0 5.373 0 12h4Z" />
+    <svg className={`playground-spinner ${className ?? ""}`} fill="none" viewBox="0 0 24 24">
+      <circle opacity="0.2" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" />
+      <path stroke="currentColor" strokeWidth="3" strokeLinecap="round" d="M12 2a10 10 0 0 1 10 10" />
     </svg>
   );
 }
@@ -604,8 +604,8 @@ export function PlaygroundScreen() {
   );
 
   const codeSnippetForCopy = useMemo(
-    () => buildCodeSnippet(codeLang, query, "<YOUR_API_KEY>"),
-    [codeLang, query],
+    () => buildCodeSnippet(codeLang, query, selectedKey?.rawKey ?? maskKey(selectedKey?.prefix ?? "cerul_xxxx")),
+    [codeLang, query, selectedKey?.rawKey, selectedKey?.prefix],
   );
 
   async function handleSearch() {
@@ -729,9 +729,9 @@ export function PlaygroundScreen() {
             {/* Send button */}
             <button
               type="button"
-              disabled={isLoading || !query.trim() || keys.length === 0 || !selectedKeyId}
+              disabled={!isLoading && (!query.trim() || keys.length === 0 || !selectedKeyId)}
               onClick={() => void handleSearch()}
-              className="button-primary w-full"
+              className={`button-primary w-full ${isLoading ? "!opacity-100 pointer-events-none" : ""}`}
             >
               {isLoading ? (
                 <span className="flex items-center justify-center gap-2">
