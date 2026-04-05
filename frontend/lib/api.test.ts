@@ -131,6 +131,7 @@ describe("dashboard API client", () => {
               id: "key_1",
               name: "Primary key",
               prefix: "cerul_abcd1234",
+              raw_key: "cerul_full_secret_123",
               created_at: "2026-03-01T10:00:00Z",
               last_used_at: null,
               is_active: true,
@@ -151,6 +152,7 @@ describe("dashboard API client", () => {
         id: "key_1",
         name: "Primary key",
         prefix: "cerul_abcd1234",
+        rawKey: "cerul_full_secret_123",
         createdAt: "2026-03-01T10:00:00Z",
         lastUsedAt: null,
         isActive: true,
@@ -369,6 +371,8 @@ describe("dashboard API client", () => {
           referral: {
             code: "CRL1A2B3C",
             bonus_credits: 100,
+            invitee_bonus_credits: 100,
+            inviter_bonus_credits: 200,
             reward_delay_days: 0,
             redeemed_code: null,
             status: null,
@@ -406,6 +410,8 @@ describe("dashboard API client", () => {
       referral: {
         code: "CRL1A2B3C",
         bonusCredits: 100,
+        inviteeBonusCredits: 100,
+        inviterBonusCredits: 200,
         rewardDelayDays: 0,
         redeemedCode: null,
         status: null,

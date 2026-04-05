@@ -107,6 +107,8 @@ type BillingCatalogWire = {
   referral?: {
     code?: string;
     bonus_credits?: number;
+    invitee_bonus_credits?: number;
+    inviter_bonus_credits?: number;
     reward_delay_days?: number;
     redeemed_code?: string | null;
     status?: string | null;
@@ -201,6 +203,7 @@ export type DashboardApiKey = {
   id: string;
   name: string;
   prefix: string;
+  rawKey: string | null;
   createdAt: string;
   lastUsedAt: string | null;
   isActive: boolean;
@@ -325,6 +328,8 @@ export type BillingCatalog = {
   referral: {
     code: string;
     bonusCredits: number;
+    inviteeBonusCredits: number;
+    inviterBonusCredits: number;
     rewardDelayDays: number;
     redeemedCode: string | null;
     status: string | null;
@@ -527,6 +532,9 @@ function isApiKeyWire(value: unknown): value is ApiKeyWire {
     typeof value.id === "string" &&
     typeof value.name === "string" &&
     typeof value.prefix === "string" &&
+    (value.raw_key === undefined ||
+      value.raw_key === null ||
+      typeof value.raw_key === "string") &&
     typeof value.created_at === "string" &&
     (value.last_used_at === undefined ||
       value.last_used_at === null ||
@@ -624,6 +632,7 @@ function normalizeApiKey(input: ApiKeyWire): DashboardApiKey {
     id: input.id,
     name: input.name,
     prefix: input.prefix,
+    rawKey: input.raw_key ?? null,
     createdAt: input.created_at,
     lastUsedAt: input.last_used_at ?? null,
     isActive: input.is_active ?? true,
@@ -844,6 +853,18 @@ function normalizeBillingCatalog(payload: unknown): BillingCatalog {
         typeof referral.bonus_credits === "number"
           ? referral.bonus_credits
           : 0,
+      inviteeBonusCredits:
+        typeof referral.invitee_bonus_credits === "number"
+          ? referral.invitee_bonus_credits
+          : typeof referral.bonus_credits === "number"
+            ? referral.bonus_credits
+            : 0,
+      inviterBonusCredits:
+        typeof referral.inviter_bonus_credits === "number"
+          ? referral.inviter_bonus_credits
+          : typeof referral.bonus_credits === "number"
+            ? referral.bonus_credits
+            : 0,
       rewardDelayDays:
         typeof referral.reward_delay_days === "number"
           ? referral.reward_delay_days

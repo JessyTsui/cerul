@@ -161,7 +161,7 @@ export function DashboardAccountScreen() {
               </button>
             </div>
             <p className="mt-2 text-xs text-[var(--foreground-secondary)]">
-              Both get {formatNumber(catalog.referral.bonusCredits)} bonus credits
+              Invitees get {formatNumber(catalog.referral.inviteeBonusCredits)} and inviters get {formatNumber(catalog.referral.inviterBonusCredits)}
             </p>
           </div>
         ) : null}

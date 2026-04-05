@@ -149,7 +149,9 @@ export function DashboardSettingsScreen() {
     setIsRedeemingReferral(true); setReferralError(null); setReferralSuccess(null);
     try {
       await billing.redeemReferral(code);
-      setReferralSuccess(`Code applied! ${formatNumber(catalog?.referral.bonusCredits ?? 100)} credits added.`);
+      setReferralSuccess(
+        `Code applied! ${formatNumber(catalog?.referral.inviteeBonusCredits ?? 100)} credits added.`,
+      );
       setReferralInput("");
       void billing.getCatalog().then(setCatalog).catch(() => {});
       void refresh();
@@ -276,7 +278,7 @@ export function DashboardSettingsScreen() {
                 </div>
 
                 <p className="mt-2 text-xs text-[var(--foreground-tertiary)]">
-                  Both sides get {formatNumber(referral?.bonusCredits ?? 100)} bonus credits instantly. Credits expire in 90 days.
+                  Invitees get {formatNumber(referral?.inviteeBonusCredits ?? 100)} credits and inviters get {formatNumber(referral?.inviterBonusCredits ?? 200)} credits instantly. Credits expire in 90 days.
                 </p>
               </div>
 

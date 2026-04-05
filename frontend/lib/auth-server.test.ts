@@ -179,6 +179,7 @@ describe("getAuthRouteHandlers", () => {
       email: "owner@example.com",
       name: "Owner Example",
       grantSignupBonus: true,
+      createDefaultApiKey: true,
     });
     expect(state.sentEmails).toEqual([]);
 

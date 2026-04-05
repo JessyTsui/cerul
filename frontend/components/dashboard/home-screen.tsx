@@ -190,6 +190,7 @@ export function DashboardHomeScreen() {
                 isPending={pendingKeyId === key.id}
                 onRevoke={handleRevoke}
                 compact
+                isLastKey={keys.filter((item) => item.isActive).length <= 1}
               />
             ))}
           </div>

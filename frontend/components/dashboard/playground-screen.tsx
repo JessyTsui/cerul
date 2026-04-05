@@ -35,34 +35,33 @@ function buildCodeSnippet(lang: CodeLang, query: string, authToken: string): str
   const q = query || "your search query here";
 
   if (lang === "python") {
-    return `# To install: pip install requests
-import requests
+    return `# To install: pip install cerul
+from cerul import Cerul
 
-response = requests.post(
-    "https://api.cerul.ai/v1/search",
-    headers={"Authorization": "Bearer ${authToken}"},
-    json={
-        "query": ${JSON.stringify(q)},
-        "max_results": 5,
-    },
+client = Cerul(api_key="${authToken}")
+
+result = client.search(
+    query=${JSON.stringify(q)},
+    max_results=5,
 )
-print(response.json())`;
+
+for r in result:
+    print(r.title, r.url)`;
   }
 
   if (lang === "javascript") {
-    return `const response = await fetch("https://api.cerul.ai/v1/search", {
-  method: "POST",
-  headers: {
-    "Authorization": "Bearer ${authToken}",
-    "Content-Type": "application/json",
-  },
-  body: JSON.stringify({
-    query: ${JSON.stringify(q)},
-    max_results: 5,
-  }),
+    return `import { cerul } from "cerul";
+
+const client = cerul({ apiKey: "${authToken}" });
+
+const result = await client.search({
+  query: ${JSON.stringify(q)},
+  max_results: 5,
 });
-const data = await response.json();
-console.log(data);`;
+
+for (const r of result.results) {
+  console.log(r.title, r.url);
+}`;
   }
 
   if (lang === "go") {
@@ -72,8 +71,8 @@ import (
     "bytes"
     "encoding/json"
     "fmt"
-    "net/http"
     "io"
+    "net/http"
 )
 
 func main() {
@@ -81,9 +80,11 @@ func main() {
         "query":       ${JSON.stringify(q)},
         "max_results": 5,
     })
-    req, _ := http.NewRequest("POST",
+    req, _ := http.NewRequest(
+        "POST",
         "https://api.cerul.ai/v1/search",
-        bytes.NewBuffer(body))
+        bytes.NewBuffer(body),
+    )
     req.Header.Set("Authorization", "Bearer ${authToken}")
     req.Header.Set("Content-Type", "application/json")
 
@@ -271,9 +272,9 @@ function IconThumbDown({ className, filled }: { className?: string; filled?: boo
 
 function IconSpinner({ className }: { className?: string }) {
   return (
-    <svg className={`animate-spin ${className ?? ""}`} fill="none" viewBox="0 0 24 24">
-      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 0 1 8-8V0C5.373 0 0 5.373 0 12h4Z" />
+    <svg className={`playground-spinner ${className ?? ""}`} fill="none" viewBox="0 0 24 24">
+      <circle opacity="0.2" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" />
+      <path stroke="currentColor" strokeWidth="3" strokeLinecap="round" d="M12 2a10 10 0 0 1 10 10" />
     </svg>
   );
 }
@@ -603,8 +604,8 @@ export function PlaygroundScreen() {
   );
 
   const codeSnippetForCopy = useMemo(
-    () => buildCodeSnippet(codeLang, query, "<YOUR_API_KEY>"),
-    [codeLang, query],
+    () => buildCodeSnippet(codeLang, query, selectedKey?.rawKey ?? maskKey(selectedKey?.prefix ?? "cerul_xxxx")),
+    [codeLang, query, selectedKey?.rawKey, selectedKey?.prefix],
   );
 
   async function handleSearch() {
@@ -728,17 +729,17 @@ export function PlaygroundScreen() {
             {/* Send button */}
             <button
               type="button"
-              disabled={isLoading || !query.trim() || keys.length === 0 || !selectedKeyId}
+              disabled={!isLoading && (!query.trim() || keys.length === 0 || !selectedKeyId)}
               onClick={() => void handleSearch()}
-              className="button-primary w-full"
+              className={`button-primary w-full ${isLoading ? "!opacity-100 pointer-events-none" : ""}`}
             >
               {isLoading ? (
                 <span className="flex items-center justify-center gap-2">
                   <IconSpinner className="h-5 w-5" />
-                  Processing...
+                  Sending...
                 </span>
               ) : (
-                "Send Request"
+                "Send"
               )}
             </button>
 

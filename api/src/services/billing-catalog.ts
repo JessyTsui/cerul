@@ -57,7 +57,7 @@ export function getProProduct(config: AppConfig): BillingCatalogProduct {
 
 export function includedCreditsForPlan(planCode: BillingPlanCode): number {
   if (planCode === "free") {
-    return 0;
+    return 300;
   }
   if (planCode === "pro") {
     return 5_000;
@@ -71,7 +71,8 @@ export const TOPUP_STEP_PRICE_CENTS = (TOPUP_RATE_PER_1K_CENTS * TOPUP_CREDIT_ST
 export const SIGNUP_BONUS_CREDITS = 100;
 export const FREE_DAILY_SEARCHES = 10;
 
-export const REFERRAL_BONUS_CREDITS = 100;
+export const REFERRAL_INVITEE_BONUS = 100;
+export const REFERRAL_INVITER_BONUS = 200;
 export const REFERRAL_REWARD_DELAY_DAYS = 0;
 export const BONUS_CREDIT_EXPIRY_DAYS = 90;
 export const MAX_REFERRALS_PER_USER = 100;

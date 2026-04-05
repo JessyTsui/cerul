@@ -92,8 +92,8 @@ export default function DocsPage() {
                     Get your API key
                   </h2>
                   <p className="mt-4 max-w-3xl text-[15px] leading-8 text-[var(--foreground-secondary)]">
-                    Sign up at cerul.ai and create an API key from the dashboard.
-                    The free tier gives you 1,000 credits per month — no credit card required.
+                    Sign up at cerul.ai and your default API key is ready in the dashboard.
+                    New accounts start with 100 signup credits and 10 free searches per day. Add a credit card when you want the 300-credit monthly free tier.
                   </p>
                   <div className="mt-6 flex flex-wrap gap-3">
                     <Link href="/login?mode=signup" className="button-primary">

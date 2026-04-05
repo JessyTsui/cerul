@@ -28,7 +28,8 @@ describe("email templates", () => {
     });
 
     expect(html).toContain("Welcome to Cerul, Owner Example!");
-    expect(html).toContain("1,000 free search requests");
+    expect(html).toContain("100 signup credits");
+    expect(html).toContain("300-credit monthly free tier");
     expect(html).toContain("https://cerul.ai/dashboard");
     expect(html).toContain("https://cerul.ai/docs");
   });

@@ -198,9 +198,47 @@ type ProfileInput = {
   email: string;
   name: string;
   grantSignupBonus?: boolean;
+  createDefaultApiKey?: boolean;
 };
 
 const SIGNUP_BONUS_CREDITS = 100;
+const DEFAULT_API_KEY_NAME = "Default";
+const API_KEY_PREFIX = "cerul_";
+const API_KEY_TOKEN_LENGTH = 32;
+const API_KEY_PREFIX_LENGTH = 16;
+
+const encoder = new TextEncoder();
+
+function asArrayBuffer(bytes: Uint8Array): ArrayBuffer {
+  return bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer;
+}
+
+function toHex(buffer: ArrayBuffer): string {
+  return [...new Uint8Array(buffer)].map((value) => value.toString(16).padStart(2, "0")).join("");
+}
+
+async function sha256Hex(value: string): Promise<string> {
+  const digest = await crypto.subtle.digest("SHA-256", asArrayBuffer(encoder.encode(value)));
+  return toHex(digest);
+}
+
+function randomHex(length: number): string {
+  const byteLength = Math.ceil(length / 2);
+  const buffer = new Uint8Array(byteLength);
+  crypto.getRandomValues(buffer);
+  return [...buffer].map((value) => value.toString(16).padStart(2, "0")).join("").slice(0, length);
+}
+
+async function generateApiKey(): Promise<{ rawKey: string; keyHash: string; prefix: string }> {
+  const token = randomHex(API_KEY_TOKEN_LENGTH);
+  const rawKey = `${API_KEY_PREFIX}${token}`;
+  const keyHash = await sha256Hex(rawKey);
+  return {
+    rawKey,
+    keyHash,
+    prefix: rawKey.slice(0, API_KEY_PREFIX_LENGTH),
+  };
+}
 
 export async function upsertUserProfile(profile: ProfileInput): Promise<void> {
   const displayName = profile.name.trim() || null;
@@ -219,60 +257,88 @@ export async function upsertUserProfile(profile: ProfileInput): Promise<void> {
       `.execute(trx);
 
       if (!profile.grantSignupBonus) {
+        if (!profile.createDefaultApiKey) {
+          return;
+        }
+      } else {
+        const insertedGrant = await sql<{ id: string }>`
+          INSERT INTO credit_grants (
+            user_id,
+            grant_key,
+            grant_type,
+            plan_code,
+            total_credits,
+            remaining_credits,
+            expires_at,
+            metadata
+          )
+          VALUES (
+            ${profile.id},
+            ${`signup_bonus:${profile.id}`},
+            'promo_bonus',
+            'free',
+            ${SIGNUP_BONUS_CREDITS},
+            ${SIGNUP_BONUS_CREDITS},
+            NULL,
+            ${JSON.stringify({ reason: "signup_bonus" })}::jsonb
+          )
+          ON CONFLICT (grant_key) DO NOTHING
+          RETURNING id
+        `.execute(trx);
+
+        const grantId = insertedGrant.rows[0]?.id;
+        if (grantId) {
+          await sql`
+            INSERT INTO credit_transactions (
+              user_id,
+              grant_id,
+              kind,
+              amount,
+              metadata
+            )
+            VALUES (
+              ${profile.id},
+              ${grantId}::uuid,
+              'grant',
+              ${SIGNUP_BONUS_CREDITS},
+              ${JSON.stringify({
+                grant_key: `signup_bonus:${profile.id}`,
+                grant_type: "promo_bonus",
+                reason: "signup_bonus",
+              })}::jsonb
+            )
+          `.execute(trx);
+        }
+      }
+
+      if (!profile.createDefaultApiKey) {
         return;
       }
 
-      const insertedGrant = await sql<{ id: string }>`
-        INSERT INTO credit_grants (
-          user_id,
-          grant_key,
-          grant_type,
-          plan_code,
-          total_credits,
-          remaining_credits,
-          expires_at,
-          metadata
-        )
-        VALUES (
-          ${profile.id},
-          ${`signup_bonus:${profile.id}`},
-          'promo_bonus',
-          'free',
-          ${SIGNUP_BONUS_CREDITS},
-          ${SIGNUP_BONUS_CREDITS},
-          NULL,
-          ${JSON.stringify({ reason: "signup_bonus" })}::jsonb
-        )
-        ON CONFLICT (grant_key) DO NOTHING
-        RETURNING id
-      `.execute(trx);
-
-      const grantId = insertedGrant.rows[0]?.id;
-      if (!grantId) {
-        return;
-      }
-
+      const generatedKey = await generateApiKey();
       await sql`
-        INSERT INTO credit_transactions (
+        INSERT INTO api_keys (
           user_id,
-          grant_id,
-          kind,
-          amount,
-          metadata
+          name,
+          key_hash,
+          prefix,
+          raw_key,
+          is_active
         )
-        VALUES (
+        SELECT
           ${profile.id},
-          ${grantId}::uuid,
-          'grant',
-          ${SIGNUP_BONUS_CREDITS},
-          ${JSON.stringify({
-            grant_key: `signup_bonus:${profile.id}`,
-            grant_type: "promo_bonus",
-            reason: "signup_bonus",
-          })}::jsonb
+          ${DEFAULT_API_KEY_NAME},
+          ${generatedKey.keyHash},
+          ${generatedKey.prefix},
+          ${generatedKey.rawKey},
+          TRUE
+        WHERE NOT EXISTS (
+          SELECT 1
+          FROM api_keys
+          WHERE user_id = ${profile.id}
+            AND is_active = TRUE
         )
       `.execute(trx);
-
     }),
   );
 }

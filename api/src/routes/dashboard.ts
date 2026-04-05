@@ -143,6 +143,7 @@ function normalizeApiKeySummary(record: Record<string, unknown> | null): Record<
     id: String(payload.id ?? ""),
     name: String(payload.name ?? ""),
     prefix: String(payload.prefix ?? ""),
+    raw_key: payload.raw_key == null ? null : String(payload.raw_key),
     created_at: payload.created_at ?? null,
     last_used_at: payload.last_used_at ?? null,
     is_active: Boolean(payload.is_active ?? false)
@@ -269,6 +270,7 @@ async function provisionUserProfileFromAuthUser(db: DatabaseClient, userId: stri
           monthly_credit_limit,
           rate_limit_per_sec,
           stripe_customer_id,
+          has_payment_method_on_file,
           stripe_subscription_id,
           billing_hold,
           auto_recharge_enabled,
@@ -292,6 +294,7 @@ async function fetchUserProfile(db: DatabaseClient, userId: string): Promise<Rec
           monthly_credit_limit,
           rate_limit_per_sec,
           stripe_customer_id,
+          has_payment_method_on_file,
           stripe_subscription_id,
           billing_hold,
           auto_recharge_enabled,
@@ -327,18 +330,20 @@ async function insertApiKey(
   userId: string,
   name: string,
   keyHash: string,
-  prefix: string
+  prefix: string,
+  rawKey: string
 ): Promise<Record<string, unknown>> {
   const row = await db.fetchrow(
     `
-      INSERT INTO api_keys (user_id, name, key_hash, prefix, is_active)
-      VALUES ($1, $2, $3, $4, TRUE)
-      RETURNING id, name, prefix, created_at, last_used_at, is_active
+      INSERT INTO api_keys (user_id, name, key_hash, prefix, raw_key, is_active)
+      VALUES ($1, $2, $3, $4, $5, TRUE)
+      RETURNING id, name, prefix, raw_key, created_at, last_used_at, is_active
     `,
     userId,
     name,
     keyHash,
-    prefix
+    prefix,
+    rawKey
   );
   if (!row) {
     apiError(500, "Failed to create API key.");
@@ -349,7 +354,7 @@ async function insertApiKey(
 async function listApiKeysForUser(db: DatabaseClient, userId: string): Promise<Record<string, unknown>[]> {
   const rows = await db.fetch(
     `
-      SELECT id, name, prefix, created_at, last_used_at, is_active
+      SELECT id, name, prefix, raw_key, created_at, last_used_at, is_active
       FROM api_keys
       WHERE user_id = $1
       ORDER BY created_at DESC
@@ -705,7 +710,14 @@ export function createDashboardRouter(): any {
     }
 
     const generated = await generateApiKey();
-    const created = await insertApiKey(db, session.userId, name, generated.keyHash, generated.prefix);
+    const created = await insertApiKey(
+      db,
+      session.userId,
+      name,
+      generated.keyHash,
+      generated.prefix,
+      generated.rawKey
+    );
     return c.json(
       {
         key_id: String(created.id),
@@ -1061,6 +1073,16 @@ export function createDashboardRouter(): any {
           stripeCustomerId,
           stripeSubscriptionId
         );
+        await db.execute(
+          `
+            UPDATE user_profiles
+            SET
+                has_payment_method_on_file = TRUE,
+                updated_at = NOW()
+            WHERE id = $1
+          `,
+          session.userId
+        );
 
         let notification = null;
         let invoiceId = normalizeExpandableId(checkoutSession.invoice);
@@ -1263,10 +1285,31 @@ export function createDashboardRouter(): any {
     const session = c.get("session") as DashboardSession;
     const profile = await fetchUserProfile(db, session.userId);
     if (!profile?.stripe_customer_id) {
+      await db.execute(
+        `
+          UPDATE user_profiles
+          SET
+              has_payment_method_on_file = FALSE,
+              updated_at = NOW()
+          WHERE id = $1
+        `,
+        session.userId
+      );
       return c.json({ methods: [] });
     }
     try {
       const methods = await listPaymentMethods(config, String(profile.stripe_customer_id));
+      await db.execute(
+        `
+          UPDATE user_profiles
+          SET
+              has_payment_method_on_file = $2,
+              updated_at = NOW()
+          WHERE id = $1
+        `,
+        session.userId,
+        methods.length > 0
+      );
       return c.json({ methods });
     } catch (error) {
       if (error instanceof StripeServiceError) {

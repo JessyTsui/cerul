@@ -224,8 +224,8 @@ export function welcomeTemplate(params: {
     title: `Welcome to Cerul, ${name}!`,
     intro: "Your account is ready.",
     body: [
-      "You now have 1,000 free search requests each month to try Cerul with your own workflows.",
-      "Create an API key from the dashboard whenever you are ready to connect an agent or internal tool.",
+      "You now have 100 signup credits and 10 free searches each day to start testing Cerul with your own workflows.",
+      "A default API key is ready in your dashboard, and you can add a payment method there whenever you want the 300-credit monthly free tier.",
       "The quickstart docs walk through the search API, dashboard basics, and how to get your first request live.",
     ],
     cta: {

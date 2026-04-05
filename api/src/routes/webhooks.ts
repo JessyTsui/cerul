@@ -127,12 +127,33 @@ async function processStripeEvent(db: DatabaseClient, config: any, event: Record
 
   if (eventType === "checkout.session.completed" || eventType === "checkout.session.async_payment_succeeded") {
     const metadata = asRecord(eventObject.metadata);
+    const mode = asString(eventObject.mode) ?? "";
+    if (mode === "setup") {
+      if (!isCheckoutComplete(eventObject)) {
+        return;
+      }
+      const stripeCustomerId = asString(eventObject.customer);
+      if (!stripeCustomerId) {
+        return;
+      }
+      await db.execute(
+        `
+          UPDATE user_profiles
+          SET
+              has_payment_method_on_file = TRUE,
+              updated_at = NOW()
+          WHERE stripe_customer_id = $1
+        `,
+        stripeCustomerId
+      );
+      return;
+    }
+
     const userId = asString(metadata.user_id) ?? asString(eventObject.client_reference_id);
     if (!userId) {
       return;
     }
 
-    const mode = asString(eventObject.mode) ?? "";
     if (mode === "subscription") {
       if (!isCheckoutComplete(eventObject) || !isSubscriptionCheckoutReady(eventObject)) {
         return;
@@ -142,6 +163,16 @@ async function processStripeEvent(db: DatabaseClient, config: any, event: Record
         userId,
         asString(eventObject.customer),
         asString(eventObject.subscription)
+      );
+      await db.execute(
+        `
+          UPDATE user_profiles
+          SET
+              has_payment_method_on_file = TRUE,
+              updated_at = NOW()
+          WHERE id = $1
+        `,
+        userId
       );
       return;
     }
@@ -177,6 +208,16 @@ async function processStripeEvent(db: DatabaseClient, config: any, event: Record
     if (!stripeCustomerId) {
       return;
     }
+    await db.execute(
+      `
+        UPDATE user_profiles
+        SET
+            has_payment_method_on_file = TRUE,
+            updated_at = NOW()
+        WHERE stripe_customer_id = $1
+      `,
+      stripeCustomerId
+    );
     await syncSubscriptionStatus(db, stripeCustomerId, {
       id: asString(eventObject.subscription),
       status: "active"

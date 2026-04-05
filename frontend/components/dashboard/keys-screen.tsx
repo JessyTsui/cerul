@@ -53,7 +53,7 @@ export function DashboardKeysScreen() {
     <DashboardLayout
       currentPath="/dashboard/keys"
       title="API Keys"
-      description="Secrets are shown once at creation and never again."
+      description="Plaintext keys stay masked by default and auto-hide after reveal."
       actions={
         <button type="button" className="button-primary" onClick={() => setIsDialogOpen(true)}>
           + New Key

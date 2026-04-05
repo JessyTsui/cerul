@@ -154,7 +154,7 @@ export function CreateKeyDialog({
           <div className="mt-6 space-y-4">
             <div className="rounded-[20px] border border-[var(--border-brand)] bg-[var(--brand-subtle)] px-5 py-5">
               <p className="font-mono text-xs uppercase tracking-[0.16em] text-[var(--brand-bright)]">
-                Visible once
+                Raw key
               </p>
               <p className="mt-3 font-mono text-sm leading-7 break-all text-[var(--foreground)]">
                 {createdKey.rawKey}
@@ -162,8 +162,8 @@ export function CreateKeyDialog({
             </div>
 
             <p className="text-sm leading-6 text-[var(--foreground-secondary)]">
-              Cerul only returns the raw key once. Copy it now and store it in your
-              secrets manager before closing this dialog.
+              Copy it now for immediate use. You can also reveal or copy the masked
+              key later from the dashboard if needed.
             </p>
 
             {error ? (

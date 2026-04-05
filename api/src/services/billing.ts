@@ -9,9 +9,10 @@ import {
   includedCreditsForPlan,
   MAX_REFERRALS_PER_USER,
   normalizePlanCode,
-  REFERRAL_BONUS_CREDITS,
   REFERRAL_CODE_MAX_LENGTH,
   REFERRAL_CODE_MIN_LENGTH,
+  REFERRAL_INVITEE_BONUS,
+  REFERRAL_INVITER_BONUS,
   REFERRAL_REWARD_DELAY_DAYS,
   SIGNUP_BONUS_CREDITS,
   topupAmountCents,
@@ -33,7 +34,7 @@ export class BillingHoldError extends Error {
 }
 
 export const DEFAULT_MONTHLY_CREDIT_LIMITS: Record<string, number> = {
-  free: 0,
+  free: 300,
   pro: 5_000,
   enterprise: 100_000
 };
@@ -77,6 +78,7 @@ type UserBillingProfile = {
   billing_hold: boolean;
   stripe_customer_id: string | null;
   stripe_subscription_id: string | null;
+  has_payment_method_on_file: boolean;
   auto_recharge_enabled: boolean;
   auto_recharge_threshold: number;
   auto_recharge_quantity: number;
@@ -188,6 +190,8 @@ type BillingCatalogState = {
   referral: {
     code: string;
     bonus_credits: number;
+    invitee_bonus_credits: number;
+    inviter_bonus_credits: number;
     reward_delay_days: number;
     redeemed_code: string | null;
     status: string | null;
@@ -320,6 +324,7 @@ async function fetchUserBillingProfile(db: DatabaseClient, userId: string): Prom
           billing_hold,
           stripe_customer_id,
           stripe_subscription_id,
+          has_payment_method_on_file,
           auto_recharge_enabled,
           auto_recharge_threshold,
           auto_recharge_quantity
@@ -340,10 +345,25 @@ async function fetchUserBillingProfile(db: DatabaseClient, userId: string): Prom
     billing_hold: Boolean(row.billing_hold),
     stripe_customer_id: row.stripe_customer_id == null ? null : String(row.stripe_customer_id),
     stripe_subscription_id: row.stripe_subscription_id == null ? null : String(row.stripe_subscription_id),
+    has_payment_method_on_file: Boolean(row.has_payment_method_on_file),
     auto_recharge_enabled: Boolean(row.auto_recharge_enabled),
     auto_recharge_threshold: normalizeInteger(row.auto_recharge_threshold, 100),
     auto_recharge_quantity: Math.max(normalizeInteger(row.auto_recharge_quantity, 1_000), 1_000)
   };
+}
+
+function effectiveMonthlyCreditLimit(profile: UserBillingProfile): number {
+  const planCode = normalizePlanCode(profile.tier);
+  const configuredLimit = normalizeInteger(
+    profile.monthly_credit_limit,
+    monthlyCreditLimitForTier(profile.tier)
+  );
+
+  if (planCode === "free" && !profile.has_payment_method_on_file) {
+    return 0;
+  }
+
+  return configuredLimit;
 }
 
 async function expireElapsedCreditGrants(db: DatabaseClient, userId: string): Promise<void> {
@@ -471,15 +491,14 @@ async function ensureCurrentPeriodGrant(
   }
 
   const [periodStart, periodEnd] = currentBillingPeriod(referenceDate);
-  const totalCredits = normalizeInteger(
-    profile.monthly_credit_limit,
-    includedCreditsForPlan(planCode)
-  );
+  const totalCredits = planCode === "free"
+    ? effectiveMonthlyCreditLimit(profile)
+    : normalizeInteger(profile.monthly_credit_limit, includedCreditsForPlan(planCode));
   if (totalCredits <= 0) {
     return;
   }
-
   const grantType: CreditGrantType = planCode === "free" ? "free_monthly" : "subscription_monthly";
+
   await createCreditGrant(db, {
     userId,
     grantKey: `${grantType}:${userId}:${periodStart}`,
@@ -862,7 +881,7 @@ async function awardDueReferralCredits(db: DatabaseClient): Promise<void> {
       grantKey: `referral_bonus:${redemption.id}:referrer`,
       grantType: "referral_bonus",
       planCode: null,
-      totalCredits: REFERRAL_BONUS_CREDITS,
+      totalCredits: REFERRAL_INVITER_BONUS,
       expiresAt,
       referralRedemptionId: String(redemption.id),
       metadata: {
@@ -874,7 +893,7 @@ async function awardDueReferralCredits(db: DatabaseClient): Promise<void> {
       grantKey: `referral_bonus:${redemption.id}:referee`,
       grantType: "referral_bonus",
       planCode: null,
-      totalCredits: REFERRAL_BONUS_CREDITS,
+      totalCredits: REFERRAL_INVITEE_BONUS,
       expiresAt,
       referralRedemptionId: String(redemption.id),
       metadata: {
@@ -1718,7 +1737,7 @@ export async function redeemReferralCode(
       grantKey: `referral_bonus:${redemption.id}:referrer`,
       grantType: "referral_bonus",
       planCode: null,
-      totalCredits: REFERRAL_BONUS_CREDITS,
+      totalCredits: REFERRAL_INVITER_BONUS,
       expiresAt,
       referralRedemptionId: String(redemption.id),
       metadata: { role: "referrer" }
@@ -1728,7 +1747,7 @@ export async function redeemReferralCode(
       grantKey: `referral_bonus:${redemption.id}:referee`,
       grantType: "referral_bonus",
       planCode: null,
-      totalCredits: REFERRAL_BONUS_CREDITS,
+      totalCredits: REFERRAL_INVITEE_BONUS,
       expiresAt,
       referralRedemptionId: String(redemption.id),
       metadata: { role: "referee" }
@@ -1767,7 +1786,9 @@ export async function fetchBillingCatalogState(
       expiring_credits: wallet.expiring_credits,
       referral: {
         code: referralCode.code,
-        bonus_credits: REFERRAL_BONUS_CREDITS,
+        bonus_credits: REFERRAL_INVITEE_BONUS,
+        invitee_bonus_credits: REFERRAL_INVITEE_BONUS,
+        inviter_bonus_credits: REFERRAL_INVITER_BONUS,
         reward_delay_days: REFERRAL_REWARD_DELAY_DAYS,
         redeemed_code: redemption?.referee_code ?? null,
         status: redemption?.status ?? null,
@@ -2033,7 +2054,7 @@ async function consumeSearchUsage(
       userId: input.userId,
       periodStart,
       periodEnd,
-      creditsLimit: normalizeInteger(profile.monthly_credit_limit, monthlyCreditLimitForTier(profile.tier)),
+      creditsLimit: effectiveMonthlyCreditLimit(profile),
       creditsUsed: chargedCredits
     });
 
@@ -2220,7 +2241,7 @@ export async function fetchUsageSummary(
     return {
       tier: profile.tier,
       plan_code: normalizePlanCode(profile.tier),
-      credits_limit: normalizeInteger(profile.monthly_credit_limit, monthlyCreditLimitForTier(profile.tier)),
+      credits_limit: effectiveMonthlyCreditLimit(profile),
       credits_used: normalizeInteger(summary.credits_used, 0),
       credits_remaining: wallet.wallet_balance,
       wallet_balance: wallet.wallet_balance,

@@ -172,6 +172,7 @@ function createAuth() {
               email: user.email,
               name: user.name,
               grantSignupBonus: true,
+              createDefaultApiKey: true,
             });
 
             // Social signups can arrive already verified, so they should
