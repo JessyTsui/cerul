@@ -30,7 +30,7 @@
 <br />
 
 <div align="center">
-  <video src="./assets/demo.mp4" width="720" controls></video>
+  <video src="https://github.com/user-attachments/assets/e0982048-3b40-42b9-80b6-a79b401d2355" width="720" controls></video>
 </div>
 
 <br />
