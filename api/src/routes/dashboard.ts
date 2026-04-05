@@ -356,7 +356,7 @@ async function listApiKeysForUser(db: DatabaseClient, userId: string): Promise<R
     `
       SELECT id, name, prefix, raw_key, created_at, last_used_at, is_active
       FROM api_keys
-      WHERE user_id = $1
+      WHERE user_id = $1 AND is_active = TRUE
       ORDER BY created_at DESC
     `,
     userId
