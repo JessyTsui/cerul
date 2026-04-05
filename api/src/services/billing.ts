@@ -40,9 +40,9 @@ export const DEFAULT_MONTHLY_CREDIT_LIMITS: Record<string, number> = {
 };
 
 export const TIER_KEY_LIMITS: Record<string, number> = {
-  free: 1,
-  pro: 5,
-  enterprise: 25
+  free: 2,
+  pro: Infinity,
+  enterprise: Infinity
 };
 
 const PAID_TIERS = new Set(["pro", "enterprise"]);

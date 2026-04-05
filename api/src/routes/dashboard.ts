@@ -700,10 +700,11 @@ export function createDashboardRouter(): any {
     }
 
     const tier = String(profile.tier ?? "free").toLowerCase();
+    const hasPaid = isPaidTier(tier) || Boolean(profile.has_payment_method_on_file);
     const activeKeyCount = await countActiveApiKeys(db, session.userId);
-    const keyLimit = keyLimitForTier(tier);
+    const keyLimit = hasPaid ? Infinity : keyLimitForTier(tier);
     if (activeKeyCount >= keyLimit) {
-      apiError(403, `${tier} tier allows at most ${keyLimit} active API key(s).`);
+      apiError(403, `Free tier allows at most ${keyLimit} active API key(s). Add a payment method to unlock unlimited keys.`);
     }
     if (!name) {
       apiError(422, "API key name must not be empty.");
