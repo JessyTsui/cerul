@@ -67,6 +67,25 @@ Or install via the skills CLI:
 npx skills add cerul-ai/cerul
 ```
 
+<details>
+<summary><strong>Install for specific agents</strong></summary>
+
+```bash
+# Claude Code
+mkdir -p ~/.claude/skills/cerul && curl -fsSL https://raw.githubusercontent.com/cerul-ai/cerul/main/skills/cerul/SKILL.md -o ~/.claude/skills/cerul/SKILL.md
+
+# Windsurf
+mkdir -p ~/.codeium/windsurf/skills/cerul && curl -fsSL https://raw.githubusercontent.com/cerul-ai/cerul/main/skills/cerul/SKILL.md -o ~/.codeium/windsurf/skills/cerul/SKILL.md
+
+# OpenCode
+mkdir -p ~/.config/opencode/skills/cerul && curl -fsSL https://raw.githubusercontent.com/cerul-ai/cerul/main/skills/cerul/SKILL.md -o ~/.config/opencode/skills/cerul/SKILL.md
+
+# Cline / Cursor
+mkdir -p .claude/skills/cerul && curl -fsSL https://raw.githubusercontent.com/cerul-ai/cerul/main/skills/cerul/SKILL.md -o .claude/skills/cerul/SKILL.md
+```
+
+</details>
+
 ### CLI
 
 ```bash
