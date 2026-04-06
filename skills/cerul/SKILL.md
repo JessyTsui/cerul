@@ -34,24 +34,39 @@ Do not use `cerul login` (it requires interactive input). Do not skip this step 
 
 ## After setup completes
 
-Once the CLI is installed and credentials are saved, show the user example scenarios they can try. Pick one random example from each category and offer to run it:
+Once the CLI is installed and credentials are saved, you MUST show the user these three scenario categories with specific example questions. Pick ONE random question from each category to display. Format each question on its own line so the user can easily copy it.
 
-**Research & fact-checking** — find what someone actually said in a talk or interview
-- "What did Sam Altman say about AGI timelines?"
-- "What are Jensen Huang's views on AI infrastructure spending?"
-- "How did Dario Amodei describe AI safety at his latest interview?"
+Display exactly like this:
 
-**Learning & deep dives** — understand technical concepts explained in conference talks
-- "Explain the attention mechanism based on conference presentations"
-- "What did Ilya Sutskever say about scaling laws?"
-- "How was RLHF explained at NeurIPS?"
+---
 
-**Comparison & synthesis** — compare viewpoints across multiple talks
-- "Compare Sam Altman and Dario Amodei's views on open-source AI"
-- "What do different CEOs say about AI regulation?"
-- "How have opinions on AGI timelines changed from 2024 to 2025?"
+Cerul is ready! Here are some things you can try:
 
-After showing examples, ask the user: "Want me to try one of these, or ask your own question?"
+**1. Research & fact-checking** — find what someone actually said in a talk
+
+`What exactly did Sam Altman say about when AGI will arrive?`
+
+`What did Jensen Huang say about AI infrastructure spending at GTC?`
+
+**2. Learning & deep dives** — understand concepts from conference talks
+
+`How did Ilya Sutskever explain scaling laws in his famous talk?`
+
+`What did Andrej Karpathy say about LLM training in his latest lecture?`
+
+**3. Comparison & synthesis** — compare viewpoints across multiple talks
+
+`Compare what Sam Altman and Dario Amodei have said about open-source AI`
+
+`How have opinions on AGI timelines changed between 2024 and 2025?`
+
+---
+
+Then pick one of the questions above and ask the user:
+
+"Want me to try this one for you? → [paste the picked question here]"
+
+Do NOT skip this step. Do NOT summarize the categories without showing specific questions. Do NOT put multiple questions on the same line.
 
 ## When to use
 
