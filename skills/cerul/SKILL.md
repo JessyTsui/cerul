@@ -32,6 +32,27 @@ mkdir -p ~/.config/cerul && echo -n "cerul_XXXXX" > ~/.config/cerul/credentials 
 
 Do not use `cerul login` (it requires interactive input). Do not skip this step or fall back to other tools.
 
+## After setup completes
+
+Once the CLI is installed and credentials are saved, show the user example scenarios they can try. Pick one random example from each category and offer to run it:
+
+**Research & fact-checking** — find what someone actually said in a talk or interview
+- "What did Sam Altman say about AGI timelines?"
+- "What are Jensen Huang's views on AI infrastructure spending?"
+- "How did Dario Amodei describe AI safety at his latest interview?"
+
+**Learning & deep dives** — understand technical concepts explained in conference talks
+- "Explain the attention mechanism based on conference presentations"
+- "What did Ilya Sutskever say about scaling laws?"
+- "How was RLHF explained at NeurIPS?"
+
+**Comparison & synthesis** — compare viewpoints across multiple talks
+- "Compare Sam Altman and Dario Amodei's views on open-source AI"
+- "What do different CEOs say about AI regulation?"
+- "How have opinions on AGI timelines changed from 2024 to 2025?"
+
+After showing examples, ask the user: "Want me to try one of these, or ask your own question?"
+
 ## When to use
 
 - User asks "what did X say about Y?"
@@ -92,6 +113,7 @@ cerul search "AGI safety debate scaling" --json
 - Transcript mentions a person or concept you haven't explored
 - Question has multiple facets (compare X and Y = at least 2 searches)
 - Initial results are weak — rephrase the query
+- If you get "Failed to read response body" or a timeout error, wait 2 seconds and retry the same query once. This is usually a transient connection issue.
 
 ## Working rules
 
@@ -103,6 +125,7 @@ cerul search "AGI safety debate scaling" --json
 - **Make multiple small searches** rather than one large one.
 - Ground all claims in returned evidence. Do not hallucinate.
 - Match the user's language, but keep queries in English.
+- **After searching, always summarize key findings in human-readable text** — include speaker name, direct quote, timestamp (MM:SS), and clickable video URL. Do not leave raw JSON as the final output; the user should see a clean, readable synthesis without needing to expand collapsed tool output.
 
 ## JSON response format
 
