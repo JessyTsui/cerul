@@ -654,6 +654,7 @@ export function PlaygroundScreen() {
         transcript: r.transcript, thumbnail_url: r.thumbnailUrl,
         keyframe_url: r.keyframeUrl, duration: r.duration,
         source: r.source, speaker: r.speaker,
+        published_at: r.publishedAt, language: r.language,
         timestamp_start: r.timestampStart, timestamp_end: r.timestampEnd,
       })),
     };
