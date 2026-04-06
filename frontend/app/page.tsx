@@ -16,7 +16,7 @@ import { getServerSession } from "@/lib/auth-server";
 import { getAuthUiConfig } from "@/lib/auth-providers";
 
 const homeDescription =
-  "Cerul is the real-time video search engine for AI agents — search by meaning across visual scenes, speech, and on-screen content.";
+  "Cerul — the video search layer for AI agents. Search video by meaning — across speech, visuals, and on-screen text.";
 
 const siteOrigin = getSiteOrigin();
 
@@ -74,7 +74,7 @@ const jsonLd = {
       "@type": "WebAPI",
       name: "Cerul Search API",
       description:
-        "Real-time video search API for AI agents — search by meaning across visual scenes, speech, and on-screen content.",
+        "The video search layer for AI agents. Search video by meaning — across speech, visuals, and on-screen text.",
       documentation: `${siteOrigin}/docs`,
       url: siteOrigin,
       provider: {
@@ -165,9 +165,8 @@ export default async function HomePage() {
 
                 <BlurFade delay={300}>
                   <p className="mx-auto mt-6 max-w-2xl text-lg leading-relaxed text-[var(--foreground-secondary)] sm:text-xl">
-                    Real-time search across visual scenes, speech, and on-screen
-                    content — through a single, secure API built for agents and
-                    RAG workflows.
+                    Search video by meaning — across speech, visuals, and
+                    on-screen text.
                   </p>
                 </BlurFade>
 
@@ -267,7 +266,7 @@ export default async function HomePage() {
             <Features
               eyebrow="Features"
               title="Teach your AI agents to see"
-              description="Built from the ground up for AI agents that need to understand visual content, not just text."
+              description="Search video by meaning — across speech, visuals, and on-screen text."
               features={features}
             />
 

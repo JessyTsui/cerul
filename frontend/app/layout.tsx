@@ -79,7 +79,7 @@ export const metadata: Metadata = {
     template: "%s | Cerul",
   },
   description:
-    "Cerul is the real-time video search engine for AI agents — search by meaning across visual scenes, speech, and on-screen content.",
+    "Cerul — the video search layer for AI agents. Search video by meaning — across speech, visuals, and on-screen text.",
   icons: {
     icon: [
       { url: "/logo.svg", type: "image/svg+xml" },
@@ -95,7 +95,7 @@ export const metadata: Metadata = {
   openGraph: {
     title: "Cerul",
     description:
-      "Cerul is the real-time video search engine for AI agents — search by meaning across visual scenes, speech, and on-screen content.",
+      "Cerul — the video search layer for AI agents. Search video by meaning — across speech, visuals, and on-screen text.",
     url: siteOrigin,
     siteName: "Cerul",
     type: "website",
@@ -105,7 +105,7 @@ export const metadata: Metadata = {
     card: "summary_large_image",
     title: "Cerul",
     description:
-      "Cerul is the real-time video search engine for AI agents — search by meaning across visual scenes, speech, and on-screen content.",
+      "Cerul — the video search layer for AI agents. Search video by meaning — across speech, visuals, and on-screen text.",
     images: defaultTwitterImages,
   },
 };

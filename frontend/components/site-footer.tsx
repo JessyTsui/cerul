@@ -40,8 +40,8 @@ export function SiteFooter() {
           <div className="space-y-6">
             <BrandMark />
             <p className="max-w-sm text-[15px] leading-relaxed text-[var(--foreground-secondary)]">
-              The real-time video search engine for AI agents. Search by meaning
-              across visual scenes, speech, and on-screen content.
+              The video search layer for AI agents. Search video by meaning
+              — across speech, visuals, and on-screen text.
             </p>
             <div className="flex items-center gap-4">
               <a
