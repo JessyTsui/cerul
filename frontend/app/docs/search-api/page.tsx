@@ -90,13 +90,28 @@ const responseFields = [
   { name: "request_id", type: "string", description: "Unique request identifier in the form req_<24-hex-chars>." },
 ];
 
-const errors = [
-  { status: "400", code: "invalid_request", description: "Invalid JSON body or request validation error." },
-  { status: "401", code: "unauthorized", description: "Missing or invalid API key." },
-  { status: "403", code: "forbidden", description: "Inactive API key, billing hold, or insufficient credits." },
-  { status: "404", code: "not_found", description: "Route or resource not found." },
-  { status: "429", code: "rate_limited", description: "Rate limit exceeded. Retry after the limit resets." },
-  { status: "500+", code: "api_error", description: "Internal server error." },
+type ErrorRow = {
+  status: string;
+  code: string;
+  subcode?: string;
+  description: string;
+};
+
+// Public error contract. Keep in sync with openapi.yaml and docs/public-api-errors.md.
+// Clients should branch on `error.subcode ?? error.code`.
+const errors: ErrorRow[] = [
+  { status: "400", code: "invalid_request", description: "Generic schema or request validation failure — fix the body and do not retry unchanged." },
+  { status: "401", code: "unauthorized", subcode: "missing_authorization", description: "No Authorization header on /v1/*. Add Authorization: Bearer cerul_... and retry." },
+  { status: "401", code: "unauthorized", subcode: "invalid_authorization_header", description: "Authorization header is not a Bearer token (wrong scheme or empty Bearer)." },
+  { status: "401", code: "unauthorized", subcode: "malformed_api_key", description: "API key fails format validation. Check copy/paste and the cerul_ prefix." },
+  { status: "401", code: "unauthorized", subcode: "invalid_api_key", description: "Key format is valid but the key is unknown. Regenerate it in the dashboard." },
+  { status: "403", code: "forbidden", subcode: "api_key_inactive", description: "API key was revoked or deactivated. Regenerate or reactivate the key." },
+  { status: "403", code: "forbidden", subcode: "billing_hold", description: "Account is under billing review. Contact support; do not auto-retry." },
+  { status: "403", code: "forbidden", subcode: "insufficient_credits", description: "Wallet balance is below request cost. Check GET /v1/usage and prompt for top-up." },
+  { status: "404", code: "not_found", description: "Unknown /v1/* path or resource." },
+  { status: "422", code: "invalid_request", subcode: "invalid_image", description: "Search image could not be decoded, downloaded, or is unsupported. Text-only search still works." },
+  { status: "429", code: "rate_limited", subcode: "rate_limit_exceeded", description: "Per-key rate limit exceeded. Honor Retry-After plus jitter before retrying." },
+  { status: "500", code: "internal_error", description: "Unhandled internal failure. Retry with bounded exponential backoff and include request_id if it repeats." },
 ];
 
 export default function SearchApiPage() {
@@ -461,23 +476,57 @@ console.log(data);`}
                   </h2>
                 </FadeIn>
 
+                <p className="mt-4 max-w-4xl text-[15px] leading-8 text-[var(--foreground-secondary)]">
+                  Every /v1 error response carries an <code className="font-mono">error.code</code>{" "}
+                  (coarse category) plus an optional <code className="font-mono">error.subcode</code>{" "}
+                  (fine-grained reason), a human-readable{" "}
+                  <code className="font-mono">error.message</code>, and a{" "}
+                  <code className="font-mono">request_id</code> that matches the{" "}
+                  <code className="font-mono">x-request-id</code> response header. Clients and
+                  agents should branch on{" "}
+                  <code className="font-mono">error.subcode ?? error.code</code> — this preserves
+                  backward compatibility for callers that only understand the coarse code.
+                </p>
+
+                <div className="mt-6">
+                  <CodeBlock
+                    code={`{
+  "error": {
+    "code": "forbidden",
+    "subcode": "insufficient_credits",
+    "message": "Insufficient credits for this request",
+    "request_id": "req_9f8c1d5b2a9f7d1a8c4e6b02"
+  }
+}`}
+                    language="json"
+                    filename="error-envelope.json"
+                  />
+                </div>
+
                 <div className="mt-6 overflow-hidden rounded-[20px] border border-[var(--border)]">
                   <table className="w-full text-left text-sm">
                     <thead className="bg-[var(--background-elevated)] text-[var(--foreground-secondary)]">
                       <tr>
                         <th className="px-4 py-3 font-medium">Status</th>
                         <th className="px-4 py-3 font-medium">Code</th>
+                        <th className="px-4 py-3 font-medium">Subcode</th>
                         <th className="px-4 py-3 font-medium">Description</th>
                       </tr>
                     </thead>
                     <tbody className="bg-white/65">
                       {errors.map((error) => (
-                        <tr key={`${error.status}-${error.code}`} className="border-t border-[var(--border)]">
+                        <tr
+                          key={`${error.status}-${error.code}-${error.subcode ?? "none"}`}
+                          className="border-t border-[var(--border)]"
+                        >
                           <td className="px-4 py-4 font-mono text-[var(--foreground)]">
                             {error.status}
                           </td>
                           <td className="px-4 py-4 font-mono text-[var(--foreground-secondary)]">
                             {error.code}
+                          </td>
+                          <td className="px-4 py-4 font-mono text-[var(--foreground-secondary)]">
+                            {error.subcode ?? "—"}
                           </td>
                           <td className="px-4 py-4 text-[var(--foreground-secondary)]">
                             {error.description}
@@ -487,6 +536,15 @@ console.log(data);`}
                     </tbody>
                   </table>
                 </div>
+
+                <p className="mt-5 max-w-4xl text-sm leading-7 text-[var(--foreground-secondary)]">
+                  Only auto-retry <code className="font-mono">rate_limit_exceeded</code>,{" "}
+                  <code className="font-mono">rate_limited</code>, and{" "}
+                  <code className="font-mono">internal_error</code>. For auth, billing, and
+                  invalid-request failures, stop retrying and surface the problem.{" "}
+                  <code className="font-mono">429</code> responses include a{" "}
+                  <code className="font-mono">Retry-After</code> header in seconds.
+                </p>
 
                 <div className="mt-8 flex flex-wrap gap-3">
                   <Link href="/docs" className="button-secondary">

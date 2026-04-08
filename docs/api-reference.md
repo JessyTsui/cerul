@@ -402,25 +402,68 @@ async function getUsage() {
 
 ## Error Handling
 
-The public API uses a stable JSON error envelope:
-
-| HTTP Status | `error.code` | Description |
-|-------------|--------------|-------------|
-| `400` | `invalid_request` | Invalid JSON body or request validation error |
-| `401` | `unauthorized` | Missing or invalid API key |
-| `403` | `forbidden` | Inactive API key or insufficient credits |
-| `404` | `not_found` | Route or resource not found |
-| `422` | `invalid_request` | Payload is syntactically valid but semantically invalid |
-| `429` | `rate_limited` | Rate limit exceeded |
-| `500+` | `api_error` | Unexpected server error |
-
-Error response format:
+The public API uses a stable JSON error envelope. Every `/v1` error response
+carries an `error.code` (coarse category) plus an optional `error.subcode`
+(fine-grained reason) and a `request_id` that matches the `x-request-id`
+response header.
 
 ```json
 {
   "error": {
-    "code": "invalid_request",
-    "message": "Unsupported URL format"
+    "code": "forbidden",
+    "subcode": "insufficient_credits",
+    "message": "Insufficient credits for this request",
+    "request_id": "req_9f8c1d5b2a9f7d1a8c4e6b02"
   }
 }
 ```
+
+**Branch on `error.subcode ?? error.code`.** This keeps older clients that
+only understand `error.code` working, while giving newer clients and agents a
+stable fine-grained key.
+
+### Coarse codes
+
+| HTTP | `error.code` | When |
+|---|---|---|
+| `400` | `invalid_request` | Generic schema or request validation failure |
+| `401` | `unauthorized` | Missing or invalid credentials — see auth subcodes |
+| `403` | `forbidden` | Key inactive, billing hold, or insufficient credits |
+| `404` | `not_found` | Unknown `/v1/*` path |
+| `422` | `invalid_request` | Payload accepted but semantically invalid (e.g. `invalid_image`) |
+| `429` | `rate_limited` | Rate limit exceeded — honor `Retry-After` |
+| `500` | `internal_error` | Unhandled internal failure — retry with bounded backoff |
+
+### Subcodes
+
+| `subcode` | Coarse | HTTP | Trigger | Recommended action |
+|---|---|---|---|---|
+| `missing_authorization` | `unauthorized` | `401` | No `Authorization` header on `/v1/*` | Add `Authorization: Bearer cerul_...` and retry |
+| `invalid_authorization_header` | `unauthorized` | `401` | Non-Bearer or empty Bearer | Fix the header format before retrying |
+| `malformed_api_key` | `unauthorized` | `401` | API key fails format validation | Check the copy/paste and prefix |
+| `invalid_api_key` | `unauthorized` | `401` | Key format OK, key unknown | Regenerate the key in the dashboard |
+| `api_key_inactive` | `forbidden` | `403` | Key was revoked or deactivated | Regenerate or reactivate the key |
+| `billing_hold` | `forbidden` | `403` | Account is under billing review | Contact support; do not retry |
+| `insufficient_credits` | `forbidden` | `403` | Wallet balance below request cost | Call `GET /v1/usage`, show remaining balance, prompt top-up |
+| `rate_limit_exceeded` | `rate_limited` | `429` | Per-key rate limit exceeded | Wait `Retry-After` seconds plus jitter, then retry |
+| `invalid_image` | `invalid_request` | `422` | Search image can't be decoded, downloaded, or is unsupported | Fix the image input; text-only search can still work |
+
+### Response headers
+
+- `x-request-id` — opaque request identifier. Always echoed; include it in
+  support tickets and client logs.
+- `www-authenticate: Bearer` — sent on `401` responses.
+- `retry-after` — sent on `429` responses. Integer seconds.
+
+### Recommended client behavior
+
+1. Compute `branchKey = error.subcode ?? error.code`.
+2. Persist `error.request_id` and the `x-request-id` header in logs.
+3. Only auto-retry `rate_limit_exceeded`, `rate_limited`, and `internal_error`.
+4. For auth and billing failures, stop retrying and surface the problem.
+5. For `invalid_request` and `invalid_image`, repair the request before retrying.
+
+The full machine-readable reference lives in
+[`public-api-errors.md`](./public-api-errors.md), and the endpoint-level
+contract is in [`openapi.yaml`](../openapi.yaml) (kept in sync with
+`cerul-api`).
