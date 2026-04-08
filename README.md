@@ -11,7 +11,8 @@
     <a href="https://cerul.ai/docs"><strong>Docs</strong></a> &middot;
     <a href="https://cerul.ai/docs/search-api"><strong>API Reference</strong></a> &middot;
     <a href="https://cerul.ai/pricing"><strong>Pricing</strong></a> &middot;
-    <a href="https://x.com/cerul_hq"><img src="https://img.shields.io/badge/follow-%40cerul__hq-000?style=flat-square&logo=x" alt="Follow on X" /></a>
+    <a href="https://x.com/cerul_hq"><img src="https://img.shields.io/badge/follow-%40cerul__hq-000?style=flat-square&logo=x" alt="Follow on X" /></a> &middot;
+    <a href="https://discord.gg/qHDEMQB9vN"><img src="https://img.shields.io/badge/join-Discord-5865F2?style=flat-square&logo=discord&logoColor=white" alt="Join Discord" /></a>
   </p>
 
   <p>

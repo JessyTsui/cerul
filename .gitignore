@@ -30,6 +30,7 @@ eval/*_results.tsv
 
 # CF Workers local secrets
 api/.dev.vars
+.wrangler/
 .vercel
 
 # Claude Code local config
