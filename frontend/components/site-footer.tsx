@@ -27,6 +27,7 @@ export function SiteFooter() {
       title: "Company",
       links: [
         { label: "Contact", href: "mailto:support@cerul.ai" },
+        { label: "Brand & Press", href: "/brand" },
         { label: "Terms", href: "/terms" },
         { label: "Privacy", href: "/privacy" },
       ],
