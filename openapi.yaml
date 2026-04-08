@@ -5,6 +5,9 @@ info:
   description: |
     Video understanding search API for AI agents.
     Search across indexed videos by meaning — visual scenes, speech, and on-screen text.
+
+    Public `/v1` responses include an `x-request-id` header. Public errors use
+    a stable envelope: `{ "error": { "code", "subcode?", "message", "request_id?" } }`.
   contact:
     name: Cerul
     url: https://cerul.ai
@@ -38,7 +41,8 @@ paths:
         results with relevance scores and source URLs.
 
         Each search costs 1 credit, or 2 credits when `include_answer` is true.
-        Image search is not part of the first public contract.
+        Search requests may include text, an image, or both. Invalid image
+        inputs return `422`.
       requestBody:
         required: true
         content:
@@ -63,9 +67,28 @@ paths:
                     min_duration: 60
                     max_duration: 7200
                     source: youtube
+          multipart/form-data:
+            schema:
+              $ref: "#/components/schemas/SearchMultipartRequest"
+            encoding:
+              filters:
+                contentType: application/json
+            examples:
+              imageUpload:
+                summary: Multipart search with image upload
+                value:
+                  query: red race car drifting around a corner
+                  image_file: <binary image payload>
+                  max_results: 5
+                  include_answer: false
+                  ranking_mode: embedding
+                  filters: "{\"source\":\"youtube\"}"
       responses:
         "200":
           description: Search results
+          headers:
+            x-request-id:
+              $ref: "#/components/headers/XRequestId"
           content:
             application/json:
               schema:
@@ -132,6 +155,8 @@ paths:
           $ref: "#/components/responses/Unauthorized"
         "403":
           $ref: "#/components/responses/Forbidden"
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
         "429":
           $ref: "#/components/responses/RateLimited"
         "500":
@@ -149,6 +174,9 @@ paths:
       responses:
         "200":
           description: Usage information
+          headers:
+            x-request-id:
+              $ref: "#/components/headers/XRequestId"
           content:
             application/json:
               schema:
@@ -182,26 +210,38 @@ paths:
           $ref: "#/components/responses/InternalError"
 
 components:
+  headers:
+    XRequestId:
+      description: Request identifier for tracing and support.
+      schema:
+        type: string
+        pattern: ^req_[0-9a-f]{24}$
+
   securitySchemes:
     bearerAuth:
       type: http
       scheme: bearer
       description: |
-        Cerul API key. Pass as `Authorization: Bearer cerul_sk_...`.
+        Cerul API key. Pass as `Authorization: Bearer cerul_...`.
         Create and manage keys from the [dashboard](https://cerul.ai/dashboard).
 
   schemas:
     SearchRequest:
       type: object
       additionalProperties: false
-      required:
-        - query
+      anyOf:
+        - required:
+            - query
+        - required:
+            - image
       properties:
         query:
           type: string
           maxLength: 400
           pattern: \S
           description: Natural language search query. Must contain at least one non-whitespace character.
+        image:
+          $ref: "#/components/schemas/SearchImageInput"
         max_results:
           type: integer
           minimum: 1
@@ -224,6 +264,59 @@ components:
             Costs 2 credits instead of 1.
         filters:
           $ref: "#/components/schemas/SearchFilters"
+
+    SearchMultipartRequest:
+      type: object
+      additionalProperties: false
+      anyOf:
+        - required:
+            - query
+        - required:
+            - image_file
+      properties:
+        query:
+          type: string
+          maxLength: 400
+          pattern: \S
+          description: Natural language search query.
+        image_file:
+          type: string
+          format: binary
+          description: JPEG, PNG, or WebP image up to 10 MB.
+        max_results:
+          type: integer
+          minimum: 1
+          maximum: 50
+          default: 10
+        ranking_mode:
+          type: string
+          enum:
+            - embedding
+            - rerank
+          default: embedding
+        include_answer:
+          type: boolean
+          default: false
+        filters:
+          type: string
+          description: JSON-encoded object that matches `SearchFilters`.
+
+    SearchImageInput:
+      type: object
+      additionalProperties: false
+      oneOf:
+        - required:
+            - url
+        - required:
+            - base64
+      properties:
+        url:
+          type: string
+          format: uri
+          description: Publicly reachable image URL.
+        base64:
+          type: string
+          description: Raw base64 image payload or a `data:` URI.
 
     SearchFilters:
       type: object
@@ -482,15 +575,36 @@ components:
                 - forbidden
                 - not_found
                 - rate_limited
+                - internal_error
                 - api_error
-              description: Machine-readable error code.
+              description: Machine-readable coarse error code.
+            subcode:
+              type: string
+              enum:
+                - missing_authorization
+                - invalid_authorization_header
+                - malformed_api_key
+                - invalid_api_key
+                - api_key_inactive
+                - billing_hold
+                - insufficient_credits
+                - rate_limit_exceeded
+                - invalid_image
+              description: Optional fine-grained machine-readable error code. Prefer `subcode` over `code` when present.
             message:
               type: string
               description: Human-readable error message.
+            request_id:
+              type: string
+              pattern: ^req_[0-9a-f]{24}$
+              description: Unique request identifier for debugging and support.
 
   responses:
     BadRequest:
       description: Invalid request body or missing required field.
+      headers:
+        x-request-id:
+          $ref: "#/components/headers/XRequestId"
       content:
         application/json:
           schema:
@@ -524,6 +638,8 @@ components:
     Unauthorized:
       description: Missing or invalid API key.
       headers:
+        x-request-id:
+          $ref: "#/components/headers/XRequestId"
         WWW-Authenticate:
           schema:
             type: string
@@ -538,28 +654,35 @@ components:
               value:
                 error:
                   code: unauthorized
-                  message: Missing Authorization header.
-            invalidBearerScheme:
-              summary: Authorization header must use Bearer
+                  subcode: missing_authorization
+                  message: Missing Authorization header
+            invalidAuthorizationHeader:
+              summary: Authorization header is malformed
               value:
                 error:
                   code: unauthorized
-                  message: Authorization header must use the Bearer scheme.
+                  subcode: invalid_authorization_header
+                  message: Authorization header must use the Bearer scheme
             malformedApiKey:
               summary: API key format is invalid
               value:
                 error:
                   code: unauthorized
-                  message: Malformed API key.
+                  subcode: malformed_api_key
+                  message: Malformed API key
             invalidApiKey:
               summary: API key not recognized
               value:
                 error:
                   code: unauthorized
+                  subcode: invalid_api_key
                   message: Invalid API key
 
     Forbidden:
       description: Inactive API key or insufficient credits.
+      headers:
+        x-request-id:
+          $ref: "#/components/headers/XRequestId"
       content:
         application/json:
           schema:
@@ -570,23 +693,60 @@ components:
               value:
                 error:
                   code: forbidden
+                  subcode: api_key_inactive
                   message: API key is inactive
             billingHold:
               summary: Billing account requires review
               value:
                 error:
                   code: forbidden
-                  message: Billing account requires review before more requests can be served.
+                  subcode: billing_hold
+                  message: Billing account requires review before more requests can be served
             requestCreditsInsufficient:
               summary: Insufficient credits for this request
               value:
                 error:
                   code: forbidden
+                  subcode: insufficient_credits
                   message: Insufficient credits for this request
+
+    UnprocessableEntity:
+      description: Request payload is syntactically valid but contains an invalid search image.
+      headers:
+        x-request-id:
+          $ref: "#/components/headers/XRequestId"
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+          examples:
+            unsupportedImageType:
+              summary: Uploaded image type is not supported
+              value:
+                error:
+                  code: invalid_request
+                  subcode: invalid_image
+                  message: "Unsupported image type: image/gif"
+            invalidBase64:
+              summary: Base64 payload cannot be decoded
+              value:
+                error:
+                  code: invalid_request
+                  subcode: invalid_image
+                  message: Invalid base64 image payload
+            downloadFailed:
+              summary: Remote image URL could not be fetched
+              value:
+                error:
+                  code: invalid_request
+                  subcode: invalid_image
+                  message: "Failed to download image: 404"
 
     RateLimited:
       description: Rate limit exceeded.
       headers:
+        x-request-id:
+          $ref: "#/components/headers/XRequestId"
         Retry-After:
           schema:
             type: integer
@@ -599,15 +759,19 @@ components:
           example:
             error:
               code: rate_limited
+              subcode: rate_limit_exceeded
               message: Rate limit exceeded
 
     InternalError:
       description: Unexpected server error.
+      headers:
+        x-request-id:
+          $ref: "#/components/headers/XRequestId"
       content:
         application/json:
           schema:
             $ref: "#/components/schemas/ErrorResponse"
           example:
             error:
-              code: api_error
+              code: internal_error
               message: Internal server error
