@@ -1131,14 +1131,22 @@ button:focus-visible,
   background: var(--surface-hover);
 }
 
-.soft-theme .surface-elevated {
+/* `.soft-theme-vars` is the palette-only counterpart of `.soft-theme`
+ * (see the block after `.soft-theme::after`). Elements rendered inside a
+ * portal subtree that uses `.soft-theme-vars` (e.g. `QueryLogDetailDrawer`)
+ * need the same visual treatment these descendant rules apply under
+ * `.soft-theme`, otherwise they fall back to the dark-theme base rules
+ * earlier in this file and look out of place on cream backgrounds. */
+.soft-theme .surface-elevated,
+.soft-theme-vars .surface-elevated {
   background: var(--surface-elevated);
   border-color: var(--border);
   box-shadow: var(--shadow);
   backdrop-filter: blur(18px);
 }
 
-.soft-theme .surface-elevated::before {
+.soft-theme .surface-elevated::before,
+.soft-theme-vars .surface-elevated::before {
   background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.88), transparent);
 }
 
@@ -1243,7 +1251,13 @@ button:focus-visible,
   box-shadow: none;
 }
 
-.soft-theme .badge-success {
+/* Mirror `.soft-theme .badge-success` under `.soft-theme-vars` so the
+ * `QueryLogDetailDrawer` (and any future portal using `.soft-theme-vars`)
+ * gets the low-saturation forest-green variant designed for cream
+ * backgrounds, instead of falling back to the brighter `#4ade80` base
+ * rule that was designed for dark surfaces. */
+.soft-theme .badge-success,
+.soft-theme-vars .badge-success {
   background: rgba(31, 141, 74, 0.12);
   border-color: rgba(31, 141, 74, 0.18);
   color: var(--success);
