@@ -34,6 +34,17 @@ function formatLatency(value: number | null): string {
   return value < 1000 ? `${Math.round(value)}ms` : `${(value / 1000).toFixed(2)}s`;
 }
 
+// query_logs.filters is jsonb with default '{}'. Most /v1/search callers
+// don't pass filters so `detail.filters` is usually an empty object, which
+// stringifies to the literal "{}" and renders as a suspiciously empty box.
+// Only show the raw JSON block when there's actual content.
+function hasQueryLogFilters(value: unknown): boolean {
+  if (value == null) return false;
+  if (typeof value !== "object") return false;
+  if (Array.isArray(value)) return value.length > 0;
+  return Object.keys(value as Record<string, unknown>).length > 0;
+}
+
 export function QueryLogDetailDrawer({
   selectedRequestId,
   showUserColumn,
@@ -124,7 +135,21 @@ export function QueryLogDetailDrawer({
   }
 
   return createPortal(
-    <div className="fixed inset-0 z-[120]">
+    // We use `soft-theme-vars` (NOT the full `soft-theme`) here.
+    //
+    // createPortal escapes the React ancestry and mounts under <body>,
+    // bypassing the `.soft-theme` wrapper that AdminAppShell /
+    // DashboardAppShell apply. Without any light-theme class the CSS
+    // variables fall back to the `:root` dark theme defaults.
+    //
+    // BUT applying full `.soft-theme` to this full-viewport root is
+    // wrong — `.soft-theme` also carries `position: relative`, an opaque
+    // radial-gradient background, and `::before/::after` decorative
+    // layers that would cover the underlying page and fight Tailwind's
+    // `fixed` positioning. `.soft-theme-vars` is a palette-only variant
+    // that only declares the CSS custom properties, so children resolve
+    // to the light tokens without any of the full-screen side effects.
+    <div className="soft-theme-vars fixed inset-0 z-[120]">
       <button
         type="button"
         aria-label="Close query log detail"
@@ -200,20 +225,31 @@ export function QueryLogDetailDrawer({
 
                 {detail.answerText ? (
                   <section className="rounded-[24px] border border-[var(--border-brand)] bg-[var(--brand-subtle)] px-5 py-5">
-                    <p className="font-mono text-[11px] uppercase tracking-[0.16em] text-[var(--brand-bright)]">
-                      Answer
+                    <div className="flex items-center gap-2">
+                      <span aria-hidden className="text-base leading-none">✨</span>
+                      <p className="font-mono text-[11px] uppercase tracking-[0.16em] text-[var(--brand-bright)]">
+                        AI Answer
+                      </p>
+                    </div>
+                    <p className="mt-3 whitespace-pre-wrap text-sm leading-7 text-[var(--foreground)]">
+                      {detail.answerText}
                     </p>
-                    <p className="mt-3 text-sm leading-7 text-[var(--foreground)]">{detail.answerText}</p>
                   </section>
                 ) : null}
 
                 <section className="surface-elevated rounded-[26px] px-5 py-5">
                   <p className="font-mono text-[11px] uppercase tracking-[0.16em] text-[var(--foreground-tertiary)]">
-                    Filters JSON
+                    Filters
                   </p>
-                  <pre className="mt-3 overflow-x-auto rounded-[18px] bg-[rgba(255,255,255,0.68)] p-4 text-xs leading-6 text-[var(--foreground-secondary)]">
-                    {JSON.stringify(detail.filters ?? {}, null, 2)}
-                  </pre>
+                  {hasQueryLogFilters(detail.filters) ? (
+                    <pre className="mt-3 overflow-x-auto rounded-[18px] bg-[rgba(255,255,255,0.68)] p-4 text-xs leading-6 text-[var(--foreground-secondary)]">
+                      {JSON.stringify(detail.filters, null, 2)}
+                    </pre>
+                  ) : (
+                    <p className="mt-3 text-sm text-[var(--foreground-secondary)]">
+                      No filters were applied to this query.
+                    </p>
+                  )}
                 </section>
 
                 <section className="surface-elevated rounded-[26px] px-5 py-5">

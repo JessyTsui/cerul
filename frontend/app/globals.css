@@ -177,6 +177,65 @@ body::after {
     radial-gradient(circle at 68% 78%, rgba(222, 205, 184, 0.3), transparent 28%);
 }
 
+/*
+ * Lightweight palette-only variant of `.soft-theme`. Use on overlay /
+ * portal subtrees (e.g. `createPortal` destinations like the query log
+ * detail drawer) that need the light color tokens but must NOT inherit
+ * `.soft-theme`'s visual layer: `position: relative`, the opaque
+ * radial-gradient background, or the `::before/::after` decorative layers.
+ *
+ * Applying full `.soft-theme` to a full-viewport portal root would:
+ *   - cover the underlying page with an opaque canvas (breaking the
+ *     see-through dim overlay)
+ *   - fight with Tailwind `fixed`/`absolute` utilities via
+ *     `position: relative`
+ *   - paint grid + radial decorations across the whole screen
+ *
+ * This class contains ONLY the CSS custom property definitions from
+ * `.soft-theme`, so children can `var(--surface-elevated)` etc. and
+ * resolve to the light palette without any of the side effects.
+ * Keep this block in sync with the variable block in `.soft-theme` above.
+ */
+.soft-theme-vars {
+  --background: #f5efe3;
+  --background-elevated: #fffaf2;
+  --background-sunken: #ece2d2;
+
+  --foreground: #241d15;
+  --foreground-secondary: #6d6558;
+  --foreground-tertiary: #958b7d;
+
+  --brand: #88a5f2;
+  --brand-bright: #5e79cf;
+  --brand-deep: #2f405a;
+  --brand-glow: rgba(136, 165, 242, 0.18);
+  --brand-subtle: rgba(136, 165, 242, 0.14);
+
+  --accent: #d49c69;
+  --accent-bright: #b67e4f;
+  --accent-glow: rgba(212, 156, 105, 0.18);
+  --accent-subtle: rgba(212, 156, 105, 0.12);
+
+  --success: #1f8d4a;
+  --warning: #b18418;
+  --error: #bf5b46;
+
+  --surface: rgba(255, 250, 242, 0.74);
+  --surface-hover: rgba(255, 252, 247, 0.92);
+  --surface-active: rgba(252, 246, 237, 0.96);
+  --surface-elevated: rgba(255, 252, 247, 0.92);
+
+  --border: rgba(79, 67, 51, 0.12);
+  --border-strong: rgba(79, 67, 51, 0.2);
+  --border-brand: rgba(136, 165, 242, 0.28);
+
+  --shadow-sm: 0 1px 2px rgba(70, 52, 29, 0.05);
+  --shadow: 0 18px 40px rgba(70, 52, 29, 0.08);
+  --shadow-lg: 0 28px 70px rgba(70, 52, 29, 0.12);
+  --shadow-glow: 0 0 40px rgba(136, 165, 242, 0.18);
+  --shadow-accent-glow: 0 0 40px rgba(212, 156, 105, 0.15);
+}
+
 a {
   color: inherit;
   text-decoration: none;
@@ -1072,14 +1131,22 @@ button:focus-visible,
   background: var(--surface-hover);
 }
 
-.soft-theme .surface-elevated {
+/* `.soft-theme-vars` is the palette-only counterpart of `.soft-theme`
+ * (see the block after `.soft-theme::after`). Elements rendered inside a
+ * portal subtree that uses `.soft-theme-vars` (e.g. `QueryLogDetailDrawer`)
+ * need the same visual treatment these descendant rules apply under
+ * `.soft-theme`, otherwise they fall back to the dark-theme base rules
+ * earlier in this file and look out of place on cream backgrounds. */
+.soft-theme .surface-elevated,
+.soft-theme-vars .surface-elevated {
   background: var(--surface-elevated);
   border-color: var(--border);
   box-shadow: var(--shadow);
   backdrop-filter: blur(18px);
 }
 
-.soft-theme .surface-elevated::before {
+.soft-theme .surface-elevated::before,
+.soft-theme-vars .surface-elevated::before {
   background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.88), transparent);
 }
 
@@ -1184,7 +1251,13 @@ button:focus-visible,
   box-shadow: none;
 }
 
-.soft-theme .badge-success {
+/* Mirror `.soft-theme .badge-success` under `.soft-theme-vars` so the
+ * `QueryLogDetailDrawer` (and any future portal using `.soft-theme-vars`)
+ * gets the low-saturation forest-green variant designed for cream
+ * backgrounds, instead of falling back to the brighter `#4ade80` base
+ * rule that was designed for dark surfaces. */
+.soft-theme .badge-success,
+.soft-theme-vars .badge-success {
   background: rgba(31, 141, 74, 0.12);
   border-color: rgba(31, 141, 74, 0.18);
   color: var(--success);
