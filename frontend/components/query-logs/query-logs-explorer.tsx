@@ -72,14 +72,17 @@ export function QueryLogsExplorer({
     message: null,
   });
   const [refreshTick, setRefreshTick] = useState(0);
+  // `hasFilters` controls a few cosmetic things in the filter bar (e.g. the
+  // "{N} matches" badge label and the bottom hint text), but it does NOT
+  // gate fetching anymore. The page should always load the most recent
+  // queries on mount — empty filter == "show me the latest", not
+  // "wait for me to type something". `LIMIT N ORDER BY created_at DESC`
+  // hits `idx_query_logs_created_at` and is O(N), perfectly safe to
+  // default-load.
   const hasFilters = hasActiveQueryLogFilters(urlFilters);
   const filterKey = serializeQueryLogFiltersToSearchParams(urlFilters, null).toString();
 
   useEffect(() => {
-    if (!hasFilters) {
-      return undefined;
-    }
-
     let cancelled = false;
     const loader = isAdmin ? listAdminQueryLogs : queryLogs.list;
     const currentFilters = parseQueryLogFiltersFromSearchParams(new URLSearchParams(filterKey));
@@ -109,16 +112,12 @@ export function QueryLogsExplorer({
     return () => {
       cancelled = true;
     };
-  }, [filterKey, hasFilters, isAdmin, refreshTick]);
+  }, [filterKey, isAdmin, refreshTick]);
 
   const Layout = isAdmin ? AdminLayout : DashboardLayout;
-  const currentData = hasFilters && dataState.filterKey === filterKey
-    ? dataState.data
-    : null;
-  const currentError = hasFilters && errorState.filterKey === filterKey
-    ? errorState.message
-    : null;
-  const isLoading = hasFilters && currentData == null && currentError == null;
+  const currentData = dataState.filterKey === filterKey ? dataState.data : null;
+  const currentError = errorState.filterKey === filterKey ? errorState.message : null;
+  const isLoading = currentData == null && currentError == null;
   const activeData = currentData ?? {
     items: [],
     total: 0,
@@ -165,11 +164,6 @@ export function QueryLogsExplorer({
               Retry
             </button>
           }
-        />
-      ) : !hasFilters ? (
-        <DashboardState
-          title="Start with a request ID or filter"
-          description="This view keeps the query log list focused and shareable. Once you apply a filter, the resulting state stays in the URL and the detail drawer can deep-link to a single request."
         />
       ) : activeData.items.length === 0 ? (
         <DashboardState

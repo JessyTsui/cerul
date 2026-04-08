@@ -242,7 +242,7 @@ export function QueryLogsFilterBar({
             ) : hasActiveFilters ? (
               <span>Filters stay in the URL so you can refresh, share, and return with browser history intact.</span>
             ) : (
-              <span>Enter a filter above or paste a request ID to begin.</span>
+              <span>Showing the most recent queries. Use any filter above to narrow the list.</span>
             )}
           </div>
           <div className="flex flex-wrap gap-2">
