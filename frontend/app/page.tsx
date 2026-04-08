@@ -52,6 +52,7 @@ const jsonLd = {
       sameAs: [
         "https://github.com/cerul-ai/cerul",
         "https://x.com/cerul_hq",
+        "https://discord.gg/qHDEMQB9vN",
       ],
     },
     {
