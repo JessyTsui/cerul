@@ -3,6 +3,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { AIToolbar } from "@/components/ai-toolbar";
 import { CodeBlock } from "@/components/code-block";
+import { DocsExportMarkdown } from "@/components/docs-export-markdown";
 import { DocsHeader } from "@/components/docs-header";
 import { DocsSidebar } from "@/components/docs-sidebar";
 import { DocsToc, type TocItem } from "@/components/docs-toc";
@@ -84,6 +85,10 @@ export default async function DocDetailPage({ params }: DocPageProps) {
                 <div className="mt-4 flex flex-wrap items-center gap-3 text-sm text-[var(--foreground-secondary)]">
                   <span>{page.readingTime}</span>
                   <span>Public integration guide</span>
+                  <span className="text-[var(--foreground-tertiary)]">&middot;</span>
+                  <time dateTime={page.lastUpdated}>
+                    Updated {new Date(page.lastUpdated).toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" })}
+                  </time>
                 </div>
                 <p className="mt-5 max-w-3xl text-[15px] leading-8 text-[var(--foreground-secondary)]">
                   {page.summary}
@@ -98,11 +103,16 @@ export default async function DocDetailPage({ params }: DocPageProps) {
                   </Link>
                 </div>
 
-                <div className="mt-7" data-docs-ai-anchor="true">
+                <div className="mt-7 flex flex-wrap items-center gap-2" data-docs-ai-anchor="true">
                   <AIToolbar
                     copyRootSelector="[data-ai-copy-root='true']"
                     pageUrl={`/docs/${slug}`}
                     pageTitle={page.title}
+                  />
+                  <DocsExportMarkdown
+                    pageTitle={page.title}
+                    pageUrl={`/docs/${slug}`}
+                    copyRootSelector="[data-ai-copy-root='true']"
                   />
                 </div>
               </section>

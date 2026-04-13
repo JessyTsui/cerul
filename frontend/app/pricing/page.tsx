@@ -6,9 +6,14 @@ import { FadeIn, BlurFade } from "@/components/animations";
 import { pricingFaqs, pricingTiers } from "@/lib/site";
 import { BillingCheckoutButton } from "@/components/billing-checkout-button";
 
+import { getSiteOrigin } from "@/lib/site-url";
+
+const pricingDescription =
+  "Cerul pricing — free tier with 10 daily searches, pay-as-you-go at $8 per 1K credits, Pro at $29.90/month with 5,000 included credits, and custom Enterprise plans.";
+
 export const metadata: Metadata = {
   title: "Pricing",
-  description: "Cerul pricing for evaluation, production API usage, and enterprise deployment.",
+  description: pricingDescription,
   alternates: {
     canonical: "/pricing",
   },
@@ -26,6 +31,34 @@ const featuresComparison = [
   { name: "Private indexing", free: false, payg: false, pro: false, enterprise: true },
   { name: "SLA guarantee", free: false, payg: false, pro: false, enterprise: true },
 ];
+
+const siteOrigin = getSiteOrigin();
+
+const faqJsonLd = {
+  "@context": "https://schema.org",
+  "@type": "FAQPage",
+  mainEntity: pricingFaqs.map((faq) => ({
+    "@type": "Question",
+    name: faq.question,
+    acceptedAnswer: {
+      "@type": "Answer",
+      text: faq.answer,
+    },
+  })),
+};
+
+const webPageJsonLd = {
+  "@context": "https://schema.org",
+  "@type": "WebPage",
+  name: "Cerul Pricing",
+  description: pricingDescription,
+  url: `${siteOrigin}/pricing`,
+  isPartOf: {
+    "@type": "WebSite",
+    name: "Cerul",
+    url: siteOrigin,
+  },
+};
 
 export default function PricingPage() {
   const planKeys = ["free", "payg", "pro", "enterprise"] as const;
@@ -49,6 +82,15 @@ export default function PricingPage() {
   );
 
   return (
+    <>
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(faqJsonLd) }}
+      />
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(webPageJsonLd) }}
+      />
     <div className="soft-theme overflow-x-clip">
       <div className="mx-auto flex min-h-screen max-w-[1400px] flex-col px-4 pb-8 pt-4 sm:px-6 lg:px-8">
         <SiteHeader currentPath="/pricing" />
@@ -342,5 +384,6 @@ export default function PricingPage() {
         <SiteFooter />
       </div>
     </div>
+    </>
   );
 }

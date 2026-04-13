@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import localFont from "next/font/local";
+import { GoogleAnalytics } from "@next/third-parties/google";
 import {
   defaultOpenGraphImages,
   defaultTwitterImages,
@@ -121,6 +122,7 @@ export default function RootLayout({
       className={`${spaceGroteskDisplay.variable} ${spaceGroteskSans.variable} ${jetBrainsMono.variable}`}
     >
       <body suppressHydrationWarning>{children}</body>
+      <GoogleAnalytics gaId="G-9316B2EDH4" />
     </html>
   );
 }

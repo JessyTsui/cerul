@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Image from "next/image";
 import Link from "next/link";
 import { SiteFooter } from "@/components/site-footer";
 import { SiteHeader } from "@/components/site-header";
@@ -223,11 +224,13 @@ export default async function HomePage() {
                       rel="noopener noreferrer"
                       className="group relative block aspect-[16/10] overflow-hidden rounded-xl bg-[#1a1614]"
                     >
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img
+                      <Image
                         src="https://cdn.cerul.ai/homepage/sam-altman-lex-fridman-20m23s.webp"
                         alt="Sam Altman on AI video generation — Lex Fridman Podcast"
-                        className="absolute inset-0 h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
+                        fill
+                        priority
+                        className="object-cover transition-transform duration-500 group-hover:scale-105"
+                        sizes="(max-width: 1024px) 100vw, 50vw"
                       />
                       <div className="absolute inset-0 flex items-center justify-center">
                         <div className="flex h-16 w-16 items-center justify-center rounded-full bg-red-600 shadow-lg transition-transform duration-300 group-hover:scale-110">

@@ -15,6 +15,7 @@ export type DocPage = {
   summary: string;
   kicker: string;
   readingTime: string;
+  lastUpdated: string;
   sections: DocSection[];
 };
 
@@ -203,6 +204,7 @@ export const docsPages: DocPage[] = [
     summary: "Monitor your credit balance, daily free allowance, wallet breakdown, and rate limits with GET /v1/usage.",
     kicker: "API reference",
     readingTime: "2 min",
+    lastUpdated: "2026-04-01",
     sections: [
       {
         title: "Check usage",

@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { AIToolbar } from "@/components/ai-toolbar";
 import { ApiReferenceSidebar } from "@/components/api-reference-sidebar";
 import { CodeBlock } from "@/components/code-block";
+import { DocsExportMarkdown } from "@/components/docs-export-markdown";
 import { DocsHeader } from "@/components/docs-header";
 import { DocsTabs } from "@/components/docs-tabs";
 import { DocsToc, type TocItem } from "@/components/docs-toc";
@@ -10,6 +11,8 @@ import { apiReferenceEndpoints } from "@/lib/docs";
 
 export const metadata: Metadata = {
   title: "API Reference",
+  description:
+    "Complete Cerul API reference — POST /v1/search for semantic video search and GET /v1/usage for credit and rate-limit monitoring. Bearer authentication, JSON responses.",
   alternates: {
     canonical: "/docs/api-reference",
   },
@@ -121,11 +124,20 @@ export default function ApiReferencePage() {
                   ))}
                 </div>
 
-                <div className="mt-7" data-docs-ai-anchor="true">
+                <p className="mt-4 text-sm text-[var(--foreground-tertiary)]">
+                  <time dateTime="2026-04-01">Updated Apr 1, 2026</time>
+                </p>
+
+                <div className="mt-7 flex flex-wrap items-center gap-2" data-docs-ai-anchor="true">
                   <AIToolbar
                     copyRootSelector="[data-ai-copy-root='true']"
                     pageUrl="/docs/api-reference"
                     pageTitle="Cerul API Reference"
+                  />
+                  <DocsExportMarkdown
+                    pageTitle="Cerul API Reference"
+                    pageUrl="/docs/api-reference"
+                    copyRootSelector="[data-ai-copy-root='true']"
                   />
                 </div>
               </section>

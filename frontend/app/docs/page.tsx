@@ -4,6 +4,7 @@ import Link from "next/link";
 import { AIToolbar } from "@/components/ai-toolbar";
 import { DailyFreeSearchNote } from "@/components/daily-free-search-note";
 import { CodeBlock } from "@/components/code-block";
+import { DocsExportMarkdown } from "@/components/docs-export-markdown";
 import { DocsHeader } from "@/components/docs-header";
 import { DocsSidebar } from "@/components/docs-sidebar";
 import { DocsToc, type TocItem } from "@/components/docs-toc";
@@ -73,11 +74,22 @@ export default function DocsPage() {
                   </div>
                 </FadeIn>
 
-                <div className="mt-7" data-docs-ai-anchor="true">
+                <FadeIn delay={250}>
+                  <p className="mt-4 text-sm text-[var(--foreground-tertiary)]">
+                    <time dateTime="2026-04-01">Updated Apr 1, 2026</time>
+                  </p>
+                </FadeIn>
+
+                <div className="mt-7 flex flex-wrap items-center gap-2" data-docs-ai-anchor="true">
                   <AIToolbar
                     copyRootSelector="[data-ai-copy-root='true']"
                     pageUrl="/docs"
                     pageTitle="Cerul Documentation"
+                  />
+                  <DocsExportMarkdown
+                    pageTitle="Cerul Documentation"
+                    pageUrl="/docs"
+                    copyRootSelector="[data-ai-copy-root='true']"
                   />
                 </div>
               </section>

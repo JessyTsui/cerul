@@ -3,6 +3,7 @@ import Link from "next/link";
 import { AIToolbar } from "@/components/ai-toolbar";
 import { DailyFreeSearchNote } from "@/components/daily-free-search-note";
 import { CodeBlock } from "@/components/code-block";
+import { DocsExportMarkdown } from "@/components/docs-export-markdown";
 import { DocsHeader } from "@/components/docs-header";
 import { DocsSidebar } from "@/components/docs-sidebar";
 import { DocsTabs } from "@/components/docs-tabs";
@@ -143,11 +144,20 @@ export default function SearchApiPage() {
                   Returns ranked video segments with relevance scores, timestamps, and source links.
                 </p>
 
-                <div className="mt-7" data-docs-ai-anchor="true">
+                <p className="mt-4 text-sm text-[var(--foreground-tertiary)]">
+                  <time dateTime="2026-04-01">Updated Apr 1, 2026</time>
+                </p>
+
+                <div className="mt-7 flex flex-wrap items-center gap-2" data-docs-ai-anchor="true">
                   <AIToolbar
                     copyRootSelector="[data-ai-copy-root='true']"
                     pageUrl="/docs/search-api"
                     pageTitle="Cerul Search API"
+                  />
+                  <DocsExportMarkdown
+                    pageTitle="Cerul Search API"
+                    pageUrl="/docs/search-api"
+                    copyRootSelector="[data-ai-copy-root='true']"
                   />
                 </div>
               </section>
