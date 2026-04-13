@@ -87,7 +87,7 @@ export default async function DocDetailPage({ params }: DocPageProps) {
                   <span>Public integration guide</span>
                   <span className="text-[var(--foreground-tertiary)]">&middot;</span>
                   <time dateTime={page.lastUpdated}>
-                    Updated {new Date(page.lastUpdated).toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" })}
+                    Updated {new Date(page.lastUpdated + "T00:00:00Z").toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric", timeZone: "UTC" })}
                   </time>
                 </div>
                 <p className="mt-5 max-w-3xl text-[15px] leading-8 text-[var(--foreground-secondary)]">

@@ -67,6 +67,7 @@ export function DocsExportMarkdown({
     <button
       type="button"
       onClick={exportMarkdown}
+      data-ai-copy-ignore="true"
       className="focus-ring inline-flex items-center gap-2 rounded-lg border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-sm font-medium text-[var(--foreground-secondary)] transition hover:bg-[var(--surface-hover)]"
       title="Download page as Markdown"
     >
