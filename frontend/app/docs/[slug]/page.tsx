@@ -58,7 +58,7 @@ export default async function DocDetailPage({ params }: DocPageProps) {
   ];
 
   return (
-    <div className="soft-theme min-h-screen pb-10">
+    <div className="soft-theme min-h-screen overflow-x-clip pb-10">
       <DocsHeader currentPath={`/docs/${slug}`} />
 
       <div className="mx-auto max-w-[1520px] px-4 sm:px-6 lg:px-8">

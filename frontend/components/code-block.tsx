@@ -26,7 +26,7 @@ export function CodeBlock({
   }
 
   return (
-    <div className="overflow-hidden rounded-[20px] border border-[#2b2621] bg-[#15120f] shadow-[0_18px_44px_rgba(20,15,11,0.22)]">
+    <div className="min-w-0 max-w-full overflow-hidden rounded-[20px] border border-[#2b2621] bg-[#15120f] shadow-[0_18px_44px_rgba(20,15,11,0.22)]">
       <div className="flex items-center justify-between gap-3 border-b border-white/8 bg-[#1d1916] px-4 py-3">
         <div className="flex min-w-0 items-center gap-3">
           <div className="min-w-0">
@@ -46,7 +46,7 @@ export function CodeBlock({
           {copied ? "Copied" : "Copy"}
         </button>
       </div>
-      <pre className="overflow-x-auto px-4 py-5 font-mono text-sm leading-7 text-[#f6f1e7]">
+      <pre className="max-w-full overflow-x-auto px-4 py-5 font-mono text-sm leading-7 text-[#f6f1e7]">
         <code>{code}</code>
       </pre>
     </div>

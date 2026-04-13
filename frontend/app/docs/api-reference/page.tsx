@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
-import Link from "next/link";
 import { AIToolbar } from "@/components/ai-toolbar";
+import { ApiReferenceSidebar } from "@/components/api-reference-sidebar";
 import { CodeBlock } from "@/components/code-block";
 import { DocsHeader } from "@/components/docs-header";
 import { DocsTabs } from "@/components/docs-tabs";
@@ -50,60 +50,12 @@ function getMethodClasses(method: "GET" | "POST" | "DELETE") {
 
 export default function ApiReferencePage() {
   return (
-    <div className="soft-theme min-h-screen pb-10">
+    <div className="soft-theme min-h-screen overflow-x-clip pb-10">
       <DocsHeader currentPath="/docs/api-reference" />
 
       <div className="mx-auto max-w-[1520px] px-4 sm:px-6 lg:px-8">
         <div className="mt-8 grid gap-8 lg:grid-cols-[280px_minmax(0,1fr)_220px]">
-          <aside className="sticky top-20 h-fit max-h-[calc(100vh-5.5rem)] overflow-y-auto rounded-[24px] border border-[var(--border)] bg-[rgba(255,252,247,0.78)] p-4 shadow-[0_18px_40px_rgba(36,29,21,0.06)] backdrop-blur-xl">
-            <div className="border-b border-[var(--border)] pb-4">
-              <Link
-                href="/docs"
-                className="font-mono text-[11px] uppercase tracking-[0.18em] text-[var(--brand-bright)]"
-              >
-                Documentation
-              </Link>
-              <p className="mt-2 text-base font-semibold text-[var(--foreground)]">
-                API Reference
-              </p>
-              <p className="mt-1 text-sm leading-6 text-[var(--foreground-secondary)]">
-                Stable public routes only.
-              </p>
-            </div>
-
-            <div className="mt-4 space-y-5">
-              {groups.map(([groupName, endpoints]) => (
-                <section key={groupName}>
-                  <h2 className="px-2 font-mono text-[11px] uppercase tracking-[0.18em] text-[var(--foreground-tertiary)]">
-                    {groupName}
-                  </h2>
-                  <div className="mt-2 space-y-1">
-                    {endpoints.map((endpoint) => (
-                      <a
-                        key={endpoint.id}
-                        href={`#${endpoint.id}`}
-                        className="block rounded-[14px] border-l-2 border-l-transparent px-3 py-2.5 transition hover:bg-white/70"
-                      >
-                        <div className="flex items-center gap-2">
-                          <span
-                            className={`rounded-full border px-2.5 py-1 text-[11px] font-semibold ${getMethodClasses(endpoint.method)}`}
-                          >
-                            {endpoint.method}
-                          </span>
-                          <span className="truncate text-sm text-[var(--foreground)]">
-                            {endpoint.path}
-                          </span>
-                        </div>
-                        <p className="mt-1 text-xs leading-5 text-[var(--foreground-secondary)]">
-                          {endpoint.title}
-                        </p>
-                      </a>
-                    ))}
-                  </div>
-                </section>
-              ))}
-            </div>
-          </aside>
+          <ApiReferenceSidebar groups={groups} />
 
           <main data-ai-copy-root="true" className="min-w-0">
             <article className="rounded-[28px] border border-[var(--border)] bg-[rgba(255,252,247,0.78)] px-6 py-8 shadow-[0_18px_48px_rgba(36,29,21,0.08)] backdrop-blur-xl sm:px-8">
@@ -237,8 +189,8 @@ export default function ApiReferencePage() {
                           </h3>
 
                           {endpoint.parameters.length > 0 ? (
-                            <div className="mt-4 overflow-hidden rounded-[20px] border border-[var(--border)]">
-                              <table className="w-full text-left text-sm">
+                            <div className="mt-4 overflow-x-auto rounded-[20px] border border-[var(--border)]">
+                              <table className="min-w-[640px] w-full text-left text-sm">
                                 <thead className="bg-[var(--background-elevated)] text-[var(--foreground-secondary)]">
                                   <tr>
                                     <th className="px-4 py-3 font-medium">Name</th>

@@ -14,6 +14,22 @@ interface FadeInProps {
   once?: boolean;
 }
 
+function useMountedReveal() {
+  const [isVisible, setIsVisible] = useState(false);
+
+  useEffect(() => {
+    const frameId = window.requestAnimationFrame(() => {
+      setIsVisible(true);
+    });
+
+    return () => {
+      window.cancelAnimationFrame(frameId);
+    };
+  }, []);
+
+  return isVisible;
+}
+
 export function FadeIn({
   children,
   delay = 0,
@@ -21,32 +37,8 @@ export function FadeIn({
   direction = "up",
   distance = 24,
   className = "",
-  once = true,
 }: FadeInProps) {
-  const [isVisible, setIsVisible] = useState(false);
-  const ref = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    const observer = new IntersectionObserver(
-      ([entry]) => {
-        if (entry?.isIntersecting) {
-          setIsVisible(true);
-          if (once && ref.current) {
-            observer.unobserve(ref.current);
-          }
-        } else if (!once) {
-          setIsVisible(false);
-        }
-      },
-      { threshold: 0.1, rootMargin: "0px 0px -50px 0px" }
-    );
-
-    if (ref.current) {
-      observer.observe(ref.current);
-    }
-
-    return () => observer.disconnect();
-  }, [once]);
+  const isVisible = useMountedReveal();
 
   const getTransform = () => {
     if (direction === "none") return "translate3d(0, 0, 0)";
@@ -67,8 +59,7 @@ export function FadeIn({
 
   return (
     <div
-      ref={ref}
-      className={className}
+      className={`motion-reveal-fade ${className}`.trim()}
       style={{
         opacity: isVisible ? 1 : 0,
         transform: getTransform(),
@@ -94,31 +85,10 @@ export function StaggerContainer({
   staggerDelay = 100,
   baseDelay = 0,
 }: StaggerContainerProps) {
-  const [isVisible, setIsVisible] = useState(false);
-  const ref = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    const observer = new IntersectionObserver(
-      ([entry]) => {
-        if (entry?.isIntersecting) {
-          setIsVisible(true);
-          if (ref.current) {
-            observer.unobserve(ref.current);
-          }
-        }
-      },
-      { threshold: 0.1, rootMargin: "0px 0px -50px 0px" }
-    );
-
-    if (ref.current) {
-      observer.observe(ref.current);
-    }
-
-    return () => observer.disconnect();
-  }, []);
+  const isVisible = useMountedReveal();
 
   return (
-    <div ref={ref} className={className}>
+    <div className={`motion-reveal-stagger ${className}`.trim()}>
       {Array.isArray(children)
         ? children.map((child, index) => (
             <div
@@ -268,41 +238,37 @@ export function AnimatedCounter({
   className = "",
 }: AnimatedCounterProps) {
   const [count, setCount] = useState(0);
-  const ref = useRef<HTMLSpanElement>(null);
-  const hasAnimated = useRef(false);
 
   useEffect(() => {
-    const observer = new IntersectionObserver(
-      ([entry]) => {
-        if (entry?.isIntersecting && !hasAnimated.current) {
-          hasAnimated.current = true;
-          const startTime = Date.now();
-          const animate = () => {
-            const elapsed = Date.now() - startTime;
-            const progress = Math.min(elapsed / duration, 1);
-            const easeOutQuart = 1 - Math.pow(1 - progress, 4);
-            setCount(Math.floor(easeOutQuart * value));
-            if (progress < 1) {
-              requestAnimationFrame(animate);
-            } else {
-              setCount(value);
-            }
-          };
-          requestAnimationFrame(animate);
-        }
-      },
-      { threshold: 0.5 }
-    );
+    let frameId = 0;
+    let startTime = 0;
 
-    if (ref.current) {
-      observer.observe(ref.current);
-    }
+    const animate = (timestamp: number) => {
+      if (!startTime) {
+        startTime = timestamp;
+      }
 
-    return () => observer.disconnect();
+      const elapsed = timestamp - startTime;
+      const progress = Math.min(elapsed / duration, 1);
+      const easeOutQuart = 1 - Math.pow(1 - progress, 4);
+      setCount(Math.floor(easeOutQuart * value));
+
+      if (progress < 1) {
+        frameId = requestAnimationFrame(animate);
+      } else {
+        setCount(value);
+      }
+    };
+
+    frameId = requestAnimationFrame(animate);
+
+    return () => {
+      cancelAnimationFrame(frameId);
+    };
   }, [value, duration]);
 
   return (
-    <span ref={ref} className={className}>
+    <span className={className}>
       {prefix}
       {count.toLocaleString()}
       {suffix}
@@ -321,33 +287,11 @@ export function BlurFade({
   delay = 0,
   className = "",
 }: BlurFadeProps) {
-  const [isVisible, setIsVisible] = useState(false);
-  const ref = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    const observer = new IntersectionObserver(
-      ([entry]) => {
-        if (entry?.isIntersecting) {
-          setIsVisible(true);
-          if (ref.current) {
-            observer.unobserve(ref.current);
-          }
-        }
-      },
-      { threshold: 0.1 }
-    );
-
-    if (ref.current) {
-      observer.observe(ref.current);
-    }
-
-    return () => observer.disconnect();
-  }, []);
+  const isVisible = useMountedReveal();
 
   return (
     <div
-      ref={ref}
-      className={className}
+      className={`motion-reveal-blur ${className}`.trim()}
       style={{
         opacity: isVisible ? 1 : 0,
         filter: isVisible ? "blur(0px)" : "blur(10px)",

@@ -116,7 +116,7 @@ const errors: ErrorRow[] = [
 
 export default function SearchApiPage() {
   return (
-    <div className="soft-theme min-h-screen pb-10">
+    <div className="soft-theme min-h-screen overflow-x-clip pb-10">
       <DocsHeader currentPath="/docs/search-api" />
 
       <div className="mx-auto max-w-[1520px] px-4 sm:px-6 lg:px-8">
@@ -299,8 +299,8 @@ console.log(data);`}
                   </p>
                 </FadeIn>
 
-                <div className="mt-6 overflow-hidden rounded-[20px] border border-[var(--border)]">
-                  <table className="w-full text-left text-sm">
+                <div className="mt-6 overflow-x-auto rounded-[20px] border border-[var(--border)]">
+                  <table className="min-w-[640px] w-full text-left text-sm">
                     <thead className="bg-[var(--background-elevated)] text-[var(--foreground-secondary)]">
                       <tr>
                         <th className="px-4 py-3 font-medium">Name</th>
@@ -343,8 +343,8 @@ console.log(data);`}
                 </FadeIn>
 
                 <div className="mt-6 grid gap-6 xl:grid-cols-[minmax(0,1fr)_420px]">
-                  <div className="overflow-hidden rounded-[20px] border border-[var(--border)]">
-                    <table className="w-full text-left text-sm">
+                  <div className="overflow-x-auto rounded-[20px] border border-[var(--border)]">
+                    <table className="min-w-[640px] w-full text-left text-sm">
                       <thead className="bg-[var(--background-elevated)] text-[var(--foreground-secondary)]">
                         <tr>
                           <th className="px-4 py-3 font-medium">Name</th>
@@ -402,8 +402,8 @@ console.log(data);`}
                 </FadeIn>
 
                 <div className="mt-6 grid gap-6 xl:grid-cols-[minmax(0,1fr)_460px]">
-                  <div className="overflow-hidden rounded-[20px] border border-[var(--border)]">
-                    <table className="w-full text-left text-sm">
+                  <div className="overflow-x-auto rounded-[20px] border border-[var(--border)]">
+                    <table className="min-w-[640px] w-full text-left text-sm">
                       <thead className="bg-[var(--background-elevated)] text-[var(--foreground-secondary)]">
                         <tr>
                           <th className="px-4 py-3 font-medium">Field</th>
@@ -503,8 +503,8 @@ console.log(data);`}
                   />
                 </div>
 
-                <div className="mt-6 overflow-hidden rounded-[20px] border border-[var(--border)]">
-                  <table className="w-full text-left text-sm">
+                <div className="mt-6 overflow-x-auto rounded-[20px] border border-[var(--border)]">
+                  <table className="min-w-[640px] w-full text-left text-sm">
                     <thead className="bg-[var(--background-elevated)] text-[var(--foreground-secondary)]">
                       <tr>
                         <th className="px-4 py-3 font-medium">Status</th>

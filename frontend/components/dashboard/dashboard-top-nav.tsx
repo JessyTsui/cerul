@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useConsoleViewer } from "@/components/console/console-viewer-context";
 import { dashboardRoutes, isDashboardRouteActive } from "@/lib/site";
 import { DashboardTopAccountControls } from "./dashboard-top-account-controls";
+import { DashboardMobileNav } from "./dashboard-mobile-nav";
 
 type DashboardTopNavProps = {
   currentPath: string;
@@ -20,6 +21,8 @@ export function DashboardTopNav({
   return (
     <header className="animate-fade-in relative z-[80] overflow-visible border-b border-[var(--border)] bg-[var(--background,white)] backdrop-blur-xl">
       <div className="mx-auto flex max-w-[1120px] items-center justify-between gap-4 px-5 py-4 sm:px-6 lg:px-8">
+        <DashboardMobileNav currentPath={currentPath} activeRoute={activeRoute} />
+
         <div className="hidden items-center gap-2 text-sm md:flex">
           <span className="rounded-full border border-[var(--border)] bg-white/72 px-3 py-1 text-[var(--foreground-tertiary)]">
             Pages

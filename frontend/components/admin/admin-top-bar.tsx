@@ -3,6 +3,7 @@
 import type { Route } from "next";
 import Link from "next/link";
 import { adminRoutes, isAdminRouteActive } from "@/lib/site";
+import { AdminMobileNav } from "./admin-mobile-nav";
 import { UserAvatarMenu } from "./user-avatar-menu";
 
 type AdminTopBarProps = {
@@ -19,6 +20,8 @@ export function AdminTopBar({ currentPath, title }: AdminTopBarProps) {
   return (
     <header className="border-b border-[var(--border)] bg-white/34 backdrop-blur-xl">
       <div className="mx-auto flex max-w-[1240px] items-center justify-between gap-4 px-5 py-4 sm:px-6 lg:px-8">
+        <AdminMobileNav currentPath={currentPath} activeRoute={activeRoute} />
+
         <div className="hidden items-center gap-2 text-sm md:flex">
           <span className="rounded-full border border-[var(--border-brand)] bg-[var(--brand-subtle)] px-3 py-1 text-[var(--brand-bright)]">
             Admin

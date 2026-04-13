@@ -48,11 +48,11 @@ export function DocsTabs({ items, defaultValue }: DocsTabsProps) {
   }
 
   return (
-    <div className="overflow-hidden rounded-[20px] border border-[var(--border)] bg-[rgba(255,252,247,0.72)] shadow-[0_14px_36px_rgba(36,29,21,0.06)]">
+    <div className="min-w-0 max-w-full overflow-hidden rounded-[20px] border border-[var(--border)] bg-[rgba(255,252,247,0.72)] shadow-[0_14px_36px_rgba(36,29,21,0.06)]">
       <div
         aria-label="Code examples"
         role="tablist"
-        className="flex gap-2 overflow-x-auto border-b border-[var(--border)] bg-[rgba(255,255,255,0.48)] px-3 py-3 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+        className="flex max-w-full gap-2 overflow-x-auto border-b border-[var(--border)] bg-[rgba(255,255,255,0.48)] px-3 py-3 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
       >
         {items.map((item, index) => {
           const selected = activeTab === item.value;
@@ -70,7 +70,7 @@ export function DocsTabs({ items, defaultValue }: DocsTabsProps) {
               aria-controls={panelId}
               onClick={() => setActiveTab(item.value)}
               onKeyDown={(event) => handleKeyDown(event, index)}
-              className={`rounded-full border px-4 py-2 text-sm transition ${
+              className={`whitespace-nowrap rounded-full border px-4 py-2 text-sm transition ${
                 selected
                   ? "border-[var(--border-brand)] bg-white text-[var(--foreground)] shadow-[0_8px_20px_rgba(36,29,21,0.06)]"
                   : "border-transparent text-[var(--foreground-secondary)] hover:border-[var(--border)] hover:bg-white/70 hover:text-[var(--foreground)]"

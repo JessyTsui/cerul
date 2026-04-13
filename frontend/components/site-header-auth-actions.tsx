@@ -106,7 +106,7 @@ export function SiteHeaderAuthActions({
   const showSignOutButton = sessionState === "authenticated" && !isConsoleRoute;
 
   if (sessionState === "loading") {
-    return <div className="h-10 w-[232px]" aria-hidden="true" />;
+    return <div className="h-10 w-[112px] sm:w-[232px]" aria-hidden="true" />;
   }
 
   if (isConsoleRoute && sessionState !== "authenticated") {
@@ -118,13 +118,13 @@ export function SiteHeaderAuthActions({
       <>
         <Link
           href={buildAuthPageHref("/login", currentPath) as Route}
-          className="button-secondary focus-ring"
+          className="focus-ring rounded-full px-3 py-2 text-sm text-[var(--foreground-secondary)] transition hover:bg-white/40 hover:text-[var(--foreground)] sm:border sm:border-[var(--border)] sm:bg-white/70 sm:px-4 sm:font-medium sm:hover:border-[var(--border-strong)] sm:hover:bg-white"
         >
           Sign in
         </Link>
         <Link
           href={buildAuthPageHref("/signup", currentPath) as Route}
-          className="button-primary focus-ring min-w-[112px]"
+          className="button-primary focus-ring min-w-0 px-4 sm:min-w-[112px]"
         >
           Sign up
         </Link>
@@ -150,7 +150,7 @@ export function SiteHeaderAuthActions({
       {showSignOutButton ? (
         <button
           type="button"
-          className="button-primary focus-ring min-w-[112px]"
+          className="button-primary focus-ring min-w-0 px-4 sm:min-w-[112px]"
           disabled={isSubmitting}
           onClick={() => void handleSignOut()}
         >
