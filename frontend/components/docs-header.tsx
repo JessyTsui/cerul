@@ -1,6 +1,6 @@
 "use client";
 
-import { useDeferredValue, useEffect, useState } from "react";
+import { useDeferredValue, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { BrandMark } from "@/components/brand-mark";
 import {
@@ -29,6 +29,7 @@ export function DocsHeader({ currentPath }: DocsHeaderProps) {
   const [query, setQuery] = useState("");
   const deferredQuery = useDeferredValue(query);
   const searchEntries = getDocsSearchEntries();
+  const activeTabRef = useRef<HTMLAnchorElement | null>(null);
 
   useEffect(() => {
     function handleKeyDown(event: KeyboardEvent) {
@@ -55,6 +56,14 @@ export function DocsHeader({ currentPath }: DocsHeaderProps) {
       const haystack = `${entry.title} ${entry.description} ${entry.category}`.toLowerCase();
       return haystack.includes(normalizedQuery);
     });
+
+  useEffect(() => {
+    activeTabRef.current?.scrollIntoView({
+      block: "nearest",
+      inline: "center",
+      behavior: "smooth",
+    });
+  }, [currentPath]);
 
   return (
     <>
@@ -123,6 +132,7 @@ export function DocsHeader({ currentPath }: DocsHeaderProps) {
                 <Link
                   key={item.href}
                   href={item.href}
+                  ref={active ? activeTabRef : undefined}
                   className={`whitespace-nowrap rounded-full px-4 py-2 text-sm font-medium transition ${
                     active
                       ? "bg-white text-[var(--foreground)] shadow-[0_10px_24px_rgba(36,29,21,0.06)]"

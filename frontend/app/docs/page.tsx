@@ -32,7 +32,7 @@ const tocItems: TocItem[] = [
 
 export default function DocsPage() {
   return (
-    <div className="soft-theme min-h-screen pb-10">
+    <div className="soft-theme min-h-screen overflow-x-clip pb-10">
       <DocsHeader currentPath="/docs" />
 
       <div className="mx-auto max-w-[1520px] px-4 sm:px-6 lg:px-8">

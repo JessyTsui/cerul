@@ -142,7 +142,7 @@ export default async function HomePage() {
         dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
       />
       {showOneTap && <GoogleOneTap clientId={googleOneTapClientId} />}
-      <div className="soft-theme">
+      <div className="soft-theme overflow-x-clip">
         <div className="relative z-10 mx-auto flex min-h-screen max-w-[1400px] flex-col px-4 pb-10 pt-4 sm:px-6 lg:px-8">
           <SiteHeader currentPath="/" />
 
@@ -175,10 +175,10 @@ export default async function HomePage() {
 
               {/* API Demo — two-column layout */}
               <FadeIn delay={500} className="mt-20">
-                <div className="mx-auto grid gap-8 lg:grid-cols-2 items-start">
+                <div className="mx-auto grid items-start gap-8 lg:grid-cols-2">
                   {/* Left: curl terminal + description */}
-                  <div className="flex flex-col">
-                    <div className="overflow-hidden rounded-2xl border border-[var(--border)] bg-[#1a1614] shadow-xl">
+                  <div className="min-w-0 flex flex-col">
+                    <div className="max-w-full overflow-hidden rounded-2xl border border-[var(--border)] bg-[#1a1614] shadow-xl">
                       <div className="flex items-center gap-3 border-b border-white/10 px-5 py-3.5">
                         <div className="flex gap-1.5">
                           <span className="h-3 w-3 rounded-full bg-red-400/80" />
@@ -190,7 +190,7 @@ export default async function HomePage() {
                         </span>
                         <span className="ml-auto text-xs text-white/30">search.sh</span>
                       </div>
-                      <pre className="px-6 py-8 font-mono text-[13px] leading-relaxed text-[#e8e4dc] sm:text-sm lg:text-base overflow-x-auto">
+                      <pre className="overflow-x-auto px-6 py-8 font-mono text-sm leading-relaxed text-[#e8e4dc] lg:text-base">
                         <code>{`curl "https://api.cerul.ai/v1/search" \\
   -H "Authorization: Bearer YOUR_CERUL_API_KEY" \\
   -d '{
@@ -215,7 +215,7 @@ export default async function HomePage() {
                   </div>
 
                   {/* Right: video result */}
-                  <div className="flex flex-col rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-4 shadow-xl">
+                  <div className="min-w-0 flex flex-col rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-4 shadow-xl">
                     {/* Video thumbnail */}
                     <a
                       href="https://cerul.ai/v/homepage1"

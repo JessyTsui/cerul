@@ -28,8 +28,28 @@ const featuresComparison = [
 ];
 
 export default function PricingPage() {
+  const planKeys = ["free", "payg", "pro", "enterprise"] as const;
+
+  const renderComparisonValue = (value: boolean | string, highlight?: boolean) => (
+    typeof value === "boolean" ? (
+      value ? (
+        <span className="inline-flex h-6 w-6 items-center justify-center rounded-full border border-[rgba(31,141,74,0.18)] bg-[rgba(31,141,74,0.12)] text-[var(--success)]">
+          <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+          </svg>
+        </span>
+      ) : (
+        <span className="text-[var(--foreground-tertiary)]">&mdash;</span>
+      )
+    ) : (
+      <span className={`text-sm ${highlight ? "font-medium text-[var(--foreground)]" : "text-[var(--foreground-secondary)]"}`}>
+        {value}
+      </span>
+    )
+  );
+
   return (
-    <div className="soft-theme">
+    <div className="soft-theme overflow-x-clip">
       <div className="mx-auto flex min-h-screen max-w-[1400px] flex-col px-4 pb-8 pt-4 sm:px-6 lg:px-8">
         <SiteHeader currentPath="/pricing" />
         <main className="flex-1">
@@ -158,7 +178,57 @@ export default function PricingPage() {
             </FadeIn>
 
             <FadeIn delay={100}>
-              <div className="mt-8 overflow-hidden rounded-3xl border border-[var(--border)] bg-[var(--surface)]">
+              <div className="mt-8 grid gap-4 lg:hidden">
+                {pricingTiers.map((tier, tierIndex) => {
+                  const planKey = planKeys[tierIndex];
+
+                  return (
+                    <div
+                      key={tier.name}
+                      className={`rounded-3xl border p-6 ${
+                        planKey === "pro"
+                          ? "border-[var(--border-brand)] bg-gradient-to-b from-[var(--surface)] to-[var(--background-elevated)]"
+                          : "border-[var(--border)] bg-[var(--surface)]"
+                      }`}
+                    >
+                      <div className="flex items-start justify-between gap-4 border-b border-[var(--border)] pb-4">
+                        <div>
+                          <p className="text-sm font-medium uppercase tracking-wider text-[var(--brand-bright)]">
+                            {tier.name}
+                          </p>
+                          <p className="mt-2 text-2xl font-bold text-[var(--foreground)]">
+                            {tier.price}
+                          </p>
+                          <p className="mt-1 text-sm text-[var(--foreground-tertiary)]">
+                            {tier.cadence}
+                          </p>
+                        </div>
+                        {planKey === "pro" ? (
+                          <span className="rounded-full border border-[var(--border-brand)] bg-[var(--brand-subtle)] px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--brand-bright)]">
+                            Popular
+                          </span>
+                        ) : null}
+                      </div>
+
+                      <div className="mt-4 space-y-3">
+                        {featuresComparison.map((feature) => (
+                          <div
+                            key={`${tier.name}-${feature.name}`}
+                            className="flex items-start justify-between gap-4 rounded-[18px] border border-[var(--border)] bg-[var(--background-elevated)] px-4 py-3"
+                          >
+                            <p className="text-sm text-[var(--foreground)]">{feature.name}</p>
+                            <div className="shrink-0 text-right">
+                              {renderComparisonValue(feature[planKey], planKey === "pro")}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              <div className="mt-8 hidden overflow-hidden rounded-3xl border border-[var(--border)] bg-[var(--surface)] lg:block">
                 <div className="overflow-x-auto">
                   <table className="w-full">
                     <thead>
@@ -182,32 +252,16 @@ export default function PricingPage() {
                     </thead>
                     <tbody>
                       {featuresComparison.map((feature, index) => {
-                        const renderCell = (value: boolean | string, highlight?: boolean) => (
-                          typeof value === "boolean" ? (
-                            value ? (
-                              <svg className="mx-auto h-5 w-5 text-[var(--success)]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                              </svg>
-                            ) : (
-                              <span className="text-[var(--foreground-tertiary)]">&mdash;</span>
-                            )
-                          ) : (
-                            <span className={`text-sm ${highlight ? "font-medium text-[var(--foreground)]" : "text-[var(--foreground-secondary)]"}`}>
-                              {value}
-                            </span>
-                          )
-                        );
-
                         return (
                           <tr
                             key={feature.name}
                             className={index !== featuresComparison.length - 1 ? "border-b border-[var(--border)]" : ""}
                           >
                             <td className="px-6 py-4 text-sm text-[var(--foreground)]">{feature.name}</td>
-                            <td className="px-6 py-4 text-center">{renderCell(feature.free)}</td>
-                            <td className="px-6 py-4 text-center">{renderCell(feature.payg)}</td>
-                            <td className="px-6 py-4 text-center bg-[var(--brand-subtle)]/30">{renderCell(feature.pro, true)}</td>
-                            <td className="px-6 py-4 text-center">{renderCell(feature.enterprise)}</td>
+                            <td className="px-6 py-4 text-center">{renderComparisonValue(feature.free)}</td>
+                            <td className="px-6 py-4 text-center">{renderComparisonValue(feature.payg)}</td>
+                            <td className="px-6 py-4 text-center bg-[var(--brand-subtle)]/30">{renderComparisonValue(feature.pro, true)}</td>
+                            <td className="px-6 py-4 text-center">{renderComparisonValue(feature.enterprise)}</td>
                           </tr>
                         );
                       })}

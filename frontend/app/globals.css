@@ -294,6 +294,23 @@ button:focus-visible,
   }
 }
 
+@media (max-width: 1023px), (prefers-reduced-motion: reduce) {
+  .motion-reveal-fade,
+  .motion-reveal-blur {
+    opacity: 1 !important;
+    transform: none !important;
+    filter: none !important;
+    transition-duration: 0ms !important;
+    will-change: auto !important;
+  }
+
+  .motion-reveal-stagger > * {
+    opacity: 1 !important;
+    transform: none !important;
+    transition-duration: 0ms !important;
+  }
+}
+
 /* ========================================
    Component Styles
    ======================================== */
