@@ -17,25 +17,25 @@ const logoAssets = [
   {
     label: "Primary logo",
     description: "Dark mark on light backgrounds",
-    svg: "/press-kit/logo/logo.svg",
+    svg: "/press-kit/01-logos/vector-svg/cerul-primary-black.svg",
     bg: "#f7f3ec",
   },
   {
     label: "Inverted logo",
     description: "White mark on dark backgrounds",
-    svg: "/press-kit/logo/logo-light.svg",
+    svg: "/press-kit/01-logos/vector-svg/cerul-primary-white.svg",
     bg: "#241d15",
   },
   {
     label: "Brand variant",
     description: "Cerul blue on neutral backgrounds",
-    svg: "/press-kit/logo/logo-brand.svg",
+    svg: "/press-kit/01-logos/vector-svg/cerul-primary-color.svg",
     bg: "#ffffff",
   },
   {
     label: "Wordmark lockup",
     description: "Mark + Cerul wordmark",
-    svg: "/press-kit/logo/wordmark.svg",
+    svg: "/press-kit/01-logos/vector-svg/cerul-wordmark.svg",
     bg: "#f7f3ec",
   },
 ];
@@ -44,28 +44,28 @@ const screenshots = [
   {
     label: "Homepage",
     description: "Marketing hero — best for cover images",
-    src: "/press-kit/screenshots/screenshot-home.png",
+    src: "/press-kit/05-product-screenshots/screenshot-home.png",
     width: 2400,
     height: 1500,
   },
   {
     label: "Agent skill — search",
     description: "Claude Code calling the Cerul skill",
-    src: "/press-kit/screenshots/agent-skill-search.png",
+    src: "/press-kit/05-product-screenshots/agent-skill-search.png",
     width: 1600,
     height: 1000,
   },
   {
     label: "Agent skill — result",
     description: "Agent synthesizing video evidence into an answer",
-    src: "/press-kit/screenshots/agent-skill-result.png",
+    src: "/press-kit/05-product-screenshots/agent-skill-result.png",
     width: 1600,
     height: 1000,
   },
   {
     label: "CLI",
     description: "cerul search output with inline frames",
-    src: "/press-kit/screenshots/cli-search.png",
+    src: "/press-kit/05-product-screenshots/cli-search.png",
     width: 1600,
     height: 1000,
   },
@@ -76,31 +76,31 @@ const usageShots = [
     label: "CLI — Sam Altman search",
     description:
       "cerul search finds the exact moment Altman said \"compute is the new oil\" with an inline frame preview",
-    src: "/press-kit/screenshots/usage/cli-sam-altman-search.png",
+    src: "/press-kit/05-product-screenshots/usage/cli-sam-altman-search.png",
   },
   {
     label: "CLI — Dario Amodei result",
     description:
       "Inline video frame rendered in-terminal (iTerm2 / WezTerm / Kitty)",
-    src: "/press-kit/screenshots/usage/cli-dario-amodei-result.png",
+    src: "/press-kit/05-product-screenshots/usage/cli-dario-amodei-result.png",
   },
   {
     label: "Claude Code — research workflow",
     description:
       "Claude Code (Opus 4.6) running the Cerul skill across multiple sub-topic searches to prep for a Demis Hassabis interview",
-    src: "/press-kit/screenshots/usage/claude-code-demis-research.png",
+    src: "/press-kit/05-product-screenshots/usage/claude-code-demis-research.png",
   },
   {
     label: "Claude Code — synthesized notes",
     description:
       "Agent-generated research brief with bullet points, timestamps, and cerul.ai/v/ citations",
-    src: "/press-kit/screenshots/usage/claude-code-research-notes.png",
+    src: "/press-kit/05-product-screenshots/usage/claude-code-research-notes.png",
   },
   {
     label: "Telegram bot — Chinese query",
     description:
       "A Telegram bot powered by Cerul answering \"How does Dario Amodei talk about responsible scaling?\" with sourced video links",
-    src: "/press-kit/screenshots/usage/telegram-bot-dario-query.jpg",
+    src: "/press-kit/05-product-screenshots/usage/telegram-bot-dario-query.jpg",
   },
 ];
 

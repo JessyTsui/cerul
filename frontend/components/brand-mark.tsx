@@ -101,7 +101,7 @@ export function BrandMark() {
             Download logo (SVG)
           </MenuLink>
           <MenuLink
-            href="/press-kit/logo/logo-light.svg"
+            href="/press-kit/01-logos/vector-svg/cerul-primary-white.svg"
             download
             onClick={closeMenu}
             icon="download"
@@ -109,7 +109,7 @@ export function BrandMark() {
             Download logo — light (SVG)
           </MenuLink>
           <MenuLink
-            href="/press-kit/icons/icon-512.png"
+            href="/press-kit/03-app-icons/icon-512.png"
             download
             onClick={closeMenu}
             icon="download"

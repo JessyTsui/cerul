@@ -16,6 +16,7 @@ node_modules/
 dist/
 build/
 coverage/
+test-results/
 tmp/
 .turbo/
 artifacts/
