@@ -13,8 +13,8 @@ The Cerul mark is three geometric blocks forming an abstract **C**. It should
 always appear:
 
 - With at least **one mark-width** of clear space around it.
-- On a background with sufficient contrast (use `logo-light.svg` on dark
-  backgrounds).
+- On a background with sufficient contrast (use
+  `01-logos/vector-svg/cerul-primary-white.svg` on dark backgrounds).
 - At a minimum display size of **24px** on screen / **8mm** in print.
 
 Don't:
