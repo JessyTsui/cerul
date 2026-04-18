@@ -12,7 +12,8 @@
     <a href="https://cerul.ai/docs/search-api"><strong>API Reference</strong></a> &middot;
     <a href="https://cerul.ai/pricing"><strong>Pricing</strong></a> &middot;
     <a href="https://x.com/cerul_hq"><img src="https://img.shields.io/badge/follow-%40cerul__hq-000?style=flat-square&logo=x" alt="Follow on X" /></a> &middot;
-    <a href="https://discord.gg/qHDEMQB9vN"><img src="https://img.shields.io/badge/join-Discord-5865F2?style=flat-square&logo=discord&logoColor=white" alt="Join Discord" /></a>
+    <a href="https://discord.gg/qHDEMQB9vN"><img src="https://img.shields.io/badge/join-Discord-5865F2?style=flat-square&logo=discord&logoColor=white" alt="Join Discord" /></a> &middot;
+    <a href="#wechat-group"><img src="https://img.shields.io/badge/WeChat-Group-07C160?style=flat-square&logo=wechat&logoColor=white" alt="Join WeChat Group" /></a>
   </p>
 
   <p>
@@ -166,6 +167,16 @@ Full API spec: [`openapi.yaml`](./openapi.yaml) | [cerul.ai/docs](https://cerul.
 ## License
 
 Licensed under [Apache 2.0](./LICENSE).
+
+<h2 id="wechat-group">Community</h2>
+
+Join our WeChat group to chat with the team and other users. Scan the QR code below (refreshes weekly):
+
+<div align="center">
+  <img src="./assets/wechat-group.jpg" alt="Cerul.ai WeChat Group" width="280" />
+</div>
+
+Or join us on [Discord](https://discord.gg/qHDEMQB9vN) for English discussion.
 
 <div align="center">
   <br />
