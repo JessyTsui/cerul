@@ -48,6 +48,17 @@ Most video search today is limited to transcripts — what was *said*. Cerul goe
 
 ## Quickstart
 
+### Claude Code plugin
+
+Install the official Cerul plugin in Claude Code:
+
+```bash
+/plugin marketplace add cerul-ai/cerul-plugin-cc
+/plugin install cerul@cerul-plugin
+```
+
+Source: [cerul-ai/cerul-plugin-cc](https://github.com/cerul-ai/cerul-plugin-cc).
+
 ### Use with your AI agent
 
 Copy this and send it to your agent (Claude Code, Codex, Cursor, etc.):
