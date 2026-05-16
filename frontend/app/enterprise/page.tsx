@@ -395,7 +395,7 @@ export default function EnterprisePage() {
                 <BlurFade delay={400}>
                   <div className="mt-10 flex flex-wrap items-center justify-center gap-4">
                     <a
-                      href="mailto:sales@cerul.ai?subject=Cerul%20Enterprise%20Demo%20Request"
+                      href="mailto:panda@cerul.ai?subject=Cerul%20Enterprise%20Demo%20Request"
                       className="button-gradient"
                     >
                       Book a demo
@@ -647,7 +647,7 @@ export default function EnterprisePage() {
                       </ul>
 
                       <a
-                        href="mailto:sales@cerul.ai?subject=Cerul%20Enterprise%20-%20Deployment%20Question"
+                        href="mailto:panda@cerul.ai?subject=Cerul%20Enterprise%20-%20Deployment%20Question"
                         className={`w-full text-center ${
                           option.popular ? "button-gradient" : "button-secondary"
                         }`}
@@ -829,7 +829,7 @@ export default function EnterprisePage() {
                           Cerul App on GitHub
                         </a>
                         <a
-                          href="mailto:sales@cerul.ai?subject=Cerul%20Enterprise%20Demo%20Request"
+                          href="mailto:panda@cerul.ai?subject=Cerul%20Enterprise%20Demo%20Request"
                           className="button-gradient"
                         >
                           Talk to enterprise sales
@@ -911,7 +911,7 @@ docker run -d \\
                     </p>
                     <div className="mt-8 flex flex-wrap items-center justify-center gap-4">
                       <a
-                        href="mailto:sales@cerul.ai?subject=Cerul%20Enterprise%20Demo%20Request"
+                        href="mailto:panda@cerul.ai?subject=Cerul%20Enterprise%20Demo%20Request"
                         className="button-gradient"
                       >
                         Book a demo
@@ -923,10 +923,10 @@ docker run -d \\
                     <p className="mt-6 text-xs text-[var(--foreground-tertiary)]">
                       Or write to{" "}
                       <a
-                        href="mailto:sales@cerul.ai"
+                        href="mailto:panda@cerul.ai"
                         className="text-[var(--brand-bright)] hover:text-[var(--foreground)]"
                       >
-                        sales@cerul.ai
+                        panda@cerul.ai
                       </a>
                     </p>
                   </div>
